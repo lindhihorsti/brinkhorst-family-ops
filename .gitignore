@@ -1,0 +1,23 @@
+# secrets
+.env
+.env.*
+**/.env
+**/.env.*
+
+*.pem
+*.key
+
+# node / next
+node_modules/
+.next/
+dist/
+build/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# misc
+.DS_Store

@@ -1,0 +1,45 @@
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  backend:
+    build: ../backend
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALLOWLIST: ${TELEGRAM_ALLOWLIST}
+      DATABASE_URL: ${DATABASE_URL}
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  frontend:
+    build: ../frontend
+    networks:
+      - appnet
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  appnet:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "10.77.0.0/16"
+        - subnet: "fd00:77:77::/64"

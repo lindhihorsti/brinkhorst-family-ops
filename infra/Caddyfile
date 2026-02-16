@@ -1,0 +1,9 @@
+brinkhorst-family-ops.duckdns.org {
+
+  # Backend routes
+  reverse_proxy /api/* backend:8000
+  reverse_proxy /bot/* backend:8000
+
+  # Everything else to frontend
+  reverse_proxy frontend:3000
+}
