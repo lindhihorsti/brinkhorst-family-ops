@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { api, type Recipe } from "../../../lib/api";
 import { BtnLink, Page, styles } from "../../../lib/ui";
 
@@ -12,9 +12,13 @@ function splitCsv(s: string) {
     .filter(Boolean);
 }
 
-export default function EditRecipePage({ params }: { params: { id: string } }) {
+export default function EditRecipePage() {
   const router = useRouter();
-  const id = params.id;
+  const params = useParams<{ id: string }>();
+  const id = useMemo(() => {
+    const v = params?.id;
+    return typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
+  }, [params]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,7 +35,9 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
   const [ingDraft, setIngDraft] = useState("");
 
   useEffect(() => {
+    if (!id) return;
     let cancelled = false;
+
     (async () => {
       setLoading(true);
       setErr(null);
@@ -52,6 +58,7 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -69,6 +76,7 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
   };
 
   const onSave = async () => {
+    if (!id) return;
     setErr(null);
     if (!title.trim()) {
       setErr("Titel fehlt.");
@@ -95,8 +103,8 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
   };
 
   const onDelete = async () => {
+    if (!id) return;
     setErr(null);
-    // Confirm: verhindert “aus Versehen”
     if (!confirm("Rezept wirklich löschen?")) return;
 
     setSaving(true);
@@ -113,10 +121,12 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
   return (
     <Page
       title="Rezept bearbeiten"
-      subtitle={id}
-      right={<BtnLink href={`/recipes/${id}`}>Zurück</BtnLink>}
+      subtitle={id ?? " "}
+      right={<BtnLink href={id ? `/recipes/${id}` : "/recipes"}>Zurück</BtnLink>}
     >
-      {loading ? (
+      {!id ? (
+        <div style={{ textAlign: "center", padding: "10px 0", opacity: 0.75 }}>Lade…</div>
+      ) : loading ? (
         <div style={{ textAlign: "center", padding: "10px 0", opacity: 0.75 }}>Lade…</div>
       ) : (
         <div style={{ display: "grid", gap: 12, paddingBottom: 120 }}>
@@ -190,8 +200,8 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
       <div style={styles.fabWrap}>
         <button
           onClick={onSave}
-          disabled={saving || loading}
-          style={{ ...styles.fab, opacity: saving || loading ? 0.7 : 1 }}
+          disabled={saving || loading || !id}
+          style={{ ...styles.fab, opacity: saving || loading || !id ? 0.7 : 1 }}
           type="button"
         >
           {saving ? "Speichere…" : "Speichern"}

@@ -1,19 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import { api, type Recipe } from "../../lib/api";
 import { BtnLink, Chip, Page, styles } from "../../lib/ui";
 
-export default function RecipeDetailPage({ params }: { params: { id: string } }) {
-  const id = params.id;
+export default function RecipeDetailPage() {
+  const params = useParams<{ id: string }>();
+  const id = useMemo(() => {
+    const v = params?.id;
+    return typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
+  }, [params]);
 
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<Recipe | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) return; // <- wichtig
     let cancelled = false;
+
     (async () => {
       setLoading(true);
       setErr(null);
@@ -26,6 +33,7 @@ export default function RecipeDetailPage({ params }: { params: { id: string } })
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -37,7 +45,9 @@ export default function RecipeDetailPage({ params }: { params: { id: string } })
       subtitle={item?.id ? `ID: ${item.id}` : " "}
       right={<BtnLink href="/recipes">Zurück</BtnLink>}
     >
-      {loading ? (
+      {!id ? (
+        <div style={{ textAlign: "center", padding: "10px 0", opacity: 0.75 }}>Lade…</div>
+      ) : loading ? (
         <div style={{ textAlign: "center", padding: "10px 0", opacity: 0.75 }}>Lade…</div>
       ) : err ? (
         <div style={{ ...styles.card, borderColor: "#fecaca" }}>
@@ -116,7 +126,7 @@ export default function RecipeDetailPage({ params }: { params: { id: string } })
 
       <div style={styles.fabWrap}>
         <Link
-          href={`/recipes/${id}/edit`}
+          href={id ? `/recipes/${id}/edit` : "/recipes"}
           style={{ ...styles.buttonPrimary, width: "100%", justifyContent: "center" }}
         >
           Bearbeiten
