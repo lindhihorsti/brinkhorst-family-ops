@@ -1,9 +1,10 @@
+cat > frontend/app/recipes/new/page.tsx <<'EOF'
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../lib/api";
+import { BtnLink, Page, styles } from "../../lib/ui";
 
 function splitCsv(s: string) {
   return s
@@ -19,8 +20,8 @@ export default function NewRecipePage() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState("");
-  const [timeMinutes, setTimeMinutes] = useState<string>("");
-  const [difficulty, setDifficulty] = useState<string>("");
+  const [timeMinutes, setTimeMinutes] = useState("");
+  const [difficulty, setDifficulty] = useState("");
 
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [ingDraft, setIngDraft] = useState("");
@@ -65,114 +66,118 @@ export default function NewRecipePage() {
   };
 
   return (
-    <main className="min-h-dvh bg-white">
-      <div className="mx-auto max-w-md px-4 pb-24 pt-4">
-        <header className="mb-3 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Neues Rezept</h1>
-          <Link className="text-sm text-blue-600" href="/recipes">
-            Zurück
-          </Link>
-        </header>
-
-        {err && (
-          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {err}
+    <Page
+      title="Neues Rezept"
+      subtitle="Schnell anlegen · sauber wie Home"
+      right={<BtnLink href="/recipes">Rezepte</BtnLink>}
+    >
+      <div style={{ display: "grid", gap: 12, paddingBottom: 74 }}>
+        {err ? (
+          <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff" }}>
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Konnte nicht speichern</div>
+            <div style={{ fontSize: 13 }}>{err}</div>
           </div>
-        )}
+        ) : null}
 
-        <div className="space-y-3">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Titel (z.B. Shakshuka)"
+          style={styles.input}
+        />
+        <input
+          value={sourceUrl}
+          onChange={(e) => setSourceUrl(e.target.value)}
+          placeholder="Link (optional)"
+          style={styles.input}
+        />
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Notizen (optional)"
+          rows={3}
+          style={styles.textarea}
+        />
+        <input
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="Tags (comma-separated) z.B. vegetarisch, schnell"
+          style={styles.input}
+        />
+ <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Titel (z.B. Shakshuka)"
-            className="w-full rounded-xl border px-3 py-2 text-base"
+            value={timeMinutes}
+            onChange={(e) => setTimeMinutes(e.target.value)}
+            placeholder="Zeit (min)"
+            inputMode="numeric"
+            style={styles.input}
           />
-
           <input
-            value={sourceUrl}
-            onChange={(e) => setSourceUrl(e.target.value)}
-            placeholder="Link (optional)"
-            className="w-full rounded-xl border px-3 py-2 text-base"
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value)}
+            placeholder="Diff (1-3)"
+            inputMode="numeric"
+            style={styles.input}
           />
+        </div>
 
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notizen (optional)"
-            className="w-full rounded-xl border px-3 py-2 text-base"
-            rows={3}
-          />
+        <div style={styles.card}>
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>Zutaten</div>
 
-          <input
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="Tags (comma-separated) z.B. vegetarisch, schnell"
-            className="w-full rounded-xl border px-3 py-2 text-base"
-          />
-
-          <div className="grid grid-cols-2 gap-3">
+          <div style={{ display: "flex", gap: 10 }}>
             <input
-              value={timeMinutes}
-              onChange={(e) => setTimeMinutes(e.target.value)}
-              placeholder="Zeit (min)"
-              inputMode="numeric"
-              className="w-full rounded-xl border px-3 py-2 text-base"
+              value={ingDraft}
+              onChange={(e) => setIngDraft(e.target.value)}
+              placeholder="z.B. Tomaten (Dose)"
+              style={styles.input}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addIng();
+                }
+              }}
             />
-            <input
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value)}
-              placeholder="Diff (1-3)"
-              inputMode="numeric"
-              className="w-full rounded-xl border px-3 py-2 text-base"
-            />
+            <button
+              onClick={addIng}
+              style={{ ...styles.buttonPrimary, padding: "10px 12px", borderRadius: 14 }}
+              type="button"
+            >
+              +
+            </button>
           </div>
 
-          <section className="rounded-2xl border p-3">
-            <div className="mb-2 text-sm font-semibold">Zutaten</div>
-
-            <div className="flex gap-2">
-              <input
-                value={ingDraft}
-                onChange={(e) => setIngDraft(e.target.value)}
-                placeholder="z.B. Tomaten (Dose)"
-                className="w-full rounded-xl border px-3 py-2 text-base"
-              />
-              <button
-                onClick={addIng}
-                className="rounded-xl bg-black px-4 py-2 text-base font-semibold text-white"
-              >
-                +
-              </button>
-            </div>
-
-            {ingredients.length ? (
-              <ul className="mt-3 space-y-2">
-                {ingredients.map((ing, idx) => (
-                  <li key={`${ing}-${idx}`} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
-                    <span className="text-base">{ing}</span>
-                    <button
-                      onClick={() => removeIng(idx)}
-                      className="rounded-lg border px-2 py-1 text-sm"
-                    >
+          {ingredients.length ? (
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              {ingredients.map((ing, idx) => (
+                <div
+                  key={`${ing}-${idx}`}
+                  style={{
+                    ...styles.card,
+                    padding: 12,
+                    borderRadius: 14,
+                    boxShadow: "none",
+                  }}
+                >
+                  <div style={styles.rowBetween}>
+                    <div style={{ fontSize: 14, fontWeight: 700 }}>{ing}</div>
+                    <button onClick={() => removeIng(idx)} style={styles.button} type="button">
                       Entfernen
                     </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="mt-2 text-sm text-gray-600">Noch keine Zutaten.</div>
-            )}
-          </section>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, fontSize: 13, opacity: 0.8 }}>Noch keine Zutaten.</div>
+          )}
         </div>
       </div>
-
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="fixed bottom-6 left-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl bg-black px-4 py-3 text-center text-base font-semibold text-white shadow-lg disabled:opacity-60"
-      >
-        {saving ? "Speichere…" : "Speichern"}
-      </button>
-    </main>
+ <div style={styles.fabWrap}>
+        <button onClick={onSave} disabled={saving} style={{ ...styles.fab, opacity: saving ? 0.7 : 1 }} type="button">
+          {saving ? "Speichere…" : "Speichern"}
+        </button>
+      </div>
+    </Page>
   );
 }
+EOF

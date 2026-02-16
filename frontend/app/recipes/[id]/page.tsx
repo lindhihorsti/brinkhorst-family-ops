@@ -1,19 +1,17 @@
+cat > frontend/app/recipes/[id]/page.tsx <<'EOF'
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, type Recipe } from "../../lib/api";
+import { BtnLink, Chip, Page, styles } from "../../lib/ui";
 
-export default function RecipeDetailPage() {
-  const params = useParams<{ id: string }>();
+export default function RecipeDetailPage({ params }: { params: { id: string } }) {
   const id = params.id;
-  const router = useRouter();
 
-  const [r, setR] = useState<Recipe | null>(null);
-  const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [item, setItem] = useState<Recipe | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,10 +19,10 @@ export default function RecipeDetailPage() {
       setLoading(true);
       setErr(null);
       try {
-        const data = await api.getRecipe(id);
-        if (!cancelled) setR(data);
+        const r = await api.getRecipe(id);
+        if (!cancelled) setItem(r);
       } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Fehler");
+        if (!cancelled) setErr(e?.message ?? "Fehler beim Laden");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -34,124 +32,90 @@ export default function RecipeDetailPage() {
     };
   }, [id]);
 
-  const deactivate = async () => {
-    if (!r) return;
-    setBusy(true);
-    try {
-      await api.updateRecipe(r.id, { is_active: false });
-      router.push("/recipes");
-    } catch (e: any) {
-      setErr(e?.message ?? "Fehler");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <main className="min-h-dvh bg-white">
-        <div className="mx-auto max-w-md px-4 pt-4 text-sm text-gray-600">Lade…</div>
-      </main>
-    );
-  }
-
-  if (err || !r) {
-    return (
-      <main className="min-h-dvh bg-white">
-        <div className="mx-auto max-w-md px-4 pt-4">
-          <div className="mb-3 text-sm text-red-700">{err ?? "Nicht gefunden"}</div>
-          <Link className="text-sm text-blue-600" href="/recipes">
-            Zurück
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-dvh bg-white">
-      <div className="mx-auto max-w-md px-4 pb-24 pt-4">
-        <header className="mb-3 flex items-center justify-between">
-          <Link className="text-sm text-blue-600" href="/recipes">
-            ← Rezepte
-          </Link>
-          <Link className="text-sm text-blue-600" href={`/recipes/${r.id}/edit`}>
-            Bearbeiten
-          </Link>
-        </header>
-
-        <h1 className="text-xl font-semibold">{r.title}</h1>
-
-        <div className="mt-2 text-sm text-gray-600">
-          {r.time_minutes ? `${r.time_minutes} min` : "—"} ·{" "}
-          {r.difficulty ? `Diff ${r.difficulty}` : "—"}
+    <Page
+      title={item?.title ?? "Rezept"}
+      subtitle={item?.id ? `ID: ${item.id}` : " "}
+      right={<BtnLink href="/recipes">Zurück</BtnLink>}
+    >
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "10px 0", opacity: 0.75 }}>Lade…</div>
+      ) : err ? (
+        <div style={{ ...styles.card, borderColor: "#fecaca" }}>
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>Fehler</div>
+          <div style={{ fontSize: 13 }}>{err}</div>
         </div>
+      ) : !item ? (
+        <div style={styles.card}>
+          <div style={{ fontWeight: 800 }}>Nicht gefunden</div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 12, paddingBottom: 74 }}>
+          <div style={styles.card}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {typeof item.time_minutes === "number" ? <Chip text={`${item.time_minutes} min`} /> : <Chip text="— min" />}
+              {item.difficulty ? <Chip text={`Diff ${item.difficulty}`} /> : <Chip text="Diff —" />}
+              {item.tags?.length ? <Chip text={`${item.tags.length} Tags`} /> : <Chip text="0 Tags" />}
+              {item.ingredients?.length ? <Chip text={`${item.ingredients.length} Zutaten`} /> : <Chip text="0 Zutaten" />}
+            </div>
 
-        {r.source_url ? (
-          <a
-            className="mt-2 block truncate text-sm text-blue-600"
-            href={r.source_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {r.source_url}
-          </a>
-        ) : null}
+            {item.source_url ? (
+              <>
+                <div style={styles.divider} />
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>Link</div>
+                <a href={item.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#000", textDecoration: "underline" }}>
+                  {item.source_url}
+                </a>
+              </>
+            ) : null}
 
-        {r.tags?.length ? (
-          <div className="mt-3 flex flex-wrap gap-1">
-            {r.tags.map((t) => (
-              <span key={t} className="rounded-full border px-2 py-0.5 text-xs">
-                {t}
-              </span>
-            ))}
+            {item.tags?.length ? (
+              <>
+                <div style={styles.divider} />
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Tags</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {item.tags.map((t) => (
+                    <Chip key={t} text={t} />
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            <div style={styles.divider} />
+
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Zutaten</div>
+            {item.ingredients?.length ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                {item.ingredients.map((ing, idx) => (
+                  <div key={`${ing}-${idx}`} style={{ fontSize: 14, padding: "10px 12px", border: "1px solid #eee", borderRadius: 14 }}>
+                    {ing}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, opacity: 0.8 }}>Keine Zutaten hinterlegt.</div>
+            )}
+
+            {item.notes ? (
+              <>
+                <div style={styles.divider} />
+                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Notizen</div>
+                <div style={{ fontSize: 14, whiteSpace: "pre-wrap" }}>{item.notes}</div>
+              </>
+            ) : null}
           </div>
-        ) : null}
+        </div>
+      )}
 
-        <section className="mt-4 rounded-2xl border p-3">
-          <div className="mb-2 text-sm font-semibold">Zutaten</div>
-          {r.ingredients?.length ? (
-            <ul className="space-y-2">
-              {r.ingredients.map((ing, idx) => (
-                <li key={`${ing}-${idx}`} className="rounded-xl border px-3 py-2 text-base">
-                  {ing}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="text-sm text-gray-600">Noch keine Zutaten.</div>
-          )}
-        </section>
-
-        {r.notes ? (
-          <section className="mt-4 rounded-2xl border p-3">
-            <div className="mb-2 text-sm font-semibold">Notizen</div>
-            <div className="text-base whitespace-pre-wrap">{r.notes}</div>
-          </section>
-        ) : null}
-
-        {err && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {err}
-          </div>
-        )}
-      </div>
-
-      <div className="fixed bottom-6 left-1/2 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 gap-3">
+      <div style={styles.fabWrap}>
         <Link
-          href={`/recipes/${r.id}/edit`}
-          className="flex-1 rounded-2xl border px-4 py-3 text-center text-base font-semibold"
+          href={`/recipes/${id}/edit`}
+          style={{ ...styles.buttonPrimary, width: "100%", justifyContent: "center" }}
         >
           Bearbeiten
         </Link>
-        <button
-          onClick={deactivate}
-          disabled={busy}
-          className="flex-1 rounded-2xl bg-black px-4 py-3 text-center text-base font-semibold text-white disabled:opacity-60"
-        >
-          {busy ? "…" : "Deaktivieren"}
-        </button>
       </div>
-    </main>
+    </Page>
   );
 }
+EOF
