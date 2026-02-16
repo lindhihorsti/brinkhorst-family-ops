@@ -1,4 +1,3 @@
-cat > frontend/app/recipes/new/page.tsx <<'EOF'
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -104,7 +103,8 @@ export default function NewRecipePage() {
           placeholder="Tags (comma-separated) z.B. vegetarisch, schnell"
           style={styles.input}
         />
- <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <input
             value={timeMinutes}
             onChange={(e) => setTimeMinutes(e.target.value)}
@@ -172,12 +172,17 @@ export default function NewRecipePage() {
           )}
         </div>
       </div>
- <div style={styles.fabWrap}>
-        <button onClick={onSave} disabled={saving} style={{ ...styles.fab, opacity: saving ? 0.7 : 1 }} type="button">
+
+      <div style={styles.fabWrap}>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          style={{ ...styles.fab, opacity: saving ? 0.7 : 1 }}
+          type="button"
+        >
           {saving ? "Speichere…" : "Speichern"}
         </button>
       </div>
     </Page>
   );
 }
-EOF

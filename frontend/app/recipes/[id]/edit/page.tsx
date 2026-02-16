@@ -1,4 +1,3 @@
-cat > frontend/app/recipes/[id]/edit/page.tsx <<'EOF'
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -94,9 +93,12 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
       setSaving(false);
     }
   };
- const onDelete = async () => {
-    // nutzt euren bestehenden api.deleteRecipe
+
+  const onDelete = async () => {
     setErr(null);
+    // Confirm: verhindert “aus Versehen”
+    if (!confirm("Rezept wirklich löschen?")) return;
+
     setSaving(true);
     try {
       await api.deleteRecipe(id);
@@ -155,7 +157,8 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
                 +
               </button>
             </div>
- {ingredients.length ? (
+
+            {ingredients.length ? (
               <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
                 {ingredients.map((ing, idx) => (
                   <div key={`${ing}-${idx}`} style={{ ...styles.card, padding: 12, borderRadius: 14, boxShadow: "none" }}>
@@ -173,18 +176,27 @@ export default function EditRecipePage({ params }: { params: { id: string } }) {
             )}
           </div>
 
-          <button onClick={onDelete} disabled={saving} style={{ ...styles.buttonDanger, width: "100%", justifyContent: "center" }} type="button">
+          <button
+            onClick={onDelete}
+            disabled={saving}
+            style={{ ...styles.buttonDanger, width: "100%", justifyContent: "center" }}
+            type="button"
+          >
             Rezept löschen
           </button>
         </div>
       )}
 
       <div style={styles.fabWrap}>
-        <button onClick={onSave} disabled={saving || loading} style={{ ...styles.fab, opacity: saving || loading ? 0.7 : 1 }} type="button">
+        <button
+          onClick={onSave}
+          disabled={saving || loading}
+          style={{ ...styles.fab, opacity: saving || loading ? 0.7 : 1 }}
+          type="button"
+        >
           {saving ? "Speichere…" : "Speichern"}
         </button>
       </div>
     </Page>
   );
 }
-EOF

@@ -1,4 +1,3 @@
-cat > frontend/app/recipes/page.tsx <<'EOF'
 "use client";
 
 import Link from "next/link";
@@ -102,4 +101,3 @@ export default function RecipesPage() {
     </Page>
   );
 }
-EOF

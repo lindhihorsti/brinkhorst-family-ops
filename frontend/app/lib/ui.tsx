@@ -1,4 +1,3 @@
-cat > frontend/app/lib/ui.tsx <<'EOF'
 "use client";
 
 import React from "react";
@@ -191,4 +190,3 @@ export function BtnLink({ href, children }: { href: string; children: React.Reac
 export function Chip({ text }: { text: string }) {
   return <span style={styles.chip}>{text}</span>;
 }
-EOF

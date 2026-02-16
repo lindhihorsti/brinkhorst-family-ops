@@ -1,4 +1,3 @@
-cat > frontend/app/recipes/[id]/page.tsx <<'EOF'
 "use client";
 
 import Link from "next/link";
@@ -63,7 +62,12 @@ export default function RecipeDetailPage({ params }: { params: { id: string } })
               <>
                 <div style={styles.divider} />
                 <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>Link</div>
-                <a href={item.source_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "#000", textDecoration: "underline" }}>
+                <a
+                  href={item.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 13, color: "#000", textDecoration: "underline" }}
+                >
                   {item.source_url}
                 </a>
               </>
@@ -87,7 +91,10 @@ export default function RecipeDetailPage({ params }: { params: { id: string } })
             {item.ingredients?.length ? (
               <div style={{ display: "grid", gap: 8 }}>
                 {item.ingredients.map((ing, idx) => (
-                  <div key={`${ing}-${idx}`} style={{ fontSize: 14, padding: "10px 12px", border: "1px solid #eee", borderRadius: 14 }}>
+                  <div
+                    key={`${ing}-${idx}`}
+                    style={{ fontSize: 14, padding: "10px 12px", border: "1px solid #eee", borderRadius: 14 }}
+                  >
                     {ing}
                   </div>
                 ))}
@@ -118,4 +125,3 @@ export default function RecipeDetailPage({ params }: { params: { id: string } })
     </Page>
   );
 }
-EOF
