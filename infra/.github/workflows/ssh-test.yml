@@ -1,0 +1,23 @@
+name: SSH Test (EC2)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ssh_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH to EC2 and print info
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            echo "Connected!"
+            whoami
+            hostname
+            uptime
+            docker --version
+            docker compose version
