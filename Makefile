@@ -15,9 +15,9 @@ build:
 	cd infra && docker compose build
 
 api-health:
-	curl -sS http://localhost:8080/api/health ; echo
+	curl -sS http://127.0.0.1:8080/api/health ; echo
 api-ping:
-	curl -sS http://localhost:8080/api/db/ping ; echo
+	curl -sS http://127.0.0.1:8080/api/db/ping ; echo
 
 psql:
 	cd infra && docker compose exec db psql -U familyops -d familyops
