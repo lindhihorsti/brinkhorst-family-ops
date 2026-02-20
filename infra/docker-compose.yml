@@ -2,10 +2,9 @@ services:
   caddy:
     image: caddy:2
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -18,9 +17,13 @@ services:
   backend:
     build: ../backend
     environment:
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_ALLOWLIST: ${TELEGRAM_ALLOWLIST}
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql+psycopg://familyops:familyops@db:5432/familyops
+      AUTO_MIGRATE: "1"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWLIST: ${TELEGRAM_ALLOWLIST:-}
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - appnet
     restart: unless-stopped
@@ -31,15 +34,30 @@ services:
       - appnet
     restart: unless-stopped
 
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: familyops
+      POSTGRES_USER: familyops
+      POSTGRES_PASSWORD: familyops
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U familyops -d familyops"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - appnet
+    restart: unless-stopped
+
 volumes:
   caddy_data:
   caddy_config:
+  pgdata:
 
 networks:
   appnet:
     driver: bridge
     enable_ipv6: true
-    ipam:
-      config:
-        - subnet: "10.77.0.0/16"
-        - subnet: "fd00:77:77::/64"
