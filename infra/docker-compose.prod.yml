@@ -10,19 +10,16 @@ services:
       - caddy_config:/config
 
   backend:
-    build: null
     image: ghcr.io/lindhihorsti/brinkhorst-family-ops-backend:stable
     environment:
       DATABASE_URL: ${DATABASE_URL}
       AUTO_MIGRATE: "0"
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_ALLOWLIST: ${TELEGRAM_ALLOWLIST}
-    depends_on: []
 
   frontend:
-    build: null
     image: ghcr.io/lindhihorsti/brinkhorst-family-ops-frontend:stable
 
-  # disable local DB on prod runs
+  # disable local DB for prod runs
   db:
     profiles: ["dev"]
