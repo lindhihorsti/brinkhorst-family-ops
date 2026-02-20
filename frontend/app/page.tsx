@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 
 type HealthAll = {
   api: boolean | null;
@@ -229,11 +230,24 @@ export default function HomePage() {
 
   return (
     <main style={styles.page}>
+<div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+<Image
+  src="/logo.PNG"
+  alt="Family Ops"
+  width={600}      // "native" Verhältnis grob abbilden
+  height={380}
+  priority
+  style={{
+    width: 240,     // gewünschte Anzeige-Breite
+    height: "auto", // verhindert Quetschen
+  }}
+/>
+</div>
       <div style={styles.container}>
         <div style={styles.headerRow}>
           <div>
             <h1 style={styles.title}>Family Ops</h1>
-            <p style={styles.subtitle}>Küchen- & Wochenplan MVP (mobile-first)</p>
+            <p style={styles.subtitle}>Küchen- & Wochenplan</p>
 
             <div style={styles.microChecks}>
               <div style={styles.microRow}>
