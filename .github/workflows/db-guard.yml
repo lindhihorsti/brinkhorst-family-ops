@@ -1,0 +1,41 @@
+name: DB Change Guard
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect DB-related changes and require migration SQL
+        run: |
+          set -euo pipefail
+
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          echo "Comparing $BASE..$HEAD"
+
+          DB_CHANGED=0
+          # agreed heuristic:
+          if git diff --name-only "$BASE" "$HEAD" | grep -qE '^backend/app/models\.py$'; then
+            DB_CHANGED=1
+          fi
+          if git diff --name-only "$BASE" "$HEAD" | grep -qE '^backend/app/main\.py$'; then
+            DB_CHANGED=1
+          fi
+
+          if [ "$DB_CHANGED" -eq 1 ]; then
+            echo "DB-related changes detected. Require a new SQL migration in db/migrations/*.sql"
+            if ! git diff --name-status "$BASE" "$HEAD" | grep -qE '^A\s+db/migrations/.*\.sql$'; then
+              echo "::error::DB schema-related change detected, but no new SQL migration file was added under db/migrations/*.sql"
+              exit 1
+            fi
+          else
+            echo "No DB-related changes detected."
+          fi
