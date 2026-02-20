@@ -30,11 +30,12 @@ jobs:
           file: ./frontend/Dockerfile
           push: true
           tags: |
-            tags: |
-              ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-frontend:sha-${{ github.sha }}
-              ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-frontend:stable
+            ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-frontend:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-frontend:stable
+            ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-frontend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
 
       - name: Build & Push Backend
         uses: docker/build-push-action@v6
@@ -43,8 +44,8 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            tags: |
-               ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-backend:sha-${{ github.sha }}
-               ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-backend:stable
+            ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-backend:sha-${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-backend:stable
+            ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
