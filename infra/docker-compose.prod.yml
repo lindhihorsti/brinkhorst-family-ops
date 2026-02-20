@@ -1,0 +1,28 @@
+services:
+  caddy:
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  backend:
+    build: null
+    image: ghcr.io/lindhihorsti/brinkhorst-family-ops-backend:stable
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTO_MIGRATE: "0"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALLOWLIST: ${TELEGRAM_ALLOWLIST}
+    depends_on: []
+
+  frontend:
+    build: null
+    image: ghcr.io/lindhihorsti/brinkhorst-family-ops-frontend:stable
+
+  # disable local DB on prod runs
+  db:
+    profiles: ["dev"]
