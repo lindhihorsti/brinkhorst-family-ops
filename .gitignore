@@ -21,3 +21,8 @@ venv/
 
 # misc
 .DS_Store
+.env
+
+# Local dev overrides
+infra/docker-compose.override.yml
+infra/.env
