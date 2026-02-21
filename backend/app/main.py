@@ -8,13 +8,17 @@ from datetime import date, datetime, timedelta
 import httpx
 from sqlmodel import create_engine, Session, SQLModel, text as sql_text, select
 
-from app.models import Recipe
+from app.models import Recipe, AppState
 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from uuid import UUID
 
-app = FastAPI()
+app = FastAPI(
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    redoc_url=None,
+)
 
 # CORS (Frontend -> Backend)
 allowed = os.getenv("CORS_ORIGINS", "*")
@@ -34,7 +38,9 @@ app.add_middleware(
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
 
-if engine:
+AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "0").strip() == "1"
+if engine and AUTO_MIGRATE:
+    from app import models  # noqa: F401  (ensures all tables are registered)
     SQLModel.metadata.create_all(engine)
 
 DAY_LABELS = {
