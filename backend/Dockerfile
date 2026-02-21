@@ -4,6 +4,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+ARG GIT_SHA=local
+ENV GIT_SHA=$GIT_SHA
+
 COPY app ./app
 
 EXPOSE 8000

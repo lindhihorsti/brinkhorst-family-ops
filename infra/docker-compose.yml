@@ -15,7 +15,10 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ../backend
+    build:
+      context: ../backend
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
     environment:
       DATABASE_URL: postgresql+psycopg://familyops:familyops@db:5432/familyops
       AUTO_MIGRATE: "0"
@@ -29,7 +32,10 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ../frontend
+    build:
+      context: ../frontend
+      args:
+        GIT_SHA: ${GIT_SHA:-local}
     networks:
       - appnet
     restart: unless-stopped

@@ -43,6 +43,8 @@ if engine and AUTO_MIGRATE:
     from app import models  # noqa: F401  (ensures all tables are registered)
     SQLModel.metadata.create_all(engine)
 
+GIT_SHA = os.getenv("GIT_SHA", "local").strip() or "local"
+
 DAY_LABELS = {
     1: "Mo",
     2: "Di",
@@ -78,7 +80,7 @@ def _on_startup():
 # -----------------------------
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "git_sha": GIT_SHA}
 
 
 @app.get("/api/db/ping")

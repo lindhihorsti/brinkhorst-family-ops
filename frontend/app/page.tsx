@@ -12,6 +12,12 @@ type HealthAll = {
   ai: boolean | null;
 };
 
+function shortSha(value?: string | null) {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "local";
+  return trimmed.length >= 7 ? trimmed.slice(0, 7) : "local";
+}
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100dvh",
@@ -185,6 +191,8 @@ export default function HomePage() {
     scheduler: null,
     ai: null,
   });
+  const [backendSha, setBackendSha] = useState<string>("local");
+  const frontendSha = shortSha(process.env.NEXT_PUBLIC_GIT_SHA);
 
   useEffect(() => {
     let cancelled = false;
@@ -192,8 +200,8 @@ export default function HomePage() {
     const check = async () => {
       const apiP = fetch("/api/health", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then((j) => j?.status === "ok")
-        .catch(() => false);
+        .then((j) => ({ ok: j?.status === "ok", sha: shortSha(j?.git_sha) }))
+        .catch(() => ({ ok: false, sha: "local" }));
 
       const dbP = fetch("/api/db/ping", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -215,9 +223,12 @@ export default function HomePage() {
         .then((j) => j?.ok === true)
         .catch(() => false);
 
-      const [api, db, bot, scheduler, ai] = await Promise.all([apiP, dbP, botP, schedP, aiP]);
+      const [apiRes, db, bot, scheduler, ai] = await Promise.all([apiP, dbP, botP, schedP, aiP]);
 
-      if (!cancelled) setAll({ api, db, bot, scheduler, ai });
+      if (!cancelled) {
+        setAll({ api: apiRes.ok, db, bot, scheduler, ai });
+        setBackendSha(apiRes.sha);
+      }
     };
 
     check();
@@ -289,6 +300,8 @@ export default function HomePage() {
           <p style={styles.small}>
             API/DB/BOT/SCHED/AI werden automatisch alle 20s geprüft und als Ampel angezeigt.
           </p>
+          <p style={styles.small}>Frontend SHA: {frontendSha}</p>
+          <p style={styles.small}>Backend SHA: {backendSha}</p>
         </div>
       </div>
     </main>
