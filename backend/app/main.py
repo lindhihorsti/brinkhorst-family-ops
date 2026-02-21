@@ -78,7 +78,7 @@ def _on_startup():
 # -----------------------------
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "build": "deploy-test-2026-02-21-2155"}
+    return {"status": "ok"}
 
 
 @app.get("/api/db/ping")
