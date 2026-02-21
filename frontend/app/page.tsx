@@ -291,7 +291,7 @@ export default function HomePage() {
 
         <div style={styles.tileStack}>
           <Tile title="Rezepte" subtitle="Rezepte verwalten, Zutaten pflegen" href="/recipes" state="MVP" />
-          <Tile title="Wochenplan" subtitle="Plan, Swap, Shop (kommt als nächstes)" href="/" state="SOON" />
+          <Tile title="Wochenplan" subtitle="Plan, Swap, Shop" href="/weekly-plan" state="MVP" />
           <Tile title="Settings" subtitle="Basisvorrat, Präferenzen, Telegram" href="/" state="SOON" />
         </div>
 

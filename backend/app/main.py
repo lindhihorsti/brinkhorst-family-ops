@@ -187,6 +187,10 @@ class RecipeUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class WeeklySwapRequest(BaseModel):
+    days: List[int]
+
+
 @app.get("/api/recipes/{recipe_id}")
 def api_get_recipe(recipe_id: UUID):
     if engine is None:
@@ -251,6 +255,210 @@ def api_delete_recipe(recipe_id: UUID):
         session.add(r)
         session.commit()
         return {"ok": True}
+
+
+def _current_week_start() -> date:
+    today = date.today()
+    return _week_start_monday(today)
+
+
+@app.get("/api/weekly/current")
+def api_weekly_current():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    base = _db_get_weekly_plan(week_start)
+    draft = _db_get_draft(week_start)
+
+    plan_payload = _build_plan_payload(base["days"]) if base else None
+    draft_payload = None
+    if draft:
+        proposed_days = draft.get("proposed_days") or {}
+        requested_swaps = list(draft.get("requested_swaps") or [])
+        draft_payload = _build_draft_payload(proposed_days, requested_swaps)
+
+    if not base:
+        return {
+            "ok": False,
+            "week_start": week_start.isoformat(),
+            "has_plan": False,
+            "has_draft": draft_payload is not None,
+            "plan": None,
+            "draft": draft_payload,
+            "message": "Kein Plan vorhanden. Erst `plan` ausführen.",
+        }
+
+    return {
+        "ok": True,
+        "week_start": week_start.isoformat(),
+        "has_plan": True,
+        "has_draft": draft_payload is not None,
+        "plan": plan_payload,
+        "draft": draft_payload,
+        "message": plan_payload["message"],
+    }
+
+
+@app.post("/api/weekly/plan")
+def api_weekly_plan():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    days = _build_new_week_plan()
+    _db_upsert_weekly_plan(week_start, days)
+
+    base = _db_get_weekly_plan(week_start)
+    draft = _db_get_draft(week_start)
+    plan_payload = _build_plan_payload(base["days"]) if base else None
+    draft_payload = None
+    if draft:
+        proposed_days = draft.get("proposed_days") or {}
+        requested_swaps = list(draft.get("requested_swaps") or [])
+        draft_payload = _build_draft_payload(proposed_days, requested_swaps)
+
+    return {
+        "ok": True,
+        "week_start": week_start.isoformat(),
+        "has_plan": plan_payload is not None,
+        "has_draft": draft_payload is not None,
+        "plan": plan_payload,
+        "draft": draft_payload,
+        "message": plan_payload["message"] if plan_payload else "Kein Plan vorhanden.",
+    }
+
+
+@app.post("/api/weekly/swap")
+def api_weekly_swap(payload: WeeklySwapRequest):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    days = payload.days or []
+    if not days:
+        raise HTTPException(400, "days must be non-empty")
+    if any((d < 1 or d > 7) for d in days):
+        raise HTTPException(400, "days must be 1..7")
+    if len(set(days)) != len(days):
+        raise HTTPException(400, "days must be unique")
+
+    base = _db_get_weekly_plan(week_start)
+    if not base:
+        return {
+            "ok": False,
+            "week_start": week_start.isoformat(),
+            "message": "Kein Plan vorhanden. Erst `plan` ausführen.",
+        }
+
+    swap_days = sorted(days)
+    base_days = base["days"]
+    base_plan_id = base["id"]
+
+    proposed = _apply_swaps(base_days, swap_days)
+    _db_create_draft(week_start, str(base_plan_id), proposed, swap_days)
+
+    return {
+        "ok": True,
+        "week_start": week_start.isoformat(),
+        "draft": _build_draft_payload(proposed, swap_days),
+    }
+
+
+@app.post("/api/weekly/confirm")
+def api_weekly_confirm():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    d = _db_get_draft(week_start)
+    if not d:
+        return {
+            "ok": False,
+            "week_start": week_start.isoformat(),
+            "message": "Kein Draft vorhanden. Nutze erst `swap ...`.",
+        }
+
+    proposed = d["proposed_days"]
+    _db_upsert_weekly_plan(week_start, proposed)
+    _db_delete_draft(week_start)
+
+    plan_payload = _build_plan_payload(proposed)
+    return {
+        "ok": True,
+        "week_start": week_start.isoformat(),
+        "has_plan": True,
+        "has_draft": False,
+        "plan": plan_payload,
+        "draft": None,
+        "message": "✅ Übernommen.\n\n" + plan_payload["message"],
+    }
+
+
+@app.post("/api/weekly/cancel")
+def api_weekly_cancel():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    _db_delete_draft(week_start)
+    return {"ok": True, "week_start": week_start.isoformat(), "message": "Draft verworfen."}
+
+
+@app.get("/api/weekly/shop")
+def api_weekly_shop():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    base = _db_get_weekly_plan(week_start)
+    if not base:
+        return {
+            "ok": False,
+            "week_start": week_start.isoformat(),
+            "items": [],
+            "message": "Kein Plan vorhanden. Erst `plan` ausführen.",
+        }
+
+    days = base["days"]
+    pantry = {
+        "salz","pfeffer","olivenöl","rapsöl","butter","mehl","zucker",
+        "reis","pasta","sojasauce","essig","erdnussöl","knoblauch"
+    }
+
+    items: Dict[str, int] = {}
+
+    with Session(engine) as session:
+        for d in range(1, 8):
+            rid = days.get(str(d))
+            if not rid or (isinstance(rid, str) and rid.startswith("KI:")):
+                continue
+            r = session.get(Recipe, rid)
+            if not r:
+                continue
+            for ing in (r.ingredients or []):
+                key = ing.strip()
+                if not key:
+                    continue
+                if key.lower() in pantry:
+                    continue
+                items[key] = items.get(key, 0) + 1
+
+    if not items:
+        return {
+            "ok": True,
+            "week_start": week_start.isoformat(),
+            "items": [],
+            "message": "🧺 Einkaufsliste ist leer (oder alle Zutaten sind Pantry).",
+        }
+
+    lines = ["🧺 Einkaufsliste (aggregiert):"]
+    for k in sorted(items.keys(), key=lambda s: s.lower()):
+        cnt = items[k]
+        lines.append(f"- {k}" + (f"  x{cnt}" if cnt > 1 else ""))
+
+    items_list = [{"name": k, "count": items[k]} for k in sorted(items.keys(), key=lambda s: s.lower())]
+
+    return {
+        "ok": True,
+        "week_start": week_start.isoformat(),
+        "items": items_list,
+        "message": "\n".join(lines),
+    }
 
 
 
@@ -599,6 +807,62 @@ def _parse_swap_days(cmd: str) -> List[int]:
 
     # unique, sorted
     return sorted(set(days))
+
+
+def _resolve_day_title(rid: Optional[str]) -> str:
+    if not rid:
+        return "—"
+    if rid.startswith("KI:"):
+        return rid
+    title = rid
+    with Session(engine) as session:
+        r = session.get(Recipe, rid)
+        if r:
+            title = r.title
+    return title
+
+
+def _build_day_entries(days: Dict[str, str]) -> List[Dict[str, Any]]:
+    entries: List[Dict[str, Any]] = []
+    for i in range(1, 8):
+        rid = days.get(str(i))
+        if not rid:
+            kind = "empty"
+            recipe_id = None
+        elif isinstance(rid, str) and rid.startswith("KI:"):
+            kind = "dummy"
+            recipe_id = None
+        else:
+            kind = "recipe"
+            recipe_id = rid
+        entries.append(
+            {
+                "day": i,
+                "label": DAY_LABELS[i],
+                "kind": kind,
+                "recipe_id": recipe_id,
+                "title": _resolve_day_title(rid),
+            }
+        )
+    return entries
+
+
+def _build_plan_payload(days: Dict[str, str]) -> Dict[str, Any]:
+    return {
+        "days": _build_day_entries(days),
+        "raw_days": days,
+        "message": _format_plan(days),
+    }
+
+
+def _build_draft_payload(proposed_days: Dict[str, str], requested_swaps: List[int]) -> Dict[str, Any]:
+    preview = "🔁 Vorschau (noch NICHT übernommen). Nutze `confirm` oder `cancel`.\n\n" + _format_plan(proposed_days)
+    return {
+        "requested_swaps": requested_swaps,
+        "proposed_days": _build_day_entries(proposed_days),
+        "raw_proposed_days": proposed_days,
+        "message": preview,
+    }
 
 
 # -----------------------------
