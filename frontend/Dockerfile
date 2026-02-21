@@ -7,6 +7,8 @@ FROM node:20-bullseye AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ARG GIT_SHA=local
+ENV NEXT_PUBLIC_GIT_SHA=$GIT_SHA
 RUN npm run build
 
 FROM node:20-bullseye AS runner

@@ -28,6 +28,8 @@ jobs:
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-frontend:sha-${{ github.sha }}
@@ -42,6 +44,8 @@ jobs:
         with:
           context: ./backend
           file: ./backend/Dockerfile
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/brinkhorst-family-ops-backend:sha-${{ github.sha }}
