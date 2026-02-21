@@ -26,3 +26,8 @@ venv/
 # Local dev overrides
 infra/docker-compose.override.yml
 infra/.env
+
+# local dumps / backups
+supabase_schema.sql
+.tmp_*.sql
+*.bak

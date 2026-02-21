@@ -2,7 +2,7 @@ from typing import Optional, List
 from uuid import UUID
 from sqlmodel import SQLModel, Field
 from datetime import datetime
-from sqlalchemy import Column, text
+from sqlalchemy import Column, text, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
 from sqlalchemy import String
 
@@ -32,3 +32,16 @@ class Recipe(SQLModel, table=True):
     is_active: bool = True
     created_by: str = "dennis"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AppState(SQLModel, table=True):
+    __tablename__ = "app_state"
+
+    key: str = Field(primary_key=True, max_length=128)
+    value: str | None = Field(default=None)
+
+    created_at: datetime | None = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    )
+    updated_at: datetime | None = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    )
