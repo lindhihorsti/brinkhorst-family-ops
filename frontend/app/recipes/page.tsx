@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { api, type Recipe } from "../lib/api";
+import { api, type Recipe, type RecipeCreate, type RecipeImportDraft } from "../lib/api";
 import { BtnLink, Chip, Page, styles } from "../lib/ui";
 
 export default function RecipesPage() {
@@ -10,6 +10,19 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Recipe[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [importStep, setImportStep] = useState<1 | 2>(1);
+  const [importUrl, setImportUrl] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [importSaving, setImportSaving] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importDraft, setImportDraft] = useState<RecipeImportDraft | null>(null);
+  const [importExistingId, setImportExistingId] = useState<string | null>(null);
+  const [tagInput, setTagInput] = useState("");
+  const [ingredientText, setIngredientText] = useState("");
 
   const query = useMemo(() => q.trim(), [q]);
 
@@ -30,7 +43,118 @@ export default function RecipesPage() {
     return () => {
       cancelled = true;
     };
-  }, [query]);
+  }, [query, refreshTick]);
+
+  const resetImport = () => {
+    setImportStep(1);
+    setImportUrl("");
+    setImportError(null);
+    setImportWarnings([]);
+    setImportDraft(null);
+    setImportExistingId(null);
+    setImportLoading(false);
+    setImportSaving(false);
+    setTagInput("");
+    setIngredientText("");
+  };
+
+  const openImport = () => {
+    resetImport();
+    setImportOpen(true);
+  };
+
+  const closeImport = () => {
+    setImportOpen(false);
+    resetImport();
+  };
+
+  const loadPreview = async () => {
+    setImportLoading(true);
+    setImportError(null);
+    setImportExistingId(null);
+    try {
+      const res = await fetch("/api/recipes/import/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: importUrl }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        setImportError(data?.error ?? "Vorschau fehlgeschlagen.");
+        setImportExistingId(data?.existing_recipe_id ?? null);
+        return;
+      }
+      setImportWarnings(data.warnings ?? []);
+      setImportDraft(data.draft);
+      setTagInput((data.draft?.tags ?? []).join(", "));
+      setIngredientText((data.draft?.ingredients ?? []).join("\n"));
+      setImportStep(2);
+    } catch (e: any) {
+      setImportError(e?.message ?? "Vorschau fehlgeschlagen.");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const updateTags = (value: string) => {
+    setTagInput(value);
+    const tags = value
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const limited = tags.slice(0, 3);
+    if (importDraft) {
+      setImportDraft({ ...importDraft, tags: limited });
+    }
+  };
+
+  const updateIngredients = (value: string) => {
+    setIngredientText(value);
+    const items = value
+      .split("\n")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (importDraft) {
+      setImportDraft({ ...importDraft, ingredients: items });
+    }
+  };
+
+  const saveImport = async () => {
+    if (!importDraft) return;
+    setImportSaving(true);
+    setImportError(null);
+    setImportExistingId(null);
+    const payload: RecipeCreate = {
+      title: importDraft.title,
+      source_url: importDraft.source_url,
+      notes: importDraft.notes,
+      tags: importDraft.tags ?? [],
+      ingredients: importDraft.ingredients ?? [],
+      time_minutes: importDraft.time_minutes ?? null,
+      difficulty: importDraft.difficulty ?? null,
+    };
+    try {
+      const res = await fetch("/api/recipes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const detail = data?.detail ?? data;
+        setImportError(detail?.error ?? "Speichern fehlgeschlagen.");
+        setImportExistingId(detail?.existing_recipe_id ?? null);
+        return;
+      }
+      await res.json();
+      setRefreshTick((v) => v + 1);
+      closeImport();
+    } catch (e: any) {
+      setImportError(e?.message ?? "Speichern fehlgeschlagen.");
+    } finally {
+      setImportSaving(false);
+    }
+  };
 
   return (
     <Page
@@ -91,13 +215,168 @@ export default function RecipesPage() {
       )}
 
       <div style={styles.fabWrap}>
-        <Link
-          href="/recipes/new"
-          style={{ ...styles.buttonPrimary, width: "100%", justifyContent: "center" }}
-        >
-          + Neues Rezept
-        </Link>
+        <div style={{ display: "grid", gap: 10 }}>
+          <button
+            onClick={openImport}
+            style={{ ...styles.button, width: "100%", justifyContent: "center" }}
+          >
+            Rezept importieren (URL)
+          </button>
+          <Link
+            href="/recipes/new"
+            style={{ ...styles.buttonPrimary, width: "100%", justifyContent: "center" }}
+          >
+            + Neues Rezept
+          </Link>
+        </div>
       </div>
+
+      {importOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 18,
+            zIndex: 20,
+          }}
+        >
+          <div style={{ ...styles.card, width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto" }}>
+            <div style={{ ...styles.rowBetween, marginBottom: 12 }}>
+              <div style={{ fontWeight: 800 }}>Rezept importieren</div>
+              <button onClick={closeImport} style={styles.button}>
+                X
+              </button>
+            </div>
+
+            {importStep === 1 ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ fontSize: 13, opacity: 0.8 }}>Schritt 1: URL eingeben</div>
+                <input
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  placeholder="https://..."
+                  style={styles.input}
+                />
+                {importError ? (
+                  <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff" }}>
+                    <div style={{ fontWeight: 800, marginBottom: 6 }}>Fehler</div>
+                    <div style={{ fontSize: 13 }}>{importError}</div>
+                    {importExistingId ? (
+                      <div style={{ marginTop: 6 }}>
+                        <Link href={`/recipes/${importExistingId}`} style={styles.button}>
+                          Vorhandenes Rezept öffnen
+                        </Link>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <button onClick={loadPreview} style={styles.buttonPrimary} disabled={importLoading}>
+                  {importLoading ? "Erstelle Vorschau…" : "Vorschau erstellen"}
+                </button>
+              </div>
+            ) : null}
+
+            {importStep === 2 && importDraft ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div style={{ fontSize: 13, opacity: 0.8 }}>Schritt 2: Vorschau prüfen</div>
+                {importWarnings.length ? (
+                  <div style={{ ...styles.card, borderColor: "#fde68a", background: "#fffbeb" }}>
+                    <div style={{ fontWeight: 800, marginBottom: 6 }}>Hinweise</div>
+                    <div style={{ fontSize: 13 }}>{importWarnings.join(" ")}</div>
+                  </div>
+                ) : null}
+                {importError ? (
+                  <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff" }}>
+                    <div style={{ fontWeight: 800, marginBottom: 6 }}>Fehler</div>
+                    <div style={{ fontSize: 13 }}>{importError}</div>
+                    {importExistingId ? (
+                      <div style={{ marginTop: 6 }}>
+                        <Link href={`/recipes/${importExistingId}`} style={styles.button}>
+                          Vorhandenes Rezept öffnen
+                        </Link>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <label style={styles.small}>Titel</label>
+                <input
+                  value={importDraft.title}
+                  onChange={(e) => setImportDraft({ ...importDraft, title: e.target.value })}
+                  style={styles.input}
+                />
+
+                <label style={styles.small}>Quelle (URL)</label>
+                <input
+                  value={importDraft.source_url}
+                  onChange={(e) => setImportDraft({ ...importDraft, source_url: e.target.value })}
+                  style={styles.input}
+                />
+
+                <label style={styles.small}>Notizen (2-4 Sätze)</label>
+                <textarea
+                  value={importDraft.notes}
+                  onChange={(e) => setImportDraft({ ...importDraft, notes: e.target.value })}
+                  style={styles.textarea}
+                  rows={4}
+                />
+
+                <label style={styles.small}>Tags (max 3, Komma-getrennt)</label>
+                <input value={tagInput} onChange={(e) => updateTags(e.target.value)} style={styles.input} />
+                <div style={styles.small}>{(importDraft.tags ?? []).length}/3 Tags</div>
+
+                <label style={styles.small}>Zeit (Minuten)</label>
+                <input
+                  value={importDraft.time_minutes ?? ""}
+                  onChange={(e) =>
+                    setImportDraft({
+                      ...importDraft,
+                      time_minutes: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  type="number"
+                  min={0}
+                  style={styles.input}
+                />
+
+                <label style={styles.small}>Schwierigkeit</label>
+                <select
+                  value={importDraft.difficulty ?? 1}
+                  onChange={(e) =>
+                    setImportDraft({ ...importDraft, difficulty: Number(e.target.value) as 1 | 2 | 3 })
+                  }
+                  style={styles.input}
+                >
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                </select>
+
+                <label style={styles.small}>Zutaten (eine pro Zeile)</label>
+                <textarea
+                  value={ingredientText}
+                  onChange={(e) => updateIngredients(e.target.value)}
+                  style={styles.textarea}
+                  rows={6}
+                />
+
+                <div style={{ display: "grid", gap: 8 }}>
+                  <button onClick={closeImport} style={styles.button}>
+                    Abbrechen
+                  </button>
+                  <button onClick={saveImport} style={styles.buttonPrimary} disabled={importSaving}>
+                    {importSaving ? "Speichere…" : "Speichern"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </Page>
   );
 }

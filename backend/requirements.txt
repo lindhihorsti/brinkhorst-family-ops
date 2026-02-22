@@ -4,3 +4,8 @@ httpx==0.28.1
 sqlmodel==0.0.24
 sqlalchemy==2.0.43
 psycopg[binary]==3.2.10
+openai==1.70.0
+beautifulsoup4==4.12.3
+readability-lxml==0.8.1
+lxml==5.2.2
+lxml_html_clean==0.4.1
