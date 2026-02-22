@@ -1,5 +1,16 @@
 :80 {
-  reverse_proxy /api/* backend:8000
-  reverse_proxy /bot/* backend:8000
-  reverse_proxy frontend:3000
+  @tgwebhook path /bot/telegram/webhook*
+  handle @tgwebhook {
+    reverse_proxy backend:8000
+  }
+
+  handle {
+    basic_auth {
+      dennis {$DENNIS_PWHASH}
+    }
+
+    reverse_proxy /api/* backend:8000
+    reverse_proxy /bot/* backend:8000
+    reverse_proxy frontend:3000
+  }
 }
