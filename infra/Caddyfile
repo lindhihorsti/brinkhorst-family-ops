@@ -1,9 +1,19 @@
 brinkhorst-family-ops.duckdns.org {
 
-  # Backend routes
-  reverse_proxy /api/* backend:8000
-  reverse_proxy /bot/* backend:8000
+  # Telegram webhook must be public (Telegram cannot send Basic Auth)
+  @tgwebhook path /bot/telegram/webhook*
+  handle @tgwebhook {
+    reverse_proxy backend:8000
+  }
 
-  # Everything else to frontend
-  reverse_proxy frontend:3000
+  # Everything else is protected
+  handle {
+    basic_auth {
+      dennis {$DENNIS_PWHASH}
+    }
+
+    reverse_proxy /api/* backend:8000
+    reverse_proxy /bot/* backend:8000
+    reverse_proxy frontend:3000
+  }
 }
