@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, HTTPException
 import json
 import os
 import re
+import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import date, datetime, timedelta
 
@@ -63,6 +64,39 @@ DAY_ALIASES = {
     "sa": 6, "samstag": 6,
     "so": 7, "sonntag": 7,
 }
+
+DEFAULT_PANTRY_ITEMS = [
+    {"name": "salt", "uncertain": False, "aliases": []},
+    {"name": "pepper", "uncertain": False, "aliases": []},
+    {"name": "sugar", "uncertain": False, "aliases": []},
+    {"name": "flour", "uncertain": False, "aliases": []},
+    {"name": "olive oil", "uncertain": False, "aliases": ["cooking oil"]},
+    {"name": "vinegar", "uncertain": False, "aliases": []},
+    {"name": "soy sauce", "uncertain": False, "aliases": []},
+    {"name": "mustard", "uncertain": False, "aliases": []},
+    {"name": "tomato paste", "uncertain": False, "aliases": []},
+    {"name": "stock", "uncertain": False, "aliases": ["bouillon"]},
+    {"name": "rice", "uncertain": False, "aliases": []},
+    {"name": "pasta", "uncertain": False, "aliases": []},
+    {"name": "paprika powder", "uncertain": False, "aliases": []},
+    {"name": "curry", "uncertain": False, "aliases": []},
+    {"name": "chili", "uncertain": False, "aliases": []},
+    {"name": "oregano", "uncertain": False, "aliases": []},
+    {"name": "basil", "uncertain": False, "aliases": []},
+    {"name": "baking powder", "uncertain": False, "aliases": []},
+    {"name": "starch", "uncertain": False, "aliases": []},
+    {"name": "garlic", "uncertain": True, "aliases": []},
+    {"name": "onions", "uncertain": True, "aliases": []},
+]
+DEFAULT_PREFERENCES = {"tags": []}
+DEFAULT_TELEGRAM = {"auto_send_plan": False, "auto_send_shop": False}
+
+APP_STATE_SETTINGS_PANTRY = "settings_pantry"
+APP_STATE_SETTINGS_PREFERENCES = "settings_preferences"
+APP_STATE_SETTINGS_TELEGRAM = "settings_telegram"
+APP_STATE_TELEGRAM_LAST_CHAT_ID = "telegram_last_chat_id"
+
+PUNCT_RE = re.compile(r"[.,;:!?()\[\]{}\"'`´/\\|]+")
 
 
 #-----------------------------
@@ -154,6 +188,263 @@ def jobs_status():
     return {"ok": bool(ok), "last_run": value, "updated_at": updated_at.isoformat()}
 
 
+def _ensure_app_state_table(conn) -> None:
+    conn.execute(
+        sql_text(
+            """
+            create table if not exists public.app_state (
+              key text primary key,
+              value text not null,
+              updated_at timestamptz not null default now()
+            )
+            """
+        )
+    )
+    conn.commit()
+
+
+def _db_get_app_state_value(key: str) -> Optional[str]:
+    if engine is None:
+        raise RuntimeError("DATABASE_URL missing")
+    with engine.connect() as conn:
+        _ensure_app_state_table(conn)
+        row = conn.execute(
+            sql_text("select value from public.app_state where key = :k"),
+            {"k": key},
+        ).fetchone()
+        return row[0] if row else None
+
+
+def _db_set_app_state_value(key: str, value: str) -> None:
+    if engine is None:
+        raise RuntimeError("DATABASE_URL missing")
+    with engine.connect() as conn:
+        _ensure_app_state_table(conn)
+        conn.execute(
+            sql_text(
+                """
+                insert into public.app_state (key, value)
+                values (:k, :v)
+                on conflict (key) do update set value = excluded.value, updated_at = now()
+                """
+            ),
+            {"k": key, "v": value},
+        )
+        conn.commit()
+
+
+def _db_get_app_state_json(key: str, default: Any) -> Any:
+    raw = _db_get_app_state_value(key)
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except Exception:
+        return default
+
+
+def _normalize_ingredient(value: str) -> str:
+    if not value:
+        return ""
+    s = value.strip().lower()
+    s = PUNCT_RE.sub(" ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    if not s:
+        return ""
+    if " " not in s:
+        if s.endswith("en") and len(s) > 4:
+            s = s[:-2]
+        elif s.endswith("e") and len(s) > 3:
+            s = s[:-1]
+    return s
+
+
+def _clean_display_name(value: str) -> str:
+    s = value.strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
+def _validate_pantry_items(items: List[PantryItemPayload]) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    for item in items:
+        name = (item.name or "").strip()
+        if not name:
+            raise HTTPException(400, "pantry item name must be non-empty")
+        aliases = [a.strip() for a in (item.aliases or []) if a and a.strip()]
+        # preserve order while removing duplicates
+        seen = set()
+        deduped_aliases = []
+        for a in aliases:
+            if a not in seen:
+                seen.add(a)
+                deduped_aliases.append(a)
+        cleaned.append(
+            {
+                "name": name,
+                "uncertain": bool(item.uncertain),
+                "aliases": deduped_aliases,
+            }
+        )
+    return cleaned
+
+
+def _clean_tags(tags: List[str]) -> List[str]:
+    cleaned = [t.strip() for t in (tags or []) if t and t.strip()]
+    seen = set()
+    unique = []
+    for t in cleaned:
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+    return unique
+
+
+def _get_settings_pantry() -> List[Dict[str, Any]]:
+    data = _db_get_app_state_json(APP_STATE_SETTINGS_PANTRY, {"items": DEFAULT_PANTRY_ITEMS})
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        return list(DEFAULT_PANTRY_ITEMS)
+    normalized = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            continue
+        aliases = raw.get("aliases") or []
+        if not isinstance(aliases, list):
+            aliases = []
+        aliases = [str(a).strip() for a in aliases if a and str(a).strip()]
+        normalized.append(
+            {
+                "name": name,
+                "uncertain": bool(raw.get("uncertain")),
+                "aliases": aliases,
+            }
+        )
+    return normalized or list(DEFAULT_PANTRY_ITEMS)
+
+
+def _get_settings_preferences() -> Dict[str, Any]:
+    data = _db_get_app_state_json(APP_STATE_SETTINGS_PREFERENCES, DEFAULT_PREFERENCES)
+    tags = data.get("tags") if isinstance(data, dict) else None
+    return {"tags": _clean_tags(tags or [])}
+
+
+def _get_settings_telegram() -> Dict[str, Any]:
+    data = _db_get_app_state_json(APP_STATE_SETTINGS_TELEGRAM, DEFAULT_TELEGRAM)
+    if not isinstance(data, dict):
+        return dict(DEFAULT_TELEGRAM)
+    return {
+        "auto_send_plan": bool(data.get("auto_send_plan", False)),
+        "auto_send_shop": bool(data.get("auto_send_shop", False)),
+    }
+
+
+def _build_pantry_alias_map(items: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    alias_map: Dict[str, Dict[str, Any]] = {}
+    for item in items:
+        name = item.get("name", "")
+        uncertain = bool(item.get("uncertain"))
+        aliases = item.get("aliases") or []
+        candidates = [name] + list(aliases)
+        for cand in candidates:
+            norm = _normalize_ingredient(str(cand))
+            if not norm:
+                continue
+            if norm not in alias_map:
+                alias_map[norm] = {"name": name, "uncertain": uncertain}
+    return alias_map
+
+
+def _aggregate_shop_items(days: Dict[str, str]) -> Dict[str, Any]:
+    pantry_items = _get_settings_pantry()
+    pantry_map = _build_pantry_alias_map(pantry_items)
+
+    buy_counts: Dict[str, int] = {}
+    buy_display: Dict[str, str] = {}
+    pantry_used_counts: Dict[str, int] = {}
+    pantry_uncertain_counts: Dict[str, int] = {}
+
+    with Session(engine) as session:
+        for d in range(1, 8):
+            rid = days.get(str(d))
+            if not rid or (isinstance(rid, str) and rid.startswith("KI:")):
+                continue
+            r = session.get(Recipe, rid)
+            if not r:
+                continue
+            for ing in (r.ingredients or []):
+                raw = (ing or "").strip()
+                if not raw:
+                    continue
+                norm = _normalize_ingredient(raw)
+                if not norm:
+                    continue
+                pantry_entry = pantry_map.get(norm)
+                if pantry_entry:
+                    key = pantry_entry["name"]
+                    if pantry_entry.get("uncertain"):
+                        pantry_uncertain_counts[key] = pantry_uncertain_counts.get(key, 0) + 1
+                    else:
+                        pantry_used_counts[key] = pantry_used_counts.get(key, 0) + 1
+                    continue
+
+                display = _clean_display_name(raw)
+                if norm not in buy_display:
+                    buy_display[norm] = display
+                buy_counts[norm] = buy_counts.get(norm, 0) + 1
+
+    def _to_list(counts: Dict[str, int], display_map: Optional[Dict[str, str]] = None):
+        if display_map is None:
+            items = [{"name": k, "count": v} for k, v in counts.items()]
+        else:
+            items = [{"name": display_map[k], "count": v} for k, v in counts.items()]
+        return sorted(items, key=lambda x: x["name"].lower())
+
+    buy_list = _to_list(buy_counts, buy_display)
+    pantry_used_list = _to_list(pantry_used_counts)
+    pantry_uncertain_list = _to_list(pantry_uncertain_counts)
+
+    message_lines: List[str] = []
+    if not buy_list:
+        message_lines.append("🧺 Einkaufsliste ist leer (oder alle Zutaten sind Pantry).")
+    else:
+        message_lines.append("🧺 Einkaufsliste (aggregiert):")
+        for item in buy_list:
+            cnt = item["count"]
+            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
+
+    if pantry_used_list:
+        message_lines.append("")
+        message_lines.append("Pantry verwendet:")
+        for item in pantry_used_list:
+            cnt = item["count"]
+            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
+
+    if pantry_uncertain_list:
+        message_lines.append("")
+        message_lines.append("Pantry unsicher:")
+        for item in pantry_uncertain_list:
+            cnt = item["count"]
+            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
+
+    return {
+        "buy": buy_list,
+        "pantry_used": pantry_used_list,
+        "pantry_uncertain_used": pantry_uncertain_list,
+        "message": "\n".join(message_lines),
+    }
+
+
+def _send_telegram_sync(chat_id: int, text_msg: str) -> None:
+    try:
+        asyncio.run(_tg_send(chat_id, text_msg))
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+        loop.create_task(_tg_send(chat_id, text_msg))
+
 @app.get("/api/recipes")
 def api_list_recipes(limit: int = 50, q: Optional[str] = None):
     if engine is None:
@@ -189,6 +480,25 @@ class RecipeUpdate(BaseModel):
 
 class WeeklySwapRequest(BaseModel):
     days: List[int]
+
+
+class PantryItemPayload(BaseModel):
+    name: str
+    uncertain: bool = False
+    aliases: List[str] = []
+
+
+class PantrySettingsPayload(BaseModel):
+    items: List[PantryItemPayload]
+
+
+class PreferencesSettingsPayload(BaseModel):
+    tags: List[str] = []
+
+
+class TelegramSettingsPayload(BaseModel):
+    auto_send_plan: bool = False
+    auto_send_shop: bool = False
 
 
 @app.get("/api/recipes/{recipe_id}")
@@ -257,6 +567,70 @@ def api_delete_recipe(recipe_id: UUID):
         return {"ok": True}
 
 
+@app.get("/api/settings")
+def api_get_settings():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    pantry = _get_settings_pantry()
+    preferences = _get_settings_preferences()
+    telegram = _get_settings_telegram()
+    last_chat_id = _db_get_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID)
+    return {
+        "ok": True,
+        "pantry": {"items": pantry},
+        "preferences": preferences,
+        "telegram": telegram,
+        "telegram_last_chat_id": last_chat_id,
+    }
+
+
+@app.put("/api/settings/pantry")
+def api_put_settings_pantry(payload: PantrySettingsPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    cleaned = _validate_pantry_items(payload.items or [])
+    _db_set_app_state_value(APP_STATE_SETTINGS_PANTRY, json.dumps({"items": cleaned}))
+    return {"ok": True, "pantry": {"items": cleaned}}
+
+
+@app.put("/api/settings/preferences")
+def api_put_settings_preferences(payload: PreferencesSettingsPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    tags = _clean_tags(payload.tags or [])
+    data = {"tags": tags}
+    _db_set_app_state_value(APP_STATE_SETTINGS_PREFERENCES, json.dumps(data))
+    return {"ok": True, "preferences": data}
+
+
+@app.put("/api/settings/telegram")
+def api_put_settings_telegram(payload: TelegramSettingsPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    data = {
+        "auto_send_plan": bool(payload.auto_send_plan),
+        "auto_send_shop": bool(payload.auto_send_shop),
+    }
+    _db_set_app_state_value(APP_STATE_SETTINGS_TELEGRAM, json.dumps(data))
+    return {"ok": True, "telegram": data}
+
+
+@app.get("/api/settings/preferences/options")
+def api_get_preference_options():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    tags: List[str] = []
+    with Session(engine) as session:
+        stmt = select(Recipe.tags).where(Recipe.is_active == True)  # noqa: E712
+        rows = session.exec(stmt).all()
+        for row in rows:
+            for tag in (row or []):
+                if tag and tag not in tags:
+                    tags.append(tag)
+    tags = sorted(tags, key=lambda s: s.lower())
+    return {"ok": True, "tags": tags}
+
+
 def _current_week_start() -> date:
     today = date.today()
     return _week_start_monday(today)
@@ -300,7 +674,7 @@ def api_weekly_current():
 
 
 @app.post("/api/weekly/plan")
-def api_weekly_plan():
+def api_weekly_plan(notify: int = 0):
     if engine is None:
         raise HTTPException(500, "DATABASE_URL missing")
     week_start = _current_week_start()
@@ -316,7 +690,7 @@ def api_weekly_plan():
         requested_swaps = list(draft.get("requested_swaps") or [])
         draft_payload = _build_draft_payload(proposed_days, requested_swaps)
 
-    return {
+    response = {
         "ok": True,
         "week_start": week_start.isoformat(),
         "has_plan": plan_payload is not None,
@@ -325,6 +699,15 @@ def api_weekly_plan():
         "draft": draft_payload,
         "message": plan_payload["message"] if plan_payload else "Kein Plan vorhanden.",
     }
+    if notify == 1:
+        telegram_settings = _get_settings_telegram()
+        if telegram_settings.get("auto_send_plan"):
+            last_chat_id = _db_get_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID)
+            if last_chat_id:
+                _send_telegram_sync(int(last_chat_id), response["message"])
+            else:
+                response["warning"] = "Send any message to the bot once to register the chat."
+    return response
 
 
 @app.post("/api/weekly/swap")
@@ -401,7 +784,7 @@ def api_weekly_cancel():
 
 
 @app.get("/api/weekly/shop")
-def api_weekly_shop():
+def api_weekly_shop(notify: int = 0):
     if engine is None:
         raise HTTPException(500, "DATABASE_URL missing")
     week_start = _current_week_start()
@@ -415,50 +798,25 @@ def api_weekly_shop():
         }
 
     days = base["days"]
-    pantry = {
-        "salz","pfeffer","olivenöl","rapsöl","butter","mehl","zucker",
-        "reis","pasta","sojasauce","essig","erdnussöl","knoblauch"
-    }
-
-    items: Dict[str, int] = {}
-
-    with Session(engine) as session:
-        for d in range(1, 8):
-            rid = days.get(str(d))
-            if not rid or (isinstance(rid, str) and rid.startswith("KI:")):
-                continue
-            r = session.get(Recipe, rid)
-            if not r:
-                continue
-            for ing in (r.ingredients or []):
-                key = ing.strip()
-                if not key:
-                    continue
-                if key.lower() in pantry:
-                    continue
-                items[key] = items.get(key, 0) + 1
-
-    if not items:
-        return {
-            "ok": True,
-            "week_start": week_start.isoformat(),
-            "items": [],
-            "message": "🧺 Einkaufsliste ist leer (oder alle Zutaten sind Pantry).",
-        }
-
-    lines = ["🧺 Einkaufsliste (aggregiert):"]
-    for k in sorted(items.keys(), key=lambda s: s.lower()):
-        cnt = items[k]
-        lines.append(f"- {k}" + (f"  x{cnt}" if cnt > 1 else ""))
-
-    items_list = [{"name": k, "count": items[k]} for k in sorted(items.keys(), key=lambda s: s.lower())]
-
-    return {
+    aggregated = _aggregate_shop_items(days)
+    response = {
         "ok": True,
         "week_start": week_start.isoformat(),
-        "items": items_list,
-        "message": "\n".join(lines),
+        "items": aggregated["buy"],
+        "buy": aggregated["buy"],
+        "pantry_used": aggregated["pantry_used"],
+        "pantry_uncertain_used": aggregated["pantry_uncertain_used"],
+        "message": aggregated["message"],
     }
+    if notify == 1:
+        telegram_settings = _get_settings_telegram()
+        if telegram_settings.get("auto_send_shop"):
+            last_chat_id = _db_get_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID)
+            if last_chat_id:
+                _send_telegram_sync(int(last_chat_id), response["message"])
+            else:
+                response["warning"] = "Send any message to the bot once to register the chat."
+    return response
 
 
 
@@ -687,7 +1045,12 @@ def _db_delete_draft(week_start: date) -> None:
 # -----------------------------
 # Planning logic (MVP simple)
 # -----------------------------
-def _pick_recipes_for_days(existing_ids: List[str], count: int) -> Tuple[List[str], List[str]]:
+def _pick_recipes_for_days(
+    existing_ids: List[str],
+    count: int,
+    prefer_tags: Optional[List[str]] = None,
+    prefer_max: int = 0,
+) -> Tuple[List[str], List[str]]:
     """
     Returns (picked_recipe_ids, dummy_titles_if_missing)
     - Picks from DB first (excluding existing_ids)
@@ -706,9 +1069,24 @@ def _pick_recipes_for_days(existing_ids: List[str], count: int) -> Tuple[List[st
 
     available = [r for r in all_recipes if str(r.id) not in existing_ids]
 
+    prefer_set = {t for t in (prefer_tags or []) if t}
+    preferred: List[Recipe] = []
+    if prefer_set:
+        for r in available:
+            if set(r.tags or []) & prefer_set:
+                preferred.append(r)
+
+    if prefer_set and prefer_max > 0:
+        for r in preferred:
+            if len(picked) >= prefer_max:
+                break
+            picked.append(str(r.id))
+
     for r in available:
         if len(picked) >= count:
             break
+        if str(r.id) in picked:
+            continue
         picked.append(str(r.id))
 
     while len(picked) + len(dummy) < count:
@@ -739,7 +1117,15 @@ def _format_plan(days: Dict[str, str]) -> str:
 
 def _build_new_week_plan() -> Dict[str, str]:
     # pick 7 unique suggestions
-    picked_ids, dummy_titles = _pick_recipes_for_days(existing_ids=[], count=7)
+    preferences = _get_settings_preferences()
+    tags = preferences.get("tags") or []
+    prefer_max = int(7 * 0.5) if tags else 0
+    picked_ids, dummy_titles = _pick_recipes_for_days(
+        existing_ids=[],
+        count=7,
+        prefer_tags=tags,
+        prefer_max=prefer_max,
+    )
     days: Dict[str, str] = {}
     di = 0
     pi = 0
@@ -887,6 +1273,11 @@ async def telegram_webhook(request: Request):
     if from_id is None or chat_id is None:
         return {"ok": True}
 
+    try:
+        _db_set_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID, str(chat_id))
+    except Exception:
+        pass
+
     if not _is_allowed(int(from_id)):
         raise HTTPException(status_code=403, detail="Not allowed")
 
@@ -939,41 +1330,8 @@ async def telegram_webhook(request: Request):
             await _tg_send(chat_id, "Kein Plan vorhanden. Erst `plan` ausführen.")
             return {"ok": True}
 
-        days = base["days"]
-
-        pantry = {
-            "salz","pfeffer","olivenöl","rapsöl","butter","mehl","zucker",
-            "reis","pasta","sojasauce","essig","erdnussöl","knoblauch"
-        }
-
-        items: Dict[str, int] = {}
-
-        with Session(engine) as session:
-            for d in range(1, 8):
-                rid = days.get(str(d))
-                if not rid or (isinstance(rid, str) and rid.startswith("KI:")):
-                    continue
-                r = session.get(Recipe, rid)
-                if not r:
-                    continue
-                for ing in (r.ingredients or []):
-                    key = ing.strip()
-                    if not key:
-                        continue
-                    if key.lower() in pantry:
-                        continue
-                    items[key] = items.get(key, 0) + 1
-
-        if not items:
-            await _tg_send(chat_id, "🧺 Einkaufsliste ist leer (oder alle Zutaten sind Pantry).")
-            return {"ok": True}
-
-        lines = ["🧺 Einkaufsliste (aggregiert):"]
-        for k in sorted(items.keys(), key=lambda s: s.lower()):
-            cnt = items[k]
-            lines.append(f"- {k}" + (f"  x{cnt}" if cnt > 1 else ""))
-
-        await _tg_send(chat_id, "\n".join(lines))
+        aggregated = _aggregate_shop_items(base["days"])
+        await _tg_send(chat_id, aggregated["message"])
         return {"ok": True}
 
 
