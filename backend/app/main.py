@@ -265,7 +265,7 @@ def _clean_display_name(value: str) -> str:
     return s
 
 
-def _validate_pantry_items(items: List[PantryItemPayload]) -> List[Dict[str, Any]]:
+def _validate_pantry_items(items: List["PantryItemPayload"]) -> List[Dict[str, Any]]:
     cleaned: List[Dict[str, Any]] = []
     for item in items:
         name = (item.name or "").strip()
