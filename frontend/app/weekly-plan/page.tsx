@@ -32,6 +32,7 @@ type WeeklyCurrent = {
   plan: PlanPayload | null;
   draft: DraftPayload | null;
   message?: string;
+  warning?: string;
 };
 
 type WeeklySwapResponse = {
@@ -45,7 +46,11 @@ type WeeklyShopResponse = {
   ok: boolean;
   week_start: string;
   items: { name: string; count: number }[];
+  buy?: { name: string; count: number }[];
+  pantry_used?: { name: string; count: number }[];
+  pantry_uncertain_used?: { name: string; count: number }[];
   message: string;
+  warning?: string;
 };
 
 const daysList = [
@@ -113,9 +118,11 @@ export default function WeeklyPlanPage() {
   const [swapDraft, setSwapDraft] = useState<DraftPayload | null>(null);
 
   const [shopError, setShopError] = useState<string | null>(null);
+  const [shopWarning, setShopWarning] = useState<string | null>(null);
   const [shopData, setShopData] = useState<WeeklyShopResponse | null>(null);
   const [shopView, setShopView] = useState<"text" | "checklist">("text");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [planWarning, setPlanWarning] = useState<string | null>(null);
 
   const weekStart = current?.week_start ?? "—";
 
@@ -156,11 +163,15 @@ export default function WeeklyPlanPage() {
   const handlePlan = async () => {
     setPlanLoading(true);
     setCurrentError(null);
+    setPlanWarning(null);
     try {
-      const res = await fetch("/api/weekly/plan", { method: "POST" });
+      const res = await fetch("/api/weekly/plan?notify=1", { method: "POST" });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as WeeklyCurrent;
       setCurrent(data);
+      if (data.warning) {
+        setPlanWarning(data.warning);
+      }
     } catch (e: any) {
       setCurrentError(e?.message ?? "Fehler beim Planen");
     } finally {
@@ -237,12 +248,16 @@ export default function WeeklyPlanPage() {
   const handleShop = async () => {
     setShopLoading(true);
     setShopError(null);
+    setShopWarning(null);
     try {
-      const res = await fetch("/api/weekly/shop", { cache: "no-store" });
+      const res = await fetch("/api/weekly/shop?notify=1", { cache: "no-store" });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as WeeklyShopResponse;
       setShopData(data);
       setChecked({});
+      if (data.warning) {
+        setShopWarning(data.warning);
+      }
     } catch (e: any) {
       setShopError(e?.message ?? "Fehler beim Laden der Einkaufsliste");
     } finally {
@@ -260,7 +275,9 @@ export default function WeeklyPlanPage() {
   }, [selectedDays]);
 
   const shopMessage = shopData?.message ?? "";
-  const shopItems = shopData?.items ?? [];
+  const shopItems = shopData?.buy ?? shopData?.items ?? [];
+  const pantryUsed = shopData?.pantry_used ?? [];
+  const pantryUncertain = shopData?.pantry_uncertain_used ?? [];
 
   return (
     <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/">Home</BtnLink>}>
@@ -288,6 +305,9 @@ export default function WeeklyPlanPage() {
         ) : null}
         {currentError ? (
           <div style={{ marginTop: 10, fontSize: 12, color: "#b91c1c" }}>{currentError}</div>
+        ) : null}
+        {planWarning ? (
+          <div style={{ marginTop: 10, fontSize: 12 }}>{planWarning}</div>
         ) : null}
       </div>
 
@@ -409,6 +429,9 @@ export default function WeeklyPlanPage() {
         {shopError ? (
           <div style={{ marginBottom: 10, fontSize: 12, color: "#b91c1c" }}>{shopError}</div>
         ) : null}
+        {shopWarning ? (
+          <div style={{ marginBottom: 10, fontSize: 12 }}>{shopWarning}</div>
+        ) : null}
 
         {shopData ? (
           shopView === "text" ? (
@@ -428,24 +451,84 @@ export default function WeeklyPlanPage() {
               </button>
             </div>
           ) : (
-            <div style={{ display: "grid", gap: 8 }}>
-              {shopItems.length === 0 ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              {shopItems.length === 0 && pantryUsed.length === 0 && pantryUncertain.length === 0 ? (
                 <div style={{ fontSize: 13 }}>{shopMessage}</div>
               ) : (
-                shopItems.map((item) => (
-                  <label key={item.name} style={cardStyles.checkboxRow}>
-                    <input
-                      type="checkbox"
-                      checked={!!checked[item.name]}
-                      onChange={(e) =>
-                        setChecked((prev) => ({ ...prev, [item.name]: e.target.checked }))
-                      }
-                    />
-                    <span>
-                      {item.name} {item.count > 1 ? `x${item.count}` : ""}
-                    </span>
-                  </label>
-                ))
+                <>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>To Buy</div>
+                    {shopItems.length === 0 ? (
+                      <div style={{ fontSize: 13 }}>Keine Items.</div>
+                    ) : (
+                      shopItems.map((item) => (
+                        <label key={`buy-${item.name}`} style={cardStyles.checkboxRow}>
+                          <input
+                            type="checkbox"
+                            checked={!!checked[`buy-${item.name}`]}
+                            onChange={(e) =>
+                              setChecked((prev) => ({
+                                ...prev,
+                                [`buy-${item.name}`]: e.target.checked,
+                              }))
+                            }
+                          />
+                          <span>
+                            {item.name} {item.count > 1 ? `x${item.count}` : ""}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Pantry Used</div>
+                    {pantryUsed.length === 0 ? (
+                      <div style={{ fontSize: 13 }}>Keine Pantry-Items.</div>
+                    ) : (
+                      pantryUsed.map((item) => (
+                        <label key={`pantry-${item.name}`} style={cardStyles.checkboxRow}>
+                          <input
+                            type="checkbox"
+                            checked={!!checked[`pantry-${item.name}`]}
+                            onChange={(e) =>
+                              setChecked((prev) => ({
+                                ...prev,
+                                [`pantry-${item.name}`]: e.target.checked,
+                              }))
+                            }
+                          />
+                          <span>
+                            {item.name} {item.count > 1 ? `x${item.count}` : ""}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Pantry Uncertain</div>
+                    {pantryUncertain.length === 0 ? (
+                      <div style={{ fontSize: 13 }}>Keine unsicheren Pantry-Items.</div>
+                    ) : (
+                      pantryUncertain.map((item) => (
+                        <label key={`uncertain-${item.name}`} style={cardStyles.checkboxRow}>
+                          <input
+                            type="checkbox"
+                            checked={!!checked[`uncertain-${item.name}`]}
+                            onChange={(e) =>
+                              setChecked((prev) => ({
+                                ...prev,
+                                [`uncertain-${item.name}`]: e.target.checked,
+                              }))
+                            }
+                          />
+                          <span>
+                            {item.name} {item.count > 1 ? `x${item.count}` : ""}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )

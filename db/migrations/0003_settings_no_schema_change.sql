@@ -1,0 +1,1 @@
+-- no schema changes for settings endpoints (app_state JSON usage only)

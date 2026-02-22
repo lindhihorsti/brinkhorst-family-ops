@@ -257,49 +257,43 @@ export default function HomePage() {
       <div style={styles.container}>
         <div style={styles.headerRow}>
           <div>
-            <h1 style={styles.title}>Family Ops</h1>
-            <p style={styles.subtitle}>Küchen- & Wochenplan</p>
-
-            <div style={styles.microChecks}>
-              <div style={styles.microRow}>
-                <span style={{ ...styles.dot, background: dotColorFrom(all.api) }} />
-                <span>API {labelFrom(all.api)}</span>
-              </div>
-              <div style={styles.microRow}>
-                <span style={{ ...styles.dot, background: dotColorFrom(all.db) }} />
-                <span>DB {labelFrom(all.db)}</span>
-              </div>
-              <div style={styles.microRow}>
-                <span style={{ ...styles.dot, background: dotColorFrom(all.bot) }} />
-                <span>BOT {labelFrom(all.bot)}</span>
-              </div>
-              <div style={styles.microRow}>
-                <span style={{ ...styles.dot, background: dotColorFrom(all.scheduler) }} />
-                <span>SCHED {labelFrom(all.scheduler)}</span>
-              </div>
-              <div style={styles.microRow}>
-                <span style={{ ...styles.dot, background: dotColorFrom(all.ai) }} />
-                <span>AI {labelFrom(all.ai)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ flexShrink: 0 }}>
-            <StatusBadge all={all} />
+            <h1 style={styles.title}>Küchen- & Wochenplan</h1>
           </div>
         </div>
 
         <div style={styles.tileStack}>
           <Tile title="Rezepte" subtitle="Rezepte verwalten, Zutaten pflegen" href="/recipes" state="MVP" />
           <Tile title="Wochenplan" subtitle="Plan, Swap, Shop" href="/weekly-plan" state="MVP" />
-          <Tile title="Settings" subtitle="Basisvorrat, Präferenzen, Telegram" href="/" state="SOON" />
+          <Tile title="Einstellungen" subtitle="Basisvorrat, Präferenzen, Telegram" href="/settings" state="MVP" />
         </div>
 
         <div style={styles.section}>
           <p style={styles.sectionTitle}>Health Checks</p>
-          <p style={styles.small}>
-            API/DB/BOT/SCHED/AI werden automatisch alle 20s geprüft und als Ampel angezeigt.
-          </p>
+          <div style={{ marginTop: 10 }}>
+            <StatusBadge all={all} />
+          </div>
+          <div style={{ marginTop: 10, ...styles.microChecks }}>
+            <div style={styles.microRow}>
+              <span style={{ ...styles.dot, background: dotColorFrom(all.api) }} />
+              <span>API {labelFrom(all.api)}</span>
+            </div>
+            <div style={styles.microRow}>
+              <span style={{ ...styles.dot, background: dotColorFrom(all.db) }} />
+              <span>DB {labelFrom(all.db)}</span>
+            </div>
+            <div style={styles.microRow}>
+              <span style={{ ...styles.dot, background: dotColorFrom(all.bot) }} />
+              <span>BOT {labelFrom(all.bot)}</span>
+            </div>
+            <div style={styles.microRow}>
+              <span style={{ ...styles.dot, background: dotColorFrom(all.scheduler) }} />
+              <span>SCHED {labelFrom(all.scheduler)}</span>
+            </div>
+            <div style={styles.microRow}>
+              <span style={{ ...styles.dot, background: dotColorFrom(all.ai) }} />
+              <span>AI {labelFrom(all.ai)}</span>
+            </div>
+          </div>
           <p style={styles.small}>Frontend SHA: {frontendSha}</p>
           <p style={styles.small}>Backend SHA: {backendSha}</p>
         </div>
