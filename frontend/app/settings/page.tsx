@@ -23,27 +23,27 @@ type PreferenceOptionsResponse = {
 };
 
 const DEFAULT_PANTRY_ITEMS: PantryItem[] = [
-  { name: "salt", uncertain: false, aliases: [] },
-  { name: "pepper", uncertain: false, aliases: [] },
-  { name: "sugar", uncertain: false, aliases: [] },
-  { name: "flour", uncertain: false, aliases: [] },
-  { name: "olive oil", uncertain: false, aliases: ["cooking oil"] },
-  { name: "vinegar", uncertain: false, aliases: [] },
-  { name: "soy sauce", uncertain: false, aliases: [] },
-  { name: "mustard", uncertain: false, aliases: [] },
-  { name: "tomato paste", uncertain: false, aliases: [] },
-  { name: "stock", uncertain: false, aliases: ["bouillon"] },
-  { name: "rice", uncertain: false, aliases: [] },
-  { name: "pasta", uncertain: false, aliases: [] },
-  { name: "paprika powder", uncertain: false, aliases: [] },
-  { name: "curry", uncertain: false, aliases: [] },
-  { name: "chili", uncertain: false, aliases: [] },
-  { name: "oregano", uncertain: false, aliases: [] },
-  { name: "basil", uncertain: false, aliases: [] },
-  { name: "baking powder", uncertain: false, aliases: [] },
-  { name: "starch", uncertain: false, aliases: [] },
-  { name: "garlic", uncertain: true, aliases: [] },
-  { name: "onions", uncertain: true, aliases: [] },
+  { name: "Salz", uncertain: false, aliases: [] },
+  { name: "Pfeffer", uncertain: false, aliases: [] },
+  { name: "Zucker", uncertain: false, aliases: [] },
+  { name: "Mehl", uncertain: false, aliases: [] },
+  { name: "Olivenöl", uncertain: false, aliases: ["Speiseöl", "Kochöl"] },
+  { name: "Essig", uncertain: false, aliases: [] },
+  { name: "Sojasauce", uncertain: false, aliases: [] },
+  { name: "Senf", uncertain: false, aliases: [] },
+  { name: "Tomatenmark", uncertain: false, aliases: [] },
+  { name: "Brühe", uncertain: false, aliases: ["Bouillon"] },
+  { name: "Reis", uncertain: false, aliases: [] },
+  { name: "Pasta", uncertain: false, aliases: ["Nudeln"] },
+  { name: "Paprikapulver", uncertain: false, aliases: [] },
+  { name: "Curry", uncertain: false, aliases: [] },
+  { name: "Chili", uncertain: false, aliases: [] },
+  { name: "Oregano", uncertain: false, aliases: [] },
+  { name: "Basilikum", uncertain: false, aliases: [] },
+  { name: "Backpulver", uncertain: false, aliases: [] },
+  { name: "Stärke", uncertain: false, aliases: ["Speisestärke"] },
+  { name: "Knoblauch", uncertain: true, aliases: [] },
+  { name: "Zwiebeln", uncertain: true, aliases: [] },
 ];
 
 const cardStyles: Record<string, React.CSSProperties> = {
@@ -187,7 +187,7 @@ export default function SettingsPage() {
           <div style={cardStyles.itemRow}>
             <div style={cardStyles.itemHeader}>Name</div>
             <div style={cardStyles.itemHeader}>Unsicher</div>
-            <div style={cardStyles.itemHeader}>Aliases (comma)</div>
+            <div style={cardStyles.itemHeader}>Aliases (Komma)</div>
           </div>
           {pantryItems.map((item, idx) => (
             <div key={`${item.name}-${idx}`} style={cardStyles.itemRow}>
@@ -256,7 +256,9 @@ export default function SettingsPage() {
 
       <div style={cardStyles.section}>
         <div style={{ fontWeight: 800, marginBottom: 10 }}>Preferences</div>
-        <div style={cardStyles.helper}>Preferences influence up to 50% of the week plan.</div>
+        <div style={cardStyles.helper}>
+          Preferences beeinflussen bis zu 50% des Wochenplans.
+        </div>
         {tagsByRow.length === 0 ? (
           <div style={styles.small}>Keine Tags gefunden.</div>
         ) : (
@@ -310,11 +312,11 @@ export default function SettingsPage() {
           </label>
         </div>
         <div style={{ marginTop: 10, ...styles.small }}>
-          Last Telegram chat known: {telegramLastChatId ? "yes" : "no"}
+          Letzter Telegram-Chat bekannt: {telegramLastChatId ? "ja" : "nein"}
         </div>
         {!telegramLastChatId ? (
           <div style={{ ...styles.small, marginTop: 4 }}>
-            Send any message to the bot once to register chat.
+            Sende einmal eine Nachricht an den Bot, um den Chat zu registrieren.
           </div>
         ) : null}
         <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
