@@ -152,7 +152,7 @@ def ai_status(probe: int = 0):
     No external call unless probe=1.
     """
     has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    model = (os.getenv("OPENAI_MODEL", "gpt-5-nano") or "gpt-5-nano").strip()
+    model = (os.getenv("OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini").strip()
     if not has_openai:
         return {"ok": False, "status": "disabled"}
 
@@ -580,7 +580,7 @@ def _openai_extract_recipe_draft(
 ) -> Dict[str, Any]:
     from openai import OpenAI
 
-    model = (os.getenv("OPENAI_MODEL", "gpt-5-nano") or "gpt-5-nano").strip()
+    model = (os.getenv("OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini").strip()
     timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
     timeout = float(timeout_raw) if timeout_raw else IMPORT_FETCH_TIMEOUT_SECONDS
     client = OpenAI(timeout=timeout)
