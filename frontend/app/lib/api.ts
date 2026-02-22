@@ -22,6 +22,25 @@ export type RecipeCreate = {
   difficulty?: number | null;
 };
 
+export type RecipeImportDraft = RecipeCreate & {
+  source_url: string;
+  notes: string;
+  tags: string[];
+  ingredients: string[];
+  time_minutes?: number | null;
+  difficulty: number;
+  created_by: string;
+  is_active: boolean;
+};
+
+export type RecipeImportPreviewResponse = {
+  ok: boolean;
+  draft?: RecipeImportDraft;
+  warnings?: string[];
+  error?: string;
+  existing_recipe_id?: string | null;
+};
+
 export type RecipeUpdate = Partial<RecipeCreate> & {
   is_active?: boolean;
 };
@@ -62,4 +81,10 @@ export const api = {
 
   deleteRecipe: (id: string) =>
     http<{ ok: boolean }>(`/api/recipes/${id}`, { method: "DELETE" }),
+
+  importRecipePreview: (url: string) =>
+    http<RecipeImportPreviewResponse>(`/api/recipes/import/preview`, {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
 };
