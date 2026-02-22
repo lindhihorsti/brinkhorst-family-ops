@@ -178,16 +178,16 @@ export default function SettingsPage() {
 
   return (
     <Page title="Einstellungen" subtitle="Basisvorrat, Präferenzen, Telegram" right={<BtnLink href="/">Home</BtnLink>}>
-      {loading ? <div style={styles.small}>Lade Einstellungen…</div> : null}
+      {loading ? <div style={styles.small}>Einstellungen werden geladen…</div> : null}
       {error ? <div style={{ ...styles.small, color: "#b91c1c" }}>{error}</div> : null}
 
       <div style={cardStyles.section}>
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Pantry / Basisvorrat</div>
+        <div style={{ fontWeight: 800, marginBottom: 10 }}>Basisvorrat</div>
         <div style={{ display: "grid", gap: 10 }}>
           <div style={cardStyles.itemRow}>
             <div style={cardStyles.itemHeader}>Name</div>
             <div style={cardStyles.itemHeader}>Unsicher</div>
-            <div style={cardStyles.itemHeader}>Aliases (Komma)</div>
+            <div style={cardStyles.itemHeader}>Synonyme (Komma)</div>
           </div>
           {pantryItems.map((item, idx) => (
             <div key={`${item.name}-${idx}`} style={cardStyles.itemRow}>
@@ -245,19 +245,19 @@ export default function SettingsPage() {
             Item hinzufügen
           </button>
           <button style={styles.button} onClick={() => setPantryItems(DEFAULT_PANTRY_ITEMS)}>
-            Reset to defaults
+            Auf Standard zurücksetzen
           </button>
           <button style={styles.buttonPrimary} onClick={handlePantrySave} disabled={pantrySaving}>
-            {pantrySaving ? "Speichere…" : "Pantry speichern"}
+            {pantrySaving ? "Speichere…" : "Basisvorrat speichern"}
           </button>
         </div>
         {pantryMessage ? <div style={styles.small}>{pantryMessage}</div> : null}
       </div>
 
       <div style={cardStyles.section}>
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Preferences</div>
+        <div style={{ fontWeight: 800, marginBottom: 10 }}>Präferenzen</div>
         <div style={cardStyles.helper}>
-          Preferences beeinflussen bis zu 50% des Wochenplans.
+          Präferenzen beeinflussen bis zu 50% des Wochenplans.
         </div>
         {tagsByRow.length === 0 ? (
           <div style={styles.small}>Keine Tags gefunden.</div>
@@ -285,7 +285,7 @@ export default function SettingsPage() {
             onClick={handlePreferencesSave}
             disabled={preferencesSaving}
           >
-            {preferencesSaving ? "Speichere…" : "Preferences speichern"}
+            {preferencesSaving ? "Speichere…" : "Präferenzen speichern"}
           </button>
         </div>
         {preferencesMessage ? <div style={styles.small}>{preferencesMessage}</div> : null}
@@ -300,7 +300,7 @@ export default function SettingsPage() {
               checked={telegram.auto_send_plan}
               onChange={(e) => setTelegram((prev) => ({ ...prev, auto_send_plan: e.target.checked }))}
             />
-            <span>Auto-Send Plan</span>
+            <span>Plan automatisch senden</span>
           </label>
           <label style={cardStyles.row}>
             <input
@@ -308,7 +308,7 @@ export default function SettingsPage() {
               checked={telegram.auto_send_shop}
               onChange={(e) => setTelegram((prev) => ({ ...prev, auto_send_shop: e.target.checked }))}
             />
-            <span>Auto-Send Shop</span>
+            <span>Einkauf automatisch senden</span>
           </label>
         </div>
         <div style={{ marginTop: 10, ...styles.small }}>
