@@ -59,6 +59,20 @@ const styles: Styles = {
   },
   badgeMvp: { background: "#e9f9ef", borderColor: "#bfe9cd" },
   badgeSoon: { background: "#f6f6f6", borderColor: "#e2e2e2" },
+  button: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    border: "1px solid #ddd",
+    padding: "8px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#000",
+    background: "#fff",
+    textDecoration: "none",
+    cursor: "pointer",
+  },
 };
 
 function Tile({
@@ -126,6 +140,9 @@ export default function KuechePage() {
           <div>
             <h1 style={styles.title}>Küchen- & Wochenplan</h1>
           </div>
+          <Link href="/" style={styles.button}>
+            Start
+          </Link>
         </div>
 
         <div style={styles.tileStack}>
