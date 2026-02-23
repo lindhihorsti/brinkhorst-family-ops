@@ -68,7 +68,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
   },
   tileTitle: { fontSize: 16, fontWeight: 700, margin: 0, color: "#000" },
-  tileSub: { fontSize: 13, marginTop: 6, marginBottom: 0, color: "#000", whiteSpace: "pre-line" },
+  tileSub: { fontSize: 13, marginTop: 6, marginBottom: 0, color: "#000" },
 
   badge: {
     fontSize: 12,
@@ -265,7 +265,7 @@ export default function HomePage() {
           <Tile title="Rezepte" subtitle="Rezepte verwalten, Zutaten pflegen" href="/recipes" state="MVP" />
           <Tile
             title="Wochenplan"
-            subtitle={"Woche planen\nRezepte austauschen\nEinkaufsliste erstellen"}
+            subtitle="Woche planen · Rezepte austauschen · Einkaufsliste erstellen"
             href="/weekly-plan"
             state="MVP"
           />
