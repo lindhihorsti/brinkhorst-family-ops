@@ -141,7 +141,7 @@ export default function KuechePage() {
             <h1 style={styles.title}>Küchen- & Wochenplan</h1>
           </div>
           <Link href="/" style={styles.button}>
-            Start
+            Home
           </Link>
         </div>
 

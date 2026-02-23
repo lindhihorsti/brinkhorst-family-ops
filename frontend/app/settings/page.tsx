@@ -178,7 +178,7 @@ export default function SettingsPage() {
   }, [preferenceOptions]);
 
   return (
-    <Page title="Einstellungen" subtitle="Basisvorrat, Präferenzen, Telegram" right={<BtnLink href="/kueche">Home</BtnLink>}>
+    <Page title="Einstellungen" subtitle="Basisvorrat, Präferenzen, Telegram" right={<BtnLink href="/kueche">Back</BtnLink>}>
       {loading ? <div style={styles.small}>Einstellungen werden geladen…</div> : null}
       {error ? <div style={{ ...styles.small, color: "#b91c1c" }}>{error}</div> : null}
 

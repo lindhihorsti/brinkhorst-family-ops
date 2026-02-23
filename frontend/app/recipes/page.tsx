@@ -180,7 +180,7 @@ export default function RecipesPage() {
     <Page
       title="Rezepte"
       subtitle=""
-      right={<BtnLink href="/kueche">Home</BtnLink>}
+      right={<BtnLink href="/kueche">Back</BtnLink>}
     >
       <input
         value={q}

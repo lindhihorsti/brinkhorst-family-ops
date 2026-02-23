@@ -281,7 +281,7 @@ export default function WeeklyPlanPage() {
   const pantryUncertain = shopData?.pantry_uncertain_used ?? [];
 
   return (
-    <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Home</BtnLink>}>
+    <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Back</BtnLink>}>
       <div style={{ ...cardStyles.section, marginBottom: 18 }}>
         <div style={cardStyles.buttonRow}>
           <button style={styles.buttonPrimary} onClick={handlePlan} disabled={planLoading}>
