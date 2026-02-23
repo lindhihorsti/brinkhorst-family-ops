@@ -35,6 +35,16 @@ a {
   text-decoration: none;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .nav-tile {
+    transition: background-color 0.15s ease;
+  }
+
+  .nav-tile:hover {
+    background-color: #eaf4ff !important;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   html {
     color-scheme: dark;
