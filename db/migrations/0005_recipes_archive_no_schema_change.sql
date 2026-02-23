@@ -1,0 +1,1 @@
+-- no schema change (recipes archive endpoint)

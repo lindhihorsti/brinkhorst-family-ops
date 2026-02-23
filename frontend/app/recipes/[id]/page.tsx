@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { api, type Recipe } from "../../lib/api";
 import { BtnLink, Chip, Page, styles } from "../../lib/ui";
 
 export default function RecipeDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = useMemo(() => {
     const v = params?.id;
     return typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
@@ -16,6 +17,8 @@ export default function RecipeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<Recipe | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
     if (!id) return; // <- wichtig
@@ -39,6 +42,24 @@ export default function RecipeDetailPage() {
     };
   }, [id]);
 
+  const archiveRecipe = async () => {
+    if (!id) return;
+    const confirmed = window.confirm(
+      "Rezept wirklich archivieren? (Kann später manuell in der DB reaktiviert werden.)"
+    );
+    if (!confirmed) return;
+    setArchiveError(null);
+    setArchiving(true);
+    try {
+      await api.archiveRecipe(id);
+      router.push("/recipes");
+    } catch (e: any) {
+      setArchiveError(e?.message ?? "Archivieren fehlgeschlagen.");
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   return (
     <Page
       title={item?.title ?? "Rezept"}
@@ -60,6 +81,12 @@ export default function RecipeDetailPage() {
         </div>
       ) : (
         <div style={{ display: "grid", gap: 12, paddingBottom: 74 }}>
+          {archiveError ? (
+            <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff" }}>
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>Archivieren fehlgeschlagen</div>
+              <div style={{ fontSize: 13 }}>{archiveError}</div>
+            </div>
+          ) : null}
           <div style={styles.card}>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {typeof item.time_minutes === "number" ? <Chip text={`${item.time_minutes} min`} /> : <Chip text="— min" />}
@@ -125,12 +152,21 @@ export default function RecipeDetailPage() {
       )}
 
       <div style={styles.fabWrap}>
-        <Link
-          href={id ? `/recipes/${id}/edit` : "/recipes"}
-          style={{ ...styles.buttonPrimary, width: "100%", justifyContent: "center" }}
-        >
-          Bearbeiten
-        </Link>
+        <div style={{ display: "grid", gap: 10 }}>
+          <Link
+            href={id ? `/recipes/${id}/edit` : "/recipes"}
+            style={{ ...styles.buttonPrimary, width: "100%", justifyContent: "center" }}
+          >
+            Bearbeiten
+          </Link>
+          <button
+            onClick={archiveRecipe}
+            style={{ ...styles.buttonDanger, width: "100%", justifyContent: "center" }}
+            disabled={archiving}
+          >
+            {archiving ? "Archivieren…" : "Archivieren"}
+          </button>
+        </div>
       </div>
     </Page>
   );

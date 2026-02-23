@@ -10,6 +10,8 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Recipe[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
   const [importOpen, setImportOpen] = useState(false);
@@ -156,6 +158,23 @@ export default function RecipesPage() {
     }
   };
 
+  const archiveRecipe = async (id: string) => {
+    const confirmed = window.confirm(
+      "Rezept wirklich archivieren? (Kann später manuell in der DB reaktiviert werden.)"
+    );
+    if (!confirmed) return;
+    setArchiveError(null);
+    setArchivingId(id);
+    try {
+      await api.archiveRecipe(id);
+      setRefreshTick((v) => v + 1);
+    } catch (e: any) {
+      setArchiveError(e?.message ?? "Archivieren fehlgeschlagen.");
+    } finally {
+      setArchivingId(null);
+    }
+  };
+
   return (
     <Page
       title="Rezepte"
@@ -175,6 +194,12 @@ export default function RecipesPage() {
           <div style={{ fontSize: 13 }}>{err}</div>
         </div>
       ) : null}
+      {archiveError ? (
+        <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff", marginTop: 10 }}>
+          <div style={{ fontWeight: 800, marginBottom: 6 }}>Archivieren fehlgeschlagen</div>
+          <div style={{ fontSize: 13 }}>{archiveError}</div>
+        </div>
+      ) : null}
 
       {loading ? (
         <div style={{ textAlign: "center", padding: "10px 0", opacity: 0.75 }}>Lade…</div>
@@ -186,30 +211,41 @@ export default function RecipesPage() {
       ) : (
         <div style={{ display: "grid", gap: 12, paddingBottom: 74 }}>
           {items.map((r) => (
-            <Link key={r.id} href={`/recipes/${r.id}`} style={styles.cardLink}>
-              <div style={styles.rowBetween}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>
-                    {r.title}
+            <div key={r.id} style={styles.card}>
+              <Link href={`/recipes/${r.id}`} style={{ textDecoration: "none", color: "#000", display: "block" }}>
+                <div style={styles.rowBetween}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>
+                      {r.title}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>
+                      {r.time_minutes ? `${r.time_minutes} min` : "—"} ·{" "}
+                      {r.difficulty ? `Diff ${r.difficulty}` : "—"} ·{" "}
+                      {r.ingredients?.length ? `${r.ingredients.length} Zutaten` : "keine Zutaten"}
+                    </div>
                   </div>
-                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>
-                    {r.time_minutes ? `${r.time_minutes} min` : "—"} ·{" "}
-                    {r.difficulty ? `Diff ${r.difficulty}` : "—"} ·{" "}
-                    {r.ingredients?.length ? `${r.ingredients.length} Zutaten` : "keine Zutaten"}
-                  </div>
+                  <div style={{ fontWeight: 800, opacity: 0.6 }}>›</div>
                 </div>
-                <div style={{ fontWeight: 800, opacity: 0.6 }}>›</div>
-              </div>
 
-              {r.tags?.length ? (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                  {r.tags.slice(0, 6).map((t) => (
-                    <Chip key={t} text={t} />
-                  ))}
-                  {r.tags.length > 6 ? <Chip text={`+${r.tags.length - 6}`} /> : null}
-                </div>
-              ) : null}
-            </Link>
+                {r.tags?.length ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                    {r.tags.slice(0, 6).map((t) => (
+                      <Chip key={t} text={t} />
+                    ))}
+                    {r.tags.length > 6 ? <Chip text={`+${r.tags.length - 6}`} /> : null}
+                  </div>
+                ) : null}
+              </Link>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                <button
+                  onClick={() => archiveRecipe(r.id)}
+                  style={styles.button}
+                  disabled={archivingId === r.id}
+                >
+                  {archivingId === r.id ? "Archivieren…" : "Archivieren"}
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}
