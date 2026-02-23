@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 import json
 import os
 import re
@@ -1084,6 +1085,20 @@ def api_delete_recipe(recipe_id: UUID):
         session.add(r)
         session.commit()
         return {"ok": True}
+
+
+@app.post("/api/recipes/{recipe_id}/archive")
+def api_archive_recipe(recipe_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        r = session.get(Recipe, recipe_id)
+        if not r:
+            return JSONResponse(status_code=404, content={"ok": False, "error": "Recipe not found"})
+        r.is_active = False
+        session.add(r)
+        session.commit()
+        return {"ok": True, "id": str(r.id), "is_active": False}
 
 
 @app.get("/api/settings")

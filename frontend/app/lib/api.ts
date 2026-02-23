@@ -82,6 +82,11 @@ export const api = {
   deleteRecipe: (id: string) =>
     http<{ ok: boolean }>(`/api/recipes/${id}`, { method: "DELETE" }),
 
+  archiveRecipe: (id: string) =>
+    http<{ ok: boolean; id: string; is_active: boolean }>(`/api/recipes/${id}/archive`, {
+      method: "POST",
+    }),
+
   importRecipePreview: (url: string) =>
     http<RecipeImportPreviewResponse>(`/api/recipes/import/preview`, {
       method: "POST",
