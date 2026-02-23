@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Recipe, type RecipeCreate, type RecipeImportDraft } from "../lib/api";
+import { getErrorMessage } from "../lib/errors";
 import { BtnLink, Chip, Page, styles } from "../lib/ui";
 
 export default function RecipesPage() {
@@ -36,8 +37,8 @@ export default function RecipesPage() {
       try {
         const data = await api.listRecipes(query || undefined);
         if (!cancelled) setItems(data);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Fehler beim Laden");
+      } catch (e) {
+        if (!cancelled) setErr(getErrorMessage(e, "Fehler beim Laden"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -91,8 +92,8 @@ export default function RecipesPage() {
       setTagInput((data.draft?.tags ?? []).join(", "));
       setIngredientText((data.draft?.ingredients ?? []).join("\n"));
       setImportStep(2);
-    } catch (e: any) {
-      setImportError(e?.message ?? "Vorschau fehlgeschlagen.");
+    } catch (e) {
+      setImportError(getErrorMessage(e, "Vorschau fehlgeschlagen."));
     } finally {
       setImportLoading(false);
     }
@@ -151,8 +152,8 @@ export default function RecipesPage() {
       await res.json();
       setRefreshTick((v) => v + 1);
       closeImport();
-    } catch (e: any) {
-      setImportError(e?.message ?? "Speichern fehlgeschlagen.");
+    } catch (e) {
+      setImportError(getErrorMessage(e, "Speichern fehlgeschlagen."));
     } finally {
       setImportSaving(false);
     }
@@ -160,7 +161,7 @@ export default function RecipesPage() {
 
   const archiveRecipe = async (id: string) => {
     const confirmed = window.confirm(
-      "Rezept wirklich archivieren? (Kann später manuell in der DB reaktiviert werden.)"
+      "Rezept wirklich archivieren?"
     );
     if (!confirmed) return;
     setArchiveError(null);
@@ -168,8 +169,8 @@ export default function RecipesPage() {
     try {
       await api.archiveRecipe(id);
       setRefreshTick((v) => v + 1);
-    } catch (e: any) {
-      setArchiveError(e?.message ?? "Archivieren fehlgeschlagen.");
+    } catch (e) {
+      setArchiveError(getErrorMessage(e, "Archivieren fehlgeschlagen."));
     } finally {
       setArchivingId(null);
     }
@@ -178,7 +179,7 @@ export default function RecipesPage() {
   return (
     <Page
       title="Rezepte"
-      subtitle="Mobile-first · gleicher Stil wie Home"
+      subtitle=""
       right={<BtnLink href="/">Home</BtnLink>}
     >
       <input

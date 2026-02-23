@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "../../lib/api";
+import { getErrorMessage } from "../../lib/errors";
 import { BtnLink, Page, styles } from "../../lib/ui";
 
 function splitCsv(s: string) {
@@ -57,8 +58,8 @@ export default function NewRecipePage() {
         difficulty: difficulty ? Number(difficulty) : null,
       });
       router.push(`/recipes/${r.id}`);
-    } catch (e: any) {
-      setErr(e?.message ?? "Fehler beim Speichern");
+    } catch (e) {
+      setErr(getErrorMessage(e, "Fehler beim Speichern"));
     } finally {
       setSaving(false);
     }

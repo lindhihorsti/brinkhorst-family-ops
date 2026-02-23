@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getErrorMessage } from "../lib/errors";
 import { BtnLink, Page, styles } from "../lib/ui";
 
 type PantryItem = {
@@ -101,8 +102,8 @@ export default function SettingsPage() {
       setTelegram(settingsData.telegram ?? { auto_send_plan: false, auto_send_shop: false });
       setTelegramLastChatId(settingsData.telegram_last_chat_id ?? null);
       setPreferenceOptions(optionsData.tags ?? []);
-    } catch (e: any) {
-      setError(e?.message ?? "Fehler beim Laden");
+    } catch (e) {
+      setError(getErrorMessage(e, "Fehler beim Laden"));
     } finally {
       setLoading(false);
     }
@@ -125,8 +126,8 @@ export default function SettingsPage() {
       const data = (await res.json()) as SettingsResponse;
       setPantryItems(data.pantry?.items ?? pantryItems);
       setPantryMessage("Gespeichert.");
-    } catch (e: any) {
-      setPantryMessage(e?.message ?? "Fehler beim Speichern");
+    } catch (e) {
+      setPantryMessage(getErrorMessage(e, "Fehler beim Speichern"));
     } finally {
       setPantrySaving(false);
     }
@@ -145,8 +146,8 @@ export default function SettingsPage() {
       const data = (await res.json()) as SettingsResponse;
       setSelectedTags(data.preferences?.tags ?? selectedTags);
       setPreferencesMessage("Gespeichert.");
-    } catch (e: any) {
-      setPreferencesMessage(e?.message ?? "Fehler beim Speichern");
+    } catch (e) {
+      setPreferencesMessage(getErrorMessage(e, "Fehler beim Speichern"));
     } finally {
       setPreferencesSaving(false);
     }
@@ -164,8 +165,8 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       await res.json();
       setTelegramMessage("Gespeichert.");
-    } catch (e: any) {
-      setTelegramMessage(e?.message ?? "Fehler beim Speichern");
+    } catch (e) {
+      setTelegramMessage(getErrorMessage(e, "Fehler beim Speichern"));
     } finally {
       setTelegramSaving(false);
     }
