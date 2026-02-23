@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getErrorMessage } from "../lib/errors";
 import { BtnLink, Page, styles } from "../lib/ui";
 
 type DayEntry = {
@@ -139,8 +140,8 @@ export default function WeeklyPlanPage() {
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as WeeklyCurrent;
       setCurrent(data);
-    } catch (e: any) {
-      setCurrentError(e?.message ?? "Fehler beim Laden");
+    } catch (e) {
+      setCurrentError(getErrorMessage(e, "Fehler beim Laden"));
     } finally {
       setLoadingCurrent(false);
     }
@@ -172,8 +173,8 @@ export default function WeeklyPlanPage() {
       if (data.warning) {
         setPlanWarning(data.warning);
       }
-    } catch (e: any) {
-      setCurrentError(e?.message ?? "Fehler beim Planen");
+    } catch (e) {
+      setCurrentError(getErrorMessage(e, "Fehler beim Planen"));
     } finally {
       setPlanLoading(false);
     }
@@ -198,8 +199,8 @@ export default function WeeklyPlanPage() {
         setSwapDraft(data.draft);
         setSwapStep("preview");
       }
-    } catch (e: any) {
-      setSwapError(e?.message ?? "Fehler beim Swap");
+    } catch (e) {
+      setSwapError(getErrorMessage(e, "Fehler beim Swap"));
     } finally {
       setSwapLoading(false);
     }
@@ -220,8 +221,8 @@ export default function WeeklyPlanPage() {
       setSwapStep("closed");
       setSelectedDays([]);
       setSwapDraft(null);
-    } catch (e: any) {
-      setSwapError(e?.message ?? "Fehler beim Bestätigen");
+    } catch (e) {
+      setSwapError(getErrorMessage(e, "Fehler beim Bestätigen"));
     } finally {
       setConfirmLoading(false);
     }
@@ -238,8 +239,8 @@ export default function WeeklyPlanPage() {
       setSelectedDays([]);
       setSwapDraft(null);
       await loadCurrent();
-    } catch (e: any) {
-      setSwapError(e?.message ?? "Fehler beim Abbrechen");
+    } catch (e) {
+      setSwapError(getErrorMessage(e, "Fehler beim Abbrechen"));
     } finally {
       setCancelLoading(false);
     }
@@ -258,8 +259,8 @@ export default function WeeklyPlanPage() {
       if (data.warning) {
         setShopWarning(data.warning);
       }
-    } catch (e: any) {
-      setShopError(e?.message ?? "Fehler beim Laden der Einkaufsliste");
+    } catch (e) {
+      setShopError(getErrorMessage(e, "Fehler beim Laden der Einkaufsliste"));
     } finally {
       setShopLoading(false);
     }

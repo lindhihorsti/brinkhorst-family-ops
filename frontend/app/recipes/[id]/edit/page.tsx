@@ -3,6 +3,7 @@
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Recipe } from "../../../lib/api";
+import { getErrorMessage } from "../../../lib/errors";
 import { BtnLink, Page, styles } from "../../../lib/ui";
 
 function splitCsv(s: string) {
@@ -52,8 +53,8 @@ export default function EditRecipePage() {
         setTimeMinutes(r.time_minutes != null ? String(r.time_minutes) : "");
         setDifficulty(r.difficulty != null ? String(r.difficulty) : "");
         setIngredients((r.ingredients ?? []) as string[]);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Fehler beim Laden");
+      } catch (e) {
+        if (!cancelled) setErr(getErrorMessage(e, "Fehler beim Laden"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -95,8 +96,8 @@ export default function EditRecipePage() {
         difficulty: difficulty ? Number(difficulty) : null,
       });
       router.push(`/recipes/${id}`);
-    } catch (e: any) {
-      setErr(e?.message ?? "Fehler beim Speichern");
+    } catch (e) {
+      setErr(getErrorMessage(e, "Fehler beim Speichern"));
     } finally {
       setSaving(false);
     }
@@ -111,8 +112,8 @@ export default function EditRecipePage() {
     try {
       await api.deleteRecipe(id);
       router.push("/recipes");
-    } catch (e: any) {
-      setErr(e?.message ?? "Fehler beim Löschen");
+    } catch (e) {
+      setErr(getErrorMessage(e, "Fehler beim Löschen"));
     } finally {
       setSaving(false);
     }

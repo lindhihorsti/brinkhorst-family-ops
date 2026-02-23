@@ -29,7 +29,7 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: 420,
     margin: "0 auto",
-    padding: "28px 22px 44px 22px",
+    padding: "16px 22px 44px 22px",
   },
   headerRow: {
     display: "flex",
@@ -68,7 +68,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
   },
   tileTitle: { fontSize: 16, fontWeight: 700, margin: 0, color: "#000" },
-  tileSub: { fontSize: 13, marginTop: 6, marginBottom: 0, color: "#000" },
+  tileSub: { fontSize: 13, marginTop: 6, marginBottom: 0, color: "#000", whiteSpace: "pre-line" },
 
   badge: {
     fontSize: 12,
@@ -241,19 +241,19 @@ export default function HomePage() {
 
   return (
     <main style={styles.page}>
-<div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-<Image
-  src="/logo.PNG"
-  alt="Family Ops"
-  width={600}      // "native" Verhältnis grob abbilden
-  height={380}
-  priority
-  style={{
-    width: 240,     // gewünschte Anzeige-Breite
-    height: "auto", // verhindert Quetschen
-  }}
-/>
-</div>
+      <div style={{ display: "flex", justifyContent: "center", marginTop: 12, marginBottom: 10 }}>
+        <Image
+          src="/logo.PNG"
+          alt="Family Ops"
+          width={600} // "native" Verhältnis grob abbilden
+          height={380}
+          priority
+          style={{
+            width: 240, // gewünschte Anzeige-Breite
+            height: "auto", // verhindert Quetschen
+          }}
+        />
+      </div>
       <div style={styles.container}>
         <div style={styles.headerRow}>
           <div>
@@ -263,13 +263,18 @@ export default function HomePage() {
 
         <div style={styles.tileStack}>
           <Tile title="Rezepte" subtitle="Rezepte verwalten, Zutaten pflegen" href="/recipes" state="MVP" />
-          <Tile title="Wochenplan" subtitle="Plan, Swap, Shop" href="/weekly-plan" state="MVP" />
+          <Tile
+            title="Wochenplan"
+            subtitle={"Woche planen\nRezepte austauschen\nEinkaufsliste erstellen"}
+            href="/weekly-plan"
+            state="MVP"
+          />
           <Tile title="Einstellungen" subtitle="Basisvorrat, Präferenzen, Telegram" href="/settings" state="MVP" />
         </div>
 
         <div style={styles.section}>
           <p style={styles.sectionTitle}>Health Checks</p>
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-start" }}>
             <StatusBadge all={all} />
           </div>
           <div style={{ marginTop: 10, ...styles.microChecks }}>

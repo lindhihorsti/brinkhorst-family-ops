@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, type Recipe } from "../../lib/api";
+import { getErrorMessage } from "../../lib/errors";
 import { BtnLink, Chip, Page, styles } from "../../lib/ui";
 
 export default function RecipeDetailPage() {
@@ -30,8 +31,8 @@ export default function RecipeDetailPage() {
       try {
         const r = await api.getRecipe(id);
         if (!cancelled) setItem(r);
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message ?? "Fehler beim Laden");
+      } catch (e) {
+        if (!cancelled) setErr(getErrorMessage(e, "Fehler beim Laden"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -45,7 +46,7 @@ export default function RecipeDetailPage() {
   const archiveRecipe = async () => {
     if (!id) return;
     const confirmed = window.confirm(
-      "Rezept wirklich archivieren? (Kann später manuell in der DB reaktiviert werden.)"
+      "Rezept wirklich archivieren?"
     );
     if (!confirmed) return;
     setArchiveError(null);
@@ -53,8 +54,8 @@ export default function RecipeDetailPage() {
     try {
       await api.archiveRecipe(id);
       router.push("/recipes");
-    } catch (e: any) {
-      setArchiveError(e?.message ?? "Archivieren fehlgeschlagen.");
+    } catch (e) {
+      setArchiveError(getErrorMessage(e, "Archivieren fehlgeschlagen."));
     } finally {
       setArchiving(false);
     }
