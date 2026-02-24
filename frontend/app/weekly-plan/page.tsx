@@ -155,11 +155,13 @@ export default function WeeklyPlanPage() {
     if (current?.has_draft && current.draft) {
       setSwapDraft(current.draft);
       setSwapStep("preview");
-    } else if (swapStep === "preview") {
+      return;
+    }
+    if (current && !current.has_draft) {
       setSwapDraft(null);
       setSwapStep("closed");
     }
-  }, [current, swapStep]);
+  }, [current]);
 
   const handlePlan = async () => {
     setPlanLoading(true);
@@ -198,6 +200,7 @@ export default function WeeklyPlanPage() {
       if (data.draft) {
         setSwapDraft(data.draft);
         setSwapStep("preview");
+        setCurrent((prev) => (prev ? { ...prev, has_draft: true, draft: data.draft ?? null } : prev));
       }
     } catch (e) {
       setSwapError(getErrorMessage(e, "Fehler beim Swap"));
@@ -295,7 +298,7 @@ export default function WeeklyPlanPage() {
             }}
             disabled={!canSwap}
           >
-            Swap
+            Tauschen
           </button>
           <button style={styles.button} onClick={handleShop} disabled={shopLoading}>
             {shopLoading ? "Lade…" : "Shop"}
@@ -329,7 +332,7 @@ export default function WeeklyPlanPage() {
       </div>
 
       <div style={cardStyles.section}>
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Swap Wizard</div>
+        <div style={{ fontWeight: 800, marginBottom: 10 }}>Swap-Assistent</div>
         {!canSwap ? (
           <div style={{ fontSize: 13 }}>Erst planen, dann swap.</div>
         ) : swapStep === "select" ? (
@@ -361,7 +364,7 @@ export default function WeeklyPlanPage() {
                 onClick={handleSwapPreview}
                 disabled={swapLoading || selectedDays.length === 0}
               >
-                {swapLoading ? "Erzeuge…" : "Generate Preview"}
+                {swapLoading ? "Erzeuge…" : "Vorschau erzeugen"}
               </button>
               <button
                 style={styles.button}
@@ -378,13 +381,41 @@ export default function WeeklyPlanPage() {
           <div>
             <div style={{ fontSize: 13, marginBottom: 10 }}>Vorschau</div>
             <DayGrid days={draftDays} />
+            <div style={{ fontSize: 13, marginTop: 14, marginBottom: 8 }}>
+              Tage für erneuten Tausch auswählen:
+            </div>
+            {draftDays.map((d) => (
+              <label key={`reroll-${d.day}`} style={cardStyles.checkboxRow}>
+                <input
+                  type="checkbox"
+                  checked={selectedDays.includes(d.day)}
+                  onChange={(e) => {
+                    setSelectedDays((prev) =>
+                      e.target.checked
+                        ? Array.from(new Set([...prev, d.day]))
+                        : prev.filter((x) => x !== d.day)
+                    );
+                  }}
+                />
+                <span>
+                  <strong>{d.label}</strong> · {d.title}
+                </span>
+              </label>
+            ))}
             <div style={{ marginTop: 10, ...cardStyles.messageBox }}>{swapDraft.message}</div>
             <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                style={styles.button}
+                onClick={handleSwapPreview}
+                disabled={swapLoading || selectedDays.length === 0}
+              >
+                {swapLoading ? "Erzeuge…" : "Erneut würfeln"}
+              </button>
               <button style={styles.buttonPrimary} onClick={handleConfirm} disabled={confirmLoading}>
-                {confirmLoading ? "Bestätige…" : "Confirm"}
+                {confirmLoading ? "Bestätige…" : "Bestätigen"}
               </button>
               <button style={styles.buttonDanger} onClick={handleCancel} disabled={cancelLoading}>
-                {cancelLoading ? "Verwerfe…" : "Cancel"}
+                {cancelLoading ? "Verwerfe…" : "Abbrechen"}
               </button>
             </div>
           </div>
@@ -394,7 +425,7 @@ export default function WeeklyPlanPage() {
               Tausche einzelne Tage gegen neue Vorschläge.
             </div>
             <button style={styles.button} onClick={() => setSwapStep("select")}>
-              Swap starten
+              Tausch starten
             </button>
           </div>
         )}
