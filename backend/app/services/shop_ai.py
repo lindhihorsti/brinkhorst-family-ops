@@ -411,33 +411,37 @@ def transform_shop_list(
     if prepared_input:
         cleaned_input = prepared_input
 
+    # For very large lists, skip remote AI to keep response time predictable.
+    max_ai_lines_raw = (os.getenv("OPENAI_SHOP_MAX_LINES") or "").strip()
+    max_ai_lines = int(max_ai_lines_raw) if max_ai_lines_raw.isdigit() else 400
+    if len(cleaned_input) > max_ai_lines:
+        return cleaned_input, "AI Sortierung übersprungen (große Liste)."
+
     if not os.getenv("OPENAI_API_KEY"):
         return None, "AI Sortierung nicht verfügbar."
 
     try:
         from openai import OpenAI
     except Exception:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     model = (os.getenv("OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini").strip()
-    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
-    timeout = float(timeout_raw) if timeout_raw else 20.0
-    client = OpenAI(timeout=timeout)
+    timeout_raw = (os.getenv("OPENAI_SHOP_TIMEOUT_SECONDS") or os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 30.0
+    client = OpenAI(timeout=timeout).with_options(max_retries=0)
 
     system_text = (
-        "Du bist ein Einkaufslisten-Transformer fuer deutsche Listen. "
-        "Fasse alle gleichbedeutenden Zutaten in genau einem Eintrag zusammen, "
-        "auch bei Schreibfehlern, Singular/Plural und Varianten. "
-        "Kanonisiere Synonyme auf einen klaren Grundbegriff, z.B. "
-        "'frische Knoblauchzehen', 'Knoblauch' -> 'Knoblauch'. "
-        "Wenn die gleiche Zutat in unterschiedlichen Formen vorkommt, summiere die Menge sinnvoll. "
-        "Summiere Mengen falls parsebar und schreibe die Gesamtsumme direkt aus, nie als Rechenausdruck. "
-        "Beispiele: '6 frische Knoblauchzehen' + '1 Knoblauch' -> '7 Knoblauch'. "
-        "VERBOTEN in merged_line: '+', '=', '*', '/'. "
-        "Sortiere nach Einkaufswirkung: Fleisch/Fisch, Gemuese/Obst, Grundnahrungsmittel, Milchprodukte, dann Gewuerze/Kleinkram. "
-        "Du darfst keine neuen Zutaten erfinden und keine weglassen. "
-        "Jeder Input-Index muss genau einmal in source_indexes vorkommen. "
-        "Jede Ausgabezeile enthaelt nur eine Zutat."
+        "Transformer fuer deutsche Einkaufslisten. "
+        "Fasse gleiche Zutaten robust zusammen (Tippfehler, Singular/Plural, Varianten). "
+        "Synonyme mergen: Knoblauchzehe=Knoblauch, Fischsoesse/Fischsose=Fischsauce, "
+        "Fruehlingszwiebel=Fruehlingszwiebeln. "
+        "Summiere Mengen wenn parsebar. "
+        "VERBOTEN in merged_line: '+', '=', '*', '/', Rechenausdruecke. "
+        "Keine neuen Zutaten, keine fehlenden Zutaten. "
+        "Jede Ausgabezeile genau eine Zutat. "
+        "Sortierung: Protein/Fleisch/Fisch/Tofu, dann Gemuese/Obst/Kraeuter, "
+        "dann Grundnahrung/Carbs, dann Milchprodukte, dann Gewuerze/Saucen/Kleinkram. "
+        "Jeder Input-Index genau einmal in source_indexes."
     )
 
     user_payload = {
@@ -485,6 +489,8 @@ def transform_shop_list(
     }
 
     try:
+        max_tokens_raw = (os.getenv("OPENAI_SHOP_MAX_OUTPUT_TOKENS") or "").strip()
+        max_tokens = int(max_tokens_raw) if max_tokens_raw.isdigit() else 1800
         response = client.responses.create(
             model=model,
             input=[
@@ -497,20 +503,20 @@ def transform_shop_list(
                 },
             ],
             text={"format": schema},
-            max_output_tokens=900,
+            max_output_tokens=max_tokens,
             truncation="auto",
         )
     except Exception:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     data = _parse_response_data(response)
     if not isinstance(data, dict):
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     cleaned_output = _validate_grouped_output(data, cleaned_input=cleaned_input)
     if cleaned_output is None:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
     if not cleaned_output and cleaned_input:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     return cleaned_output, None
