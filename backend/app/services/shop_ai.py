@@ -85,11 +85,12 @@ def _normalize_key(value: str) -> str:
     return s
 
 
-def _validate_grouped_output(data: dict, input_count: int) -> Optional[List[str]]:
+def _validate_grouped_output(data: dict, cleaned_input: List[str]) -> Optional[List[str]]:
     groups = data.get("groups")
     if not isinstance(groups, list) or not groups:
         return None
 
+    input_count = len(cleaned_input)
     seen_indexes = set()
     seen_groups = set()
     output_lines: List[str] = []
@@ -102,37 +103,56 @@ def _validate_grouped_output(data: dict, input_count: int) -> Optional[List[str]
         canonical_name = group.get("canonical_name")
         source_indexes = group.get("source_indexes")
         if not isinstance(merged_line, str) or not merged_line.strip():
-            return None
+            continue
         if not isinstance(canonical_name, str) or not canonical_name.strip():
-            return None
+            canonical_name = merged_line
         if not isinstance(source_indexes, list) or not source_indexes:
-            return None
+            continue
 
         local_indexes = set()
         for idx in source_indexes:
             if not isinstance(idx, int):
-                return None
+                continue
             if idx < 0 or idx >= input_count:
-                return None
+                continue
             if idx in local_indexes or idx in seen_indexes:
-                return None
+                continue
             local_indexes.add(idx)
-            seen_indexes.add(idx)
+        if not local_indexes:
+            continue
 
         group_key = _normalize_key(canonical_name)
         if not group_key:
             group_key = _normalize_key(merged_line)
         if not group_key:
-            return None
+            continue
         if group_key in seen_groups:
-            return None
+            continue
         seen_groups.add(group_key)
+        seen_indexes.update(local_indexes)
         output_lines.append(merged_line.strip())
 
-    if seen_indexes != set(range(input_count)):
-        return None
+    # Never lose items: uncovered source rows are appended unchanged.
+    for idx in range(input_count):
+        if idx in seen_indexes:
+            continue
+        raw_line = cleaned_input[idx].strip()
+        if raw_line:
+            output_lines.append(raw_line)
 
-    return output_lines
+    # Final output must be unique by normalized key.
+    deduped: List[str] = []
+    dedup_seen = set()
+    for line in output_lines:
+        key = _normalize_key(line)
+        if not key:
+            key = line.strip().lower()
+        if key in dedup_seen:
+            continue
+        dedup_seen.add(key)
+        deduped.append(line)
+
+    return deduped if deduped else None
 
 
 def transform_shop_list(
@@ -223,7 +243,7 @@ def transform_shop_list(
                 },
             ],
             text={"format": schema},
-            max_output_tokens=600,
+            max_output_tokens=1200,
             truncation="auto",
         )
     except Exception:
@@ -233,7 +253,7 @@ def transform_shop_list(
     if not isinstance(data, dict):
         return None, "AI Sortierung nicht verfügbar."
 
-    cleaned_output = _validate_grouped_output(data, input_count=len(cleaned_input))
+    cleaned_output = _validate_grouped_output(data, cleaned_input=cleaned_input)
     if cleaned_output is None:
         return None, "AI Sortierung nicht verfügbar."
     if not cleaned_output and cleaned_input:

@@ -603,7 +603,7 @@ def _openai_probe(model: str) -> None:
     client.responses.create(
         model=model,
         input="ping",
-        max_output_tokens=4,
+        max_output_tokens=16,
     )
 
 
