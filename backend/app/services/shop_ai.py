@@ -3,6 +3,13 @@ import os
 import re
 from typing import Any, List, Optional, Tuple
 
+_SPLIT_SEPARATORS_RE = re.compile(r"\s*[;,]\s*")
+_AND_SPLIT_RE = re.compile(r"\s+(?:und|&|\+)\s+", flags=re.IGNORECASE)
+_QUANTITY_HINT_RE = re.compile(
+    r"(?<!\w)(\d+[.,]?\d*|ein|eine|einen|einer|zwei|drei|vier|fuenf|fünf|sechs|sieben|acht|neun|zehn)\b",
+    flags=re.IGNORECASE,
+)
+
 
 def _extract_output_text(response) -> Optional[str]:
     output_text = getattr(response, "output_text", None)
@@ -85,6 +92,22 @@ def _normalize_key(value: str) -> str:
     return s
 
 
+def _expand_compound_lines(lines: List[str]) -> List[str]:
+    expanded: List[str] = []
+    for line in lines:
+        base_parts = [p.strip() for p in _SPLIT_SEPARATORS_RE.split(line) if p and p.strip()]
+        for part in base_parts:
+            and_parts = [part]
+            # Split "A und B" so combined ingredient lines become separate entries.
+            if len(_QUANTITY_HINT_RE.findall(part)) >= 2 or _AND_SPLIT_RE.search(part):
+                and_parts = [p.strip() for p in _AND_SPLIT_RE.split(part) if p and p.strip()]
+            for item in and_parts:
+                cleaned = re.sub(r"\s+", " ", item).strip(" -")
+                if cleaned:
+                    expanded.append(cleaned)
+    return expanded
+
+
 def _validate_grouped_output(data: dict, cleaned_input: List[str]) -> Optional[List[str]]:
     groups = data.get("groups")
     if not isinstance(groups, list) or not groups:
@@ -159,7 +182,8 @@ def transform_shop_list(
     to_buy_lines: List[str],
     locale: str = "de",
 ) -> Tuple[Optional[List[str]], Optional[str]]:
-    cleaned_input = [str(x).strip() for x in (to_buy_lines or []) if x and str(x).strip()]
+    raw_input = [str(x).strip() for x in (to_buy_lines or []) if x and str(x).strip()]
+    cleaned_input = _expand_compound_lines(raw_input)
     if not cleaned_input:
         return [], None
 
@@ -180,10 +204,15 @@ def transform_shop_list(
         "Du bist ein Einkaufslisten-Transformer fuer deutsche Listen. "
         "Fasse alle gleichbedeutenden Zutaten in genau einem Eintrag zusammen, "
         "auch bei Schreibfehlern, Singular/Plural und Varianten. "
+        "Kanonisiere Synonyme auf einen klaren Grundbegriff, z.B. "
+        "'frische Knoblauchzehen', 'Knoblauch' -> 'Knoblauch'. "
+        "Wenn die gleiche Zutat in unterschiedlichen Formen vorkommt, summiere die Menge sinnvoll. "
         "Summiere Mengen falls parsebar und schreibe die Gesamtsumme in merged_line. "
+        "Beispiele: '6 frische Knoblauchzehen' + '1 Knoblauch' -> '7 Knoblauch'. "
+        "Sortiere nach Einkaufswirkung: Fleisch/Fisch, Gemuese/Obst, Grundnahrungsmittel, Milchprodukte, dann Gewuerze/Kleinkram. "
         "Du darfst keine neuen Zutaten erfinden und keine weglassen. "
         "Jeder Input-Index muss genau einmal in source_indexes vorkommen. "
-        "Sortierung nach Einkaufswirkung: Kernzutaten zuerst, Gewuerze/Seasoning spaeter."
+        "Jede Ausgabezeile enthaelt nur eine Zutat."
     )
 
     user_payload = {
