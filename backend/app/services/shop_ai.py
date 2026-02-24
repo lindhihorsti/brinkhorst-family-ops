@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 
 def _extract_output_text(response) -> Optional[str]:
@@ -28,6 +28,54 @@ def _extract_output_text(response) -> Optional[str]:
             if candidate:
                 return candidate
     return None
+
+
+def _extract_output_data(response) -> Optional[Any]:
+    parsed = getattr(response, "output_parsed", None)
+    if parsed is not None:
+        return parsed
+
+    output = getattr(response, "output", None) or []
+    for item in output:
+        content = getattr(item, "content", None)
+        if content is None and isinstance(item, dict):
+            content = item.get("content")
+        if not content:
+            continue
+        for chunk in content:
+            chunk_type = getattr(chunk, "type", None)
+            if chunk_type is None and isinstance(chunk, dict):
+                chunk_type = chunk.get("type")
+            if chunk_type not in {"output_json", "json"}:
+                continue
+            candidate = getattr(chunk, "json", None)
+            if candidate is None and isinstance(chunk, dict):
+                candidate = chunk.get("json")
+            if candidate is not None:
+                return candidate
+    return None
+
+
+def _parse_response_data(response) -> Optional[dict]:
+    data = _extract_output_data(response)
+    if isinstance(data, dict):
+        return data
+
+    output_text = _extract_output_text(response)
+    if not output_text:
+        return None
+
+    # Some models occasionally wrap JSON in fenced code blocks.
+    cleaned = output_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        parsed = json.loads(cleaned)
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _normalize_key(value: str) -> str:
@@ -181,15 +229,7 @@ def transform_shop_list(
     except Exception:
         return None, "AI Sortierung nicht verfügbar."
 
-    output_text = _extract_output_text(response)
-    if not output_text:
-        return None, "AI Sortierung nicht verfügbar."
-
-    try:
-        data = json.loads(output_text)
-    except Exception:
-        return None, "AI Sortierung nicht verfügbar."
-
+    data = _parse_response_data(response)
     if not isinstance(data, dict):
         return None, "AI Sortierung nicht verfügbar."
 
