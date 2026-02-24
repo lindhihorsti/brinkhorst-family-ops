@@ -15,6 +15,7 @@ import httpx
 from sqlmodel import create_engine, Session, SQLModel, text as sql_text, select
 
 from app.models import Recipe, AppState
+from app.services import swap_service
 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -276,6 +277,37 @@ def _db_get_app_state_json(key: str, default: Any) -> Any:
         return json.loads(raw)
     except Exception:
         return default
+
+
+SWAP_AVOID_PREFIX = "swap_avoid:"
+
+
+def _swap_avoid_key(week_start: date) -> str:
+    return f"{SWAP_AVOID_PREFIX}{week_start.isoformat()}"
+
+
+def _get_swap_avoid_list(week_start: date) -> List[str]:
+    data = _db_get_app_state_json(_swap_avoid_key(week_start), [])
+    if isinstance(data, dict):
+        items = data.get("avoid", [])
+    else:
+        items = data
+    if not isinstance(items, list):
+        return []
+    cleaned: List[str] = []
+    for item in items:
+        if isinstance(item, str) and item:
+            cleaned.append(item)
+    return cleaned
+
+
+def _set_swap_avoid_list(week_start: date, avoid_list: List[str]) -> None:
+    unique = sorted({rid for rid in avoid_list if rid})
+    _db_set_app_state_value(_swap_avoid_key(week_start), json.dumps(unique))
+
+
+def _clear_swap_avoid_list(week_start: date) -> None:
+    _db_set_app_state_value(_swap_avoid_key(week_start), json.dumps([]))
 
 
 def _normalize_ingredient(value: str) -> str:
@@ -1244,6 +1276,38 @@ def api_weekly_plan(notify: int = 0):
     return response
 
 
+def _run_swap_preview(week_start: date, swap_days: List[int]) -> Dict[str, Any]:
+    base = _db_get_weekly_plan(week_start)
+    if not base:
+        return {
+            "ok": False,
+            "week_start": week_start.isoformat(),
+            "message": "Kein Plan vorhanden. Erst `plan` ausführen.",
+        }
+
+    base_plan_id = base["id"]
+    draft = _db_get_draft(week_start)
+
+    if draft and draft.get("proposed_days"):
+        base_days = draft.get("proposed_days") or {}
+        avoid_ids = set(_get_swap_avoid_list(week_start))
+        avoid_ids = swap_service.update_avoid_list_for_reroll(base_days, swap_days, avoid_ids)
+        _set_swap_avoid_list(week_start, list(avoid_ids))
+    else:
+        _clear_swap_avoid_list(week_start)
+        avoid_ids = set()
+        base_days = base["days"]
+
+    proposed = swap_service.apply_swaps(engine, base_days, swap_days, avoid_ids)
+    _db_create_draft(week_start, str(base_plan_id), proposed, swap_days)
+
+    return {
+        "ok": True,
+        "week_start": week_start.isoformat(),
+        "draft": _build_draft_payload(proposed, swap_days),
+    }
+
+
 @app.post("/api/weekly/swap")
 def api_weekly_swap(payload: WeeklySwapRequest):
     if engine is None:
@@ -1257,26 +1321,8 @@ def api_weekly_swap(payload: WeeklySwapRequest):
     if len(set(days)) != len(days):
         raise HTTPException(400, "days must be unique")
 
-    base = _db_get_weekly_plan(week_start)
-    if not base:
-        return {
-            "ok": False,
-            "week_start": week_start.isoformat(),
-            "message": "Kein Plan vorhanden. Erst `plan` ausführen.",
-        }
-
     swap_days = sorted(days)
-    base_days = base["days"]
-    base_plan_id = base["id"]
-
-    proposed = _apply_swaps(base_days, swap_days)
-    _db_create_draft(week_start, str(base_plan_id), proposed, swap_days)
-
-    return {
-        "ok": True,
-        "week_start": week_start.isoformat(),
-        "draft": _build_draft_payload(proposed, swap_days),
-    }
+    return _run_swap_preview(week_start, swap_days)
 
 
 @app.post("/api/weekly/confirm")
@@ -1295,6 +1341,7 @@ def api_weekly_confirm():
     proposed = d["proposed_days"]
     _db_upsert_weekly_plan(week_start, proposed)
     _db_delete_draft(week_start)
+    _clear_swap_avoid_list(week_start)
 
     plan_payload = _build_plan_payload(proposed)
     return {
@@ -1314,6 +1361,7 @@ def api_weekly_cancel():
         raise HTTPException(500, "DATABASE_URL missing")
     week_start = _current_week_start()
     _db_delete_draft(week_start)
+    _clear_swap_avoid_list(week_start)
     return {"ok": True, "week_start": week_start.isoformat(), "message": "Draft verworfen."}
 
 
@@ -1579,56 +1627,6 @@ def _db_delete_draft(week_start: date) -> None:
 # -----------------------------
 # Planning logic (MVP simple)
 # -----------------------------
-def _pick_recipes_for_days(
-    existing_ids: List[str],
-    count: int,
-    prefer_tags: Optional[List[str]] = None,
-    prefer_max: int = 0,
-) -> Tuple[List[str], List[str]]:
-    """
-    Returns (picked_recipe_ids, dummy_titles_if_missing)
-    - Picks from DB first (excluding existing_ids)
-    - If insufficient, returns dummy titles for the remaining slots
-    """
-    picked: List[str] = []
-    dummy: List[str] = []
-
-    with Session(engine) as session:
-        stmt = (
-            select(Recipe)
-            .where(Recipe.is_active == True)  # noqa: E712
-            .order_by(Recipe.created_at.desc())
-        )
-        all_recipes = list(session.exec(stmt))
-
-    available = [r for r in all_recipes if str(r.id) not in existing_ids]
-
-    prefer_set = {t for t in (prefer_tags or []) if t}
-    preferred: List[Recipe] = []
-    if prefer_set:
-        for r in available:
-            if set(r.tags or []) & prefer_set:
-                preferred.append(r)
-
-    if prefer_set and prefer_max > 0:
-        for r in preferred:
-            if len(picked) >= prefer_max:
-                break
-            picked.append(str(r.id))
-
-    for r in available:
-        if len(picked) >= count:
-            break
-        if str(r.id) in picked:
-            continue
-        picked.append(str(r.id))
-
-    while len(picked) + len(dummy) < count:
-        dummy.append(f"KI: Neues Rezept {len(dummy)+1}")
-
-    return picked, dummy
-
-
 def _format_plan(days: Dict[str, str]) -> str:
     lines = ["🗓️ Wochenplan (Mo–So):"]
     for i in range(1, 8):
@@ -1654,7 +1652,8 @@ def _build_new_week_plan() -> Dict[str, str]:
     preferences = _get_settings_preferences()
     tags = preferences.get("tags") or []
     prefer_max = int(7 * 0.5) if tags else 0
-    picked_ids, dummy_titles = _pick_recipes_for_days(
+    picked_ids, dummy_titles = swap_service.pick_recipes_for_days(
+        engine,
         existing_ids=[],
         count=7,
         prefer_tags=tags,
@@ -1672,38 +1671,6 @@ def _build_new_week_plan() -> Dict[str, str]:
             di += 1
     return days
 
-
-def _apply_swaps(base_days: Dict[str, str], swap_days: List[int]) -> Dict[str, str]:
-    current = dict(base_days)
-
-    # 1) Alles, was schon im Plan drin ist (echte Rezepte), ist "verboten"
-    banned_ids = {
-        v for v in current.values()
-        if v and isinstance(v, str) and not v.startswith("KI:")
-    }
-
-    # 2) Für die Swap-Slots löschen wir erst mal die Einträge
-    for d in swap_days:
-        current[str(d)] = ""
-
-    # 3) Jetzt picken wir neue Rezepte, die NICHT in banned_ids sind
-    picked_ids, dummy_titles = _pick_recipes_for_days(existing_ids=list(banned_ids), count=len(swap_days))
-
-    # 4) Und verteilen sie auf die Swap-Tage
-    pi = 0
-    di = 0
-    stamp = datetime.utcnow().strftime("%H%M%S")
-    for d in swap_days:
-        if pi < len(picked_ids):
-            current[str(d)] = picked_ids[pi]
-            pi += 1
-        else:
-            # Dummy muss sichtbar "neu" sein (sonst wirkt's wie nicht getauscht)
-            base = dummy_titles[di] if di < len(dummy_titles) else "KI: Neues Rezept"
-            current[str(d)] = f"{base} ({stamp}-{d})"
-            di += 1
-
-    return current
 
 def _parse_swap_days(cmd: str) -> List[int]:
     # accepts: "swap 2 5 7" or "swap di fr" or "swap 2,5,7"
@@ -1882,20 +1849,13 @@ async def telegram_webhook(request: Request):
     if cmd.lower().startswith("swap"):
         try:
             swap_days = _parse_swap_days(cmd)
-
-            base = _db_get_weekly_plan(week_start)
-            if not base:
-                await _tg_send(chat_id, "Kein Plan vorhanden. Erst `plan` ausführen.")
+            result = _run_swap_preview(week_start, swap_days)
+            if not result.get("ok"):
+                await _tg_send(chat_id, result.get("message") or "Swap nicht möglich.")
                 return {"ok": True}
 
-            base_days = base["days"]
-            base_plan_id = base["id"]
-
-            proposed = _apply_swaps(base_days, swap_days)
-            _db_create_draft(week_start, str(base_plan_id), proposed, swap_days)
-
-            # show only changed days + full preview
-            await _tg_send(chat_id, "🔁 Vorschau (noch NICHT übernommen). Nutze `confirm` oder `cancel`.\n\n" + _format_plan(proposed))
+            draft = result.get("draft") or {}
+            await _tg_send(chat_id, draft.get("message") or "Swap Vorschau erstellt.")
         except Exception as e:
             await _tg_send(chat_id, f"❌ swap Fehler: {e}\nBeispiel: swap 2 5 7 oder swap di fr so")
         return {"ok": True}
@@ -1910,12 +1870,14 @@ async def telegram_webhook(request: Request):
         proposed = d["proposed_days"]
         _db_upsert_weekly_plan(week_start, proposed)
         _db_delete_draft(week_start)
+        _clear_swap_avoid_list(week_start)
         await _tg_send(chat_id, "✅ Übernommen.\n\n" + _format_plan(proposed))
         return {"ok": True}
 
     # --- cancel ---
     if cmd.lower() == "cancel":
         _db_delete_draft(week_start)
+        _clear_swap_avoid_list(week_start)
         await _tg_send(chat_id, "🗑️ Draft verworfen.")
         return {"ok": True}
 
