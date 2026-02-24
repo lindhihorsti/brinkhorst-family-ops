@@ -948,7 +948,9 @@ def _build_shop_payload(days: Dict[str, str]) -> Dict[str, Any]:
     ai_lines, ai_note = transform_shop_list(buy_lines, locale="de")
 
     warning = None
+    ai_applied = False
     if ai_lines is not None:
+        ai_applied = True
         buy_items = [{"name": line, "count": 1} for line in ai_lines]
         message = _format_shop_message(
             ai_lines,
@@ -968,6 +970,7 @@ def _build_shop_payload(days: Dict[str, str]) -> Dict[str, Any]:
         "pantry_uncertain_used": aggregated["pantry_uncertain_used"],
         "message": message,
         "warning": warning,
+        "ai_applied": ai_applied,
     }
 
 
@@ -1457,6 +1460,7 @@ def api_weekly_shop(notify: int = 0):
         "pantry_used": shop_payload["pantry_used"],
         "pantry_uncertain_used": shop_payload["pantry_uncertain_used"],
         "message": shop_payload["message"],
+        "ai_applied": shop_payload["ai_applied"],
     }
     if shop_payload.get("warning"):
         response["warning"] = shop_payload["warning"]

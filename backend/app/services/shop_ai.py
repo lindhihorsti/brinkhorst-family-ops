@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import List, Optional, Tuple
 
 
@@ -29,6 +30,63 @@ def _extract_output_text(response) -> Optional[str]:
     return None
 
 
+def _normalize_key(value: str) -> str:
+    s = value.strip().lower()
+    s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    s = re.sub(r"[^a-z0-9]+", "", s)
+    return s
+
+
+def _validate_grouped_output(data: dict, input_count: int) -> Optional[List[str]]:
+    groups = data.get("groups")
+    if not isinstance(groups, list) or not groups:
+        return None
+
+    seen_indexes = set()
+    seen_groups = set()
+    output_lines: List[str] = []
+
+    for group in groups:
+        if not isinstance(group, dict):
+            return None
+
+        merged_line = group.get("merged_line")
+        canonical_name = group.get("canonical_name")
+        source_indexes = group.get("source_indexes")
+        if not isinstance(merged_line, str) or not merged_line.strip():
+            return None
+        if not isinstance(canonical_name, str) or not canonical_name.strip():
+            return None
+        if not isinstance(source_indexes, list) or not source_indexes:
+            return None
+
+        local_indexes = set()
+        for idx in source_indexes:
+            if not isinstance(idx, int):
+                return None
+            if idx < 0 or idx >= input_count:
+                return None
+            if idx in local_indexes or idx in seen_indexes:
+                return None
+            local_indexes.add(idx)
+            seen_indexes.add(idx)
+
+        group_key = _normalize_key(canonical_name)
+        if not group_key:
+            group_key = _normalize_key(merged_line)
+        if not group_key:
+            return None
+        if group_key in seen_groups:
+            return None
+        seen_groups.add(group_key)
+        output_lines.append(merged_line.strip())
+
+    if seen_indexes != set(range(input_count)):
+        return None
+
+    return output_lines
+
+
 def transform_shop_list(
     to_buy_lines: List[str],
     locale: str = "de",
@@ -51,21 +109,25 @@ def transform_shop_list(
     client = OpenAI(timeout=timeout)
 
     system_text = (
-        "Du bist ein Einkaufslisten-Transformer. "
-        "Du darfst keine neuen Zutaten hinzufügen und nichts weglassen. "
-        "Fasse gleiche/ähnliche Zutaten zusammen, summiere Mengen falls möglich, "
-        "und sortiere nach Einfluss: große/essenzielle Zutaten zuerst, Gewürze später. "
-        "Ausgabe auf Deutsch, kurze klare Einträge."
+        "Du bist ein Einkaufslisten-Transformer fuer deutsche Listen. "
+        "Fasse alle gleichbedeutenden Zutaten in genau einem Eintrag zusammen, "
+        "auch bei Schreibfehlern, Singular/Plural und Varianten. "
+        "Summiere Mengen falls parsebar und schreibe die Gesamtsumme in merged_line. "
+        "Du darfst keine neuen Zutaten erfinden und keine weglassen. "
+        "Jeder Input-Index muss genau einmal in source_indexes vorkommen. "
+        "Sortierung nach Einkaufswirkung: Kernzutaten zuerst, Gewuerze/Seasoning spaeter."
     )
 
     user_payload = {
         "locale": locale,
-        "to_buy": cleaned_input,
+        "indexed_to_buy": [{"i": i, "line": line} for i, line in enumerate(cleaned_input)],
         "rules": {
             "no_new_items": True,
             "group_equivalents": True,
+            "normalize_typos_variants": True,
             "sum_quantities": True,
             "sort_by_impact": True,
+            "source_indexes_must_cover_all_once": True,
         },
     }
 
@@ -76,9 +138,26 @@ def transform_shop_list(
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "to_buy": {"type": "array", "items": {"type": "string"}},
+                "groups": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "canonical_name": {"type": "string"},
+                            "merged_line": {"type": "string"},
+                            "source_indexes": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {"type": "integer", "minimum": 0},
+                            },
+                        },
+                        "required": ["canonical_name", "merged_line", "source_indexes"],
+                    },
+                },
             },
-            "required": ["to_buy"],
+            "required": ["groups"],
         },
         "strict": True,
     }
@@ -114,11 +193,9 @@ def transform_shop_list(
     if not isinstance(data, dict):
         return None, "AI Sortierung nicht verfügbar."
 
-    items = data.get("to_buy")
-    if not isinstance(items, list):
+    cleaned_output = _validate_grouped_output(data, input_count=len(cleaned_input))
+    if cleaned_output is None:
         return None, "AI Sortierung nicht verfügbar."
-
-    cleaned_output = [str(x).strip() for x in items if isinstance(x, str) and x.strip()]
     if not cleaned_output and cleaned_input:
         return None, "AI Sortierung nicht verfügbar."
 
