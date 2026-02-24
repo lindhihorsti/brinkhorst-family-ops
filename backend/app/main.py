@@ -16,6 +16,7 @@ from sqlmodel import create_engine, Session, SQLModel, text as sql_text, select
 
 from app.models import Recipe, AppState
 from app.services import swap_service
+from app.services.shop_ai import transform_shop_list
 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -829,6 +830,7 @@ def _aggregate_shop_items(days: Dict[str, str]) -> Dict[str, Any]:
 
     buy_counts: Dict[str, int] = {}
     buy_display: Dict[str, str] = {}
+    buy_lines: List[str] = []
     pantry_used_counts: Dict[str, int] = {}
     pantry_uncertain_counts: Dict[str, int] = {}
 
@@ -857,6 +859,7 @@ def _aggregate_shop_items(days: Dict[str, str]) -> Dict[str, Any]:
                     continue
 
                 display = _clean_display_name(raw)
+                buy_lines.append(display)
                 if norm not in buy_display:
                     buy_display[norm] = display
                 buy_counts[norm] = buy_counts.get(norm, 0) + 1
@@ -897,9 +900,74 @@ def _aggregate_shop_items(days: Dict[str, str]) -> Dict[str, Any]:
 
     return {
         "buy": buy_list,
+        "buy_lines": buy_lines,
         "pantry_used": pantry_used_list,
         "pantry_uncertain_used": pantry_uncertain_list,
         "message": "\n".join(message_lines),
+    }
+
+
+def _format_shop_message(
+    buy_lines: List[str],
+    pantry_used_list: List[Dict[str, Any]],
+    pantry_uncertain_list: List[Dict[str, Any]],
+    note: Optional[str] = None,
+) -> str:
+    message_lines: List[str] = []
+    if not buy_lines:
+        message_lines.append("🧺 Einkaufsliste ist leer (oder alle Zutaten sind Pantry).")
+    else:
+        message_lines.append("🧺 Einkaufsliste:")
+        for line in buy_lines:
+            message_lines.append(f"- {line}")
+
+    if pantry_used_list:
+        message_lines.append("")
+        message_lines.append("Pantry verwendet:")
+        for item in pantry_used_list:
+            cnt = item["count"]
+            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
+
+    if pantry_uncertain_list:
+        message_lines.append("")
+        message_lines.append("Pantry unsicher:")
+        for item in pantry_uncertain_list:
+            cnt = item["count"]
+            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
+
+    if note:
+        message_lines.append("")
+        message_lines.append(note)
+
+    return "\n".join(message_lines)
+
+
+def _build_shop_payload(days: Dict[str, str]) -> Dict[str, Any]:
+    aggregated = _aggregate_shop_items(days)
+    buy_lines = aggregated.get("buy_lines") or []
+    ai_lines, ai_note = transform_shop_list(buy_lines, locale="de")
+
+    warning = None
+    if ai_lines is not None:
+        buy_items = [{"name": line, "count": 1} for line in ai_lines]
+        message = _format_shop_message(
+            ai_lines,
+            aggregated["pantry_used"],
+            aggregated["pantry_uncertain_used"],
+        )
+    else:
+        buy_items = aggregated["buy"]
+        message = aggregated["message"]
+        if ai_note:
+            warning = ai_note
+            message = f"{message}\n\n{ai_note}"
+
+    return {
+        "buy": buy_items,
+        "pantry_used": aggregated["pantry_used"],
+        "pantry_uncertain_used": aggregated["pantry_uncertain_used"],
+        "message": message,
+        "warning": warning,
     }
 
 
@@ -1380,16 +1448,18 @@ def api_weekly_shop(notify: int = 0):
         }
 
     days = base["days"]
-    aggregated = _aggregate_shop_items(days)
+    shop_payload = _build_shop_payload(days)
     response = {
         "ok": True,
         "week_start": week_start.isoformat(),
-        "items": aggregated["buy"],
-        "buy": aggregated["buy"],
-        "pantry_used": aggregated["pantry_used"],
-        "pantry_uncertain_used": aggregated["pantry_uncertain_used"],
-        "message": aggregated["message"],
+        "items": shop_payload["buy"],
+        "buy": shop_payload["buy"],
+        "pantry_used": shop_payload["pantry_used"],
+        "pantry_uncertain_used": shop_payload["pantry_uncertain_used"],
+        "message": shop_payload["message"],
     }
+    if shop_payload.get("warning"):
+        response["warning"] = shop_payload["warning"]
     if notify == 1:
         telegram_settings = _get_settings_telegram()
         if telegram_settings.get("auto_send_shop"):
@@ -1831,8 +1901,8 @@ async def telegram_webhook(request: Request):
             await _tg_send(chat_id, "Kein Plan vorhanden. Erst `plan` ausführen.")
             return {"ok": True}
 
-        aggregated = _aggregate_shop_items(base["days"])
-        await _tg_send(chat_id, aggregated["message"])
+        shop_payload = _build_shop_payload(base["days"])
+        await _tg_send(chat_id, shop_payload["message"])
         return {"ok": True}
 
 
