@@ -413,7 +413,7 @@ def transform_shop_list(
 
     # For very large lists, skip remote AI to keep response time predictable.
     max_ai_lines_raw = (os.getenv("OPENAI_SHOP_MAX_LINES") or "").strip()
-    max_ai_lines = int(max_ai_lines_raw) if max_ai_lines_raw.isdigit() else 200
+    max_ai_lines = int(max_ai_lines_raw) if max_ai_lines_raw.isdigit() else 400
     if len(cleaned_input) > max_ai_lines:
         return cleaned_input, "AI Sortierung übersprungen (große Liste)."
 
@@ -427,7 +427,7 @@ def transform_shop_list(
 
     model = (os.getenv("OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini").strip()
     timeout_raw = (os.getenv("OPENAI_SHOP_TIMEOUT_SECONDS") or os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
-    timeout = float(timeout_raw) if timeout_raw else 20.0
+    timeout = float(timeout_raw) if timeout_raw else 30.0
     client = OpenAI(timeout=timeout).with_options(max_retries=0)
 
     system_text = (
@@ -490,7 +490,7 @@ def transform_shop_list(
 
     try:
         max_tokens_raw = (os.getenv("OPENAI_SHOP_MAX_OUTPUT_TOKENS") or "").strip()
-        max_tokens = int(max_tokens_raw) if max_tokens_raw.isdigit() else 900
+        max_tokens = int(max_tokens_raw) if max_tokens_raw.isdigit() else 1800
         response = client.responses.create(
             model=model,
             input=[
