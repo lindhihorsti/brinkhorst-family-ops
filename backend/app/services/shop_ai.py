@@ -411,17 +411,23 @@ def transform_shop_list(
     if prepared_input:
         cleaned_input = prepared_input
 
+    # For very large lists, skip remote AI to keep response time predictable.
+    max_ai_lines_raw = (os.getenv("OPENAI_SHOP_MAX_LINES") or "").strip()
+    max_ai_lines = int(max_ai_lines_raw) if max_ai_lines_raw.isdigit() else 80
+    if len(cleaned_input) > max_ai_lines:
+        return cleaned_input, "AI Sortierung übersprungen (große Liste)."
+
     if not os.getenv("OPENAI_API_KEY"):
         return None, "AI Sortierung nicht verfügbar."
 
     try:
         from openai import OpenAI
     except Exception:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     model = (os.getenv("OPENAI_MODEL", "gpt-4o-mini") or "gpt-4o-mini").strip()
-    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
-    timeout = float(timeout_raw) if timeout_raw else 20.0
+    timeout_raw = (os.getenv("OPENAI_SHOP_TIMEOUT_SECONDS") or os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 10.0
     client = OpenAI(timeout=timeout)
 
     system_text = (
@@ -501,16 +507,16 @@ def transform_shop_list(
             truncation="auto",
         )
     except Exception:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     data = _parse_response_data(response)
     if not isinstance(data, dict):
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     cleaned_output = _validate_grouped_output(data, cleaned_input=cleaned_input)
     if cleaned_output is None:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
     if not cleaned_output and cleaned_input:
-        return None, "AI Sortierung nicht verfügbar."
+        return cleaned_input, "AI Sortierung nicht verfügbar."
 
     return cleaned_output, None
