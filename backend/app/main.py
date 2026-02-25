@@ -103,11 +103,26 @@ DEFAULT_PANTRY_ITEMS = [
 DEFAULT_PREFERENCES = {"tags": []}
 DEFAULT_TELEGRAM = {"auto_send_plan": False, "auto_send_shop": False}
 DEFAULT_SHOP_SETTINGS = {"shop_output_mode": SHOP_OUTPUT_AI}
+DEFAULT_ACTIVITIES_SETTINGS = {
+    "default_location": "",
+    "max_travel_min": 30,
+    "budget": "egal",
+    "transport": "egal",
+    "types": [],
+    "use_weather": True,
+    "prefer_mountains": False,
+}
+
+ACTIVITIES_MAX_TRAVEL_OPTIONS = [15, 30, 45, 60, 90, 120]
+ACTIVITIES_TIME_BUCKETS = ["1–2 Stunden", "2–4 Stunden", "Halber Tag", "Ganzer Tag"]
+ACTIVITIES_BUDGET_OPTIONS = {"niedrig", "mittel", "egal"}
+ACTIVITIES_TRANSPORT_OPTIONS = {"auto", "oev", "zu_fuss", "egal"}
 
 APP_STATE_SETTINGS_PANTRY = "settings_pantry"
 APP_STATE_SETTINGS_PREFERENCES = "settings_preferences"
 APP_STATE_SETTINGS_TELEGRAM = "settings_telegram"
 APP_STATE_SETTINGS_SHOP = "settings_shop"
+APP_STATE_SETTINGS_ACTIVITIES = "settings_activities"
 APP_STATE_TELEGRAM_LAST_CHAT_ID = "telegram_last_chat_id"
 
 IMPORT_FETCH_MAX_BYTES = 3 * 1024 * 1024
@@ -716,6 +731,274 @@ def _openai_extract_recipe_draft(
     return data
 
 
+def _openai_generate_activities(
+    payload: "ActivitiesGeneratePayload",
+    settings: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    from openai import OpenAI
+
+    model = (os.getenv("OPENAI_MODEL_ACTIVITIES", "gpt-5.2") or "gpt-5.2").strip()
+    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 30.0
+    client = OpenAI(timeout=timeout).with_options(max_retries=0)
+
+    today = date.today()
+    child_age = _leni_age_text(today)
+
+    def transport_label(value: str) -> str:
+        if value == "auto":
+            return "Auto"
+        if value == "oev":
+            return "ÖV"
+        if value == "zu_fuss":
+            return "zu Fuß"
+        return "egal"
+
+    system_text = (
+        "Du bist ein Ideen-Generator für Familienausflüge in der Schweiz/Region. "
+        "Gib ausschließlich JSON im verlangten Schema aus. "
+        "Vorschläge müssen zur Zeitvorgabe passen und die Fahrzeit <= max_travel_min einhalten. "
+        "Wenn mountains=true, bevorzuge Berg-/Wanderaktivitäten, aber bleibe altersgerecht. "
+        "Nutze web_search, um Öffnungszeiten und Kosten zu verifizieren, wenn möglich. "
+        "Wenn Informationen fehlen, setze opening_hours_today oder price_hint auf 'Unbekannt' "
+        "und lasse sources leer. "
+        "Achte auf kinderfreundliche, altersgerechte Vorschläge."
+    )
+
+    user_payload = {
+        "date_today": today.isoformat(),
+        "time_left_bucket": payload.time_left_bucket,
+        "max_travel_min": payload.max_travel_min,
+        "mountains": bool(payload.mountains),
+        "location_text": payload.location_text,
+        "mood": {
+            "energy": payload.mood.energy,
+            "vibe": payload.mood.vibe,
+            "indoor_outdoor": payload.mood.indoor_outdoor,
+            "free_text": payload.mood.free_text,
+        },
+        "settings": {
+            "budget": settings.get("budget"),
+            "transport": transport_label(settings.get("transport", "egal")),
+            "types": settings.get("types", []),
+            "use_weather": bool(settings.get("use_weather", True)),
+            "prefer_mountains": bool(settings.get("prefer_mountains", False)),
+        },
+        "child_context": f"Child age: {child_age}",
+        "rules": {
+            "language": "de",
+            "alternatives": 3,
+            "opening_hours_today_unknown": "Unbekannt",
+            "price_hint_unknown": "Unbekannt",
+        },
+    }
+
+    if settings.get("use_weather", True):
+        user_payload["weather_instruction"] = (
+            "Wenn möglich, nutze web_search für das heutige Wetter und erwähne es kurz in why_fit."
+        )
+
+    schema = {
+        "type": "json_schema",
+        "name": "activities_ideas",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "alternatives": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "title": {"type": "string"},
+                            "location": {"type": "string"},
+                            "travel_time_min": {"type": "integer", "minimum": 0},
+                            "opening_hours_today": {"type": "string"},
+                            "price_hint": {"type": "string"},
+                            "duration_hint": {"type": "string"},
+                            "why_fit": {"type": "string"},
+                            "sources": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": [
+                            "title",
+                            "location",
+                            "travel_time_min",
+                            "opening_hours_today",
+                            "price_hint",
+                            "duration_hint",
+                            "why_fit",
+                            "sources",
+                        ],
+                    },
+                }
+            },
+            "required": ["alternatives"],
+        },
+        "strict": True,
+    }
+
+    response = client.responses.create(
+        model=model,
+        tools=[{"type": "web_search"}],
+        input=[
+            {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+        ],
+        text={"format": schema},
+        max_output_tokens=900,
+        truncation="auto",
+    )
+
+    data = _parse_response_json(response)
+    alternatives = _validate_activity_alternatives(data)
+    if not alternatives:
+        raise ValueError("AI-Antwort ungültig.")
+    return alternatives
+
+
+def _extract_output_text(response) -> Optional[str]:
+    output_text = getattr(response, "output_text", None)
+    if output_text:
+        return output_text
+    output = getattr(response, "output", None) or []
+    for item in output:
+        content = getattr(item, "content", None)
+        if content is None and isinstance(item, dict):
+            content = item.get("content")
+        if not content:
+            continue
+        for chunk in content:
+            chunk_type = getattr(chunk, "type", None)
+            if chunk_type is None and isinstance(chunk, dict):
+                chunk_type = chunk.get("type")
+            if chunk_type != "output_text":
+                continue
+            candidate = getattr(chunk, "text", None)
+            if candidate is None and isinstance(chunk, dict):
+                candidate = chunk.get("text")
+            if candidate:
+                return candidate
+    return None
+
+
+def _extract_output_json(response) -> Optional[dict]:
+    parsed = getattr(response, "output_parsed", None)
+    if isinstance(parsed, dict):
+        return parsed
+
+    output = getattr(response, "output", None) or []
+    for item in output:
+        content = getattr(item, "content", None)
+        if content is None and isinstance(item, dict):
+            content = item.get("content")
+        if not content:
+            continue
+        for chunk in content:
+            chunk_type = getattr(chunk, "type", None)
+            if chunk_type is None and isinstance(chunk, dict):
+                chunk_type = chunk.get("type")
+            if chunk_type not in {"output_json", "json"}:
+                continue
+            candidate = getattr(chunk, "json", None)
+            if candidate is None and isinstance(chunk, dict):
+                candidate = chunk.get("json")
+            if isinstance(candidate, dict):
+                return candidate
+    return None
+
+
+def _parse_response_json(response) -> Optional[dict]:
+    data = _extract_output_json(response)
+    if isinstance(data, dict):
+        return data
+
+    output_text = _extract_output_text(response)
+    if not output_text:
+        return None
+    cleaned = output_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        parsed = json.loads(cleaned)
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _leni_age_text(today: date) -> str:
+    birth = date(2024, 10, 1)
+    months = (today.year - birth.year) * 12 + (today.month - birth.month)
+    if today.day < birth.day:
+        months -= 1
+    if months < 0:
+        months = 0
+    years = months // 12
+    rem_months = months % 12
+    if years <= 0:
+        return f"{months} months"
+    if rem_months == 0:
+        return f"{years} years"
+    return f"{years} years {rem_months} months"
+
+
+def _validate_activity_alternatives(data: Any) -> Optional[List[Dict[str, Any]]]:
+    if not isinstance(data, dict):
+        return None
+    alternatives = data.get("alternatives")
+    if not isinstance(alternatives, list) or len(alternatives) != 3:
+        return None
+    cleaned: List[Dict[str, Any]] = []
+    for alt in alternatives:
+        if not isinstance(alt, dict):
+            return None
+        required = [
+            "title",
+            "location",
+            "travel_time_min",
+            "opening_hours_today",
+            "price_hint",
+            "duration_hint",
+            "why_fit",
+            "sources",
+        ]
+        for key in required:
+            if key not in alt:
+                return None
+        if not isinstance(alt.get("title"), str):
+            return None
+        if not isinstance(alt.get("location"), str):
+            return None
+        travel = alt.get("travel_time_min")
+        if not isinstance(travel, (int, float)):
+            return None
+        if not isinstance(alt.get("opening_hours_today"), str):
+            return None
+        if not isinstance(alt.get("price_hint"), str):
+            return None
+        if not isinstance(alt.get("duration_hint"), str):
+            return None
+        if not isinstance(alt.get("why_fit"), str):
+            return None
+        sources = alt.get("sources")
+        if not isinstance(sources, list) or not all(isinstance(s, str) for s in sources):
+            return None
+        cleaned.append(
+            {
+                "title": alt["title"].strip(),
+                "location": alt["location"].strip(),
+                "travel_time_min": int(travel),
+                "opening_hours_today": alt["opening_hours_today"].strip(),
+                "price_hint": alt["price_hint"].strip(),
+                "duration_hint": alt["duration_hint"].strip(),
+                "why_fit": alt["why_fit"].strip(),
+                "sources": sources,
+            }
+        )
+    return cleaned
 
 
 def _validate_pantry_items(items: List["PantryItemPayload"]) -> List[Dict[str, Any]]:
@@ -803,6 +1086,87 @@ def _get_settings_shop() -> Dict[str, Any]:
     if mode not in SHOP_OUTPUT_MODES:
         mode = SHOP_OUTPUT_AI
     return {"shop_output_mode": mode}
+
+
+def _normalize_ascii_key(value: str) -> str:
+    s = value.strip().lower()
+    s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    s = re.sub(r"[^a-z0-9]+", "", s)
+    return s
+
+
+def _normalize_activities_budget(value: Optional[str], fallback: str) -> str:
+    if not value:
+        return fallback
+    cleaned = _normalize_ascii_key(value)
+    if cleaned in ACTIVITIES_BUDGET_OPTIONS:
+        return cleaned
+    return fallback
+
+
+def _normalize_activities_transport(value: Optional[str], fallback: str) -> str:
+    if not value:
+        return fallback
+    cleaned = _normalize_ascii_key(value)
+    if cleaned in {"oev", "ov"}:
+        cleaned = "oev"
+    if cleaned in {"zufuss", "zufus"}:
+        cleaned = "zu_fuss"
+    if cleaned in {"auto", "oev", "zu_fuss", "egal"}:
+        return cleaned
+    return fallback
+
+
+def _normalize_activities_settings(
+    raw: Any, fallback: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    base = dict(DEFAULT_ACTIVITIES_SETTINGS)
+    if fallback:
+        base.update(fallback)
+    if not isinstance(raw, dict):
+        return base
+
+    default_location = str(raw.get("default_location") or base["default_location"]).strip()
+    max_travel_raw = raw.get("max_travel_min", base["max_travel_min"])
+    max_travel = base["max_travel_min"]
+    if isinstance(max_travel_raw, int):
+        max_travel = max_travel_raw
+    elif isinstance(max_travel_raw, str) and max_travel_raw.isdigit():
+        max_travel = int(max_travel_raw)
+    if max_travel not in ACTIVITIES_MAX_TRAVEL_OPTIONS:
+        max_travel = base["max_travel_min"]
+
+    budget = _normalize_activities_budget(raw.get("budget"), base["budget"])
+    transport = _normalize_activities_transport(raw.get("transport"), base["transport"])
+
+    types_raw = raw.get("types", base["types"])
+    types: List[str] = []
+    if isinstance(types_raw, list):
+        seen = set()
+        for item in types_raw:
+            label = str(item or "").strip()
+            if not label or label in seen:
+                continue
+            seen.add(label)
+            types.append(label)
+
+    use_weather = bool(raw.get("use_weather", base["use_weather"]))
+    prefer_mountains = bool(raw.get("prefer_mountains", base["prefer_mountains"]))
+
+    return {
+        "default_location": default_location,
+        "max_travel_min": max_travel,
+        "budget": budget,
+        "transport": transport,
+        "types": types,
+        "use_weather": use_weather,
+        "prefer_mountains": prefer_mountains,
+    }
+
+
+def _get_settings_activities() -> Dict[str, Any]:
+    data = _db_get_app_state_json(APP_STATE_SETTINGS_ACTIVITIES, DEFAULT_ACTIVITIES_SETTINGS)
+    return _normalize_activities_settings(data)
 
 
 
@@ -947,6 +1311,32 @@ class TelegramSettingsPayload(BaseModel):
 
 class ShopSettingsPayload(BaseModel):
     shop_output_mode: Literal["ai_consolidated", "per_recipe"] = SHOP_OUTPUT_AI
+
+
+class ActivitiesSettingsPayload(BaseModel):
+    default_location: Optional[str] = None
+    max_travel_min: Optional[int] = None
+    budget: Optional[str] = None
+    transport: Optional[str] = None
+    types: Optional[List[str]] = None
+    use_weather: Optional[bool] = None
+    prefer_mountains: Optional[bool] = None
+
+
+class ActivitiesMoodPayload(BaseModel):
+    energy: Optional[str] = None
+    vibe: Optional[str] = None
+    indoor_outdoor: Optional[str] = None
+    free_text: Optional[str] = None
+
+
+class ActivitiesGeneratePayload(BaseModel):
+    location_text: str
+    time_left_bucket: str
+    max_travel_min: int
+    mountains: bool = False
+    mood: ActivitiesMoodPayload
+    settings_snapshot: Optional[Dict[str, Any]] = None
 
 
 @app.get("/api/recipes/{recipe_id}")
@@ -1101,6 +1491,60 @@ def api_put_settings_shop(payload: ShopSettingsPayload):
     data = {"shop_output_mode": mode}
     _db_set_app_state_value(APP_STATE_SETTINGS_SHOP, json.dumps(data))
     return {"ok": True, "shop": data}
+
+
+@app.get("/api/activities/settings")
+def api_get_activities_settings():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    settings = _get_settings_activities()
+    return {"ok": True, "settings": settings}
+
+
+@app.put("/api/activities/settings")
+def api_put_activities_settings(payload: ActivitiesSettingsPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    current = _get_settings_activities()
+    normalized = _normalize_activities_settings(payload.model_dump(), current)
+    _db_set_app_state_value(APP_STATE_SETTINGS_ACTIVITIES, json.dumps(normalized, ensure_ascii=False))
+    return {"ok": True, "settings": normalized}
+
+
+@app.post("/api/activities/generate")
+def api_generate_activities(payload: ActivitiesGeneratePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if not os.getenv("OPENAI_API_KEY"):
+        return {"ok": False, "error": "AI nicht konfiguriert."}
+
+    location_text = (payload.location_text or "").strip()
+    if not location_text:
+        return {"ok": False, "error": "Bitte einen Ort angeben."}
+
+    time_bucket = (payload.time_left_bucket or "").strip()
+    if time_bucket not in ACTIVITIES_TIME_BUCKETS:
+        return {"ok": False, "error": "Ungültige Zeitangabe."}
+
+    max_travel = payload.max_travel_min
+    if max_travel not in ACTIVITIES_MAX_TRAVEL_OPTIONS:
+        return {"ok": False, "error": "Ungültige Fahrzeit."}
+
+    settings = _get_settings_activities()
+    if payload.settings_snapshot:
+        settings = _normalize_activities_settings(payload.settings_snapshot, settings)
+
+    payload.location_text = location_text
+    payload.time_left_bucket = time_bucket
+    payload.max_travel_min = max_travel
+    payload.mountains = bool(payload.mountains)
+
+    try:
+        alternatives = _openai_generate_activities(payload, settings=settings)
+    except Exception:
+        return {"ok": False, "error": "AI-Antwort ungültig."}
+
+    return {"ok": True, "alternatives": alternatives}
 
 
 @app.get("/api/settings/preferences/options")
