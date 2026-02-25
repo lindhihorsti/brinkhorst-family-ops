@@ -472,7 +472,30 @@ export default function WeeklyPlanPage() {
         {shopData ? (
           shopView === "text" ? (
             <div>
-              <div style={cardStyles.messageBox}>{shopMessage}</div>
+              {shopMode === "per_recipe" ? (
+                perRecipe.length === 0 ? (
+                  <div style={cardStyles.messageBox}>{shopMessage}</div>
+                ) : (
+                  <div style={{ ...cardStyles.messageBox, display: "grid", gap: 12 }}>
+                    {perRecipe.map((recipe, recipeIdx) => (
+                      <div key={`${recipe.title}-text-${recipeIdx}`}>
+                        <div style={{ fontWeight: 700, marginBottom: 6 }}>{recipe.title}</div>
+                        {recipe.ingredients.length === 0 ? (
+                          <div style={{ fontSize: 13, opacity: 0.7 }}>Keine Zutaten (nur Pantry).</div>
+                        ) : (
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {recipe.ingredients.map((ing, idx) => (
+                              <li key={`${recipe.title}-text-${idx}`}>{ing}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div style={cardStyles.messageBox}>{shopMessage}</div>
+              )}
               <button
                 style={{ ...styles.button, marginTop: 10 }}
                 onClick={async () => {
