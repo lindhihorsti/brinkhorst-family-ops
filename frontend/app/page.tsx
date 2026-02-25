@@ -215,7 +215,7 @@ export default function LandingPage() {
       <div style={styles.container}>
         <div style={styles.useCaseStack}>
           <UseCaseBox title="Küchen- & Wochenplan" subtitle={placeholderSubtitle} href="/kueche" />
-          <PlaceholderBox title={placeholderTitle} subtitle={placeholderSubtitle} />
+          <UseCaseBox title="Was unternehmen wir heute?" subtitle="Ideen · Einstellungen" href="/ideen" />
           <PlaceholderBox title={placeholderTitle} subtitle={placeholderSubtitle} />
         </div>
 
