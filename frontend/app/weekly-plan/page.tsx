@@ -52,6 +52,8 @@ type WeeklyShopResponse = {
   pantry_uncertain_used?: { name: string; count: number }[];
   message: string;
   warning?: string;
+  mode?: "ai_consolidated" | "per_recipe";
+  per_recipe?: { title: string; ingredients: string[] }[];
 };
 
 const daysList = [
@@ -282,6 +284,8 @@ export default function WeeklyPlanPage() {
   const shopItems = shopData?.buy ?? shopData?.items ?? [];
   const pantryUsed = shopData?.pantry_used ?? [];
   const pantryUncertain = shopData?.pantry_uncertain_used ?? [];
+  const shopMode = shopData?.mode ?? "ai_consolidated";
+  const perRecipe = shopData?.per_recipe ?? [];
 
   return (
     <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Back</BtnLink>}>
@@ -468,7 +472,30 @@ export default function WeeklyPlanPage() {
         {shopData ? (
           shopView === "text" ? (
             <div>
-              <div style={cardStyles.messageBox}>{shopMessage}</div>
+              {shopMode === "per_recipe" ? (
+                perRecipe.length === 0 ? (
+                  <div style={cardStyles.messageBox}>{shopMessage}</div>
+                ) : (
+                  <div style={{ ...cardStyles.messageBox, display: "grid", gap: 12 }}>
+                    {perRecipe.map((recipe, recipeIdx) => (
+                      <div key={`${recipe.title}-text-${recipeIdx}`}>
+                        <div style={{ fontWeight: 700, marginBottom: 6 }}>{recipe.title}</div>
+                        {recipe.ingredients.length === 0 ? (
+                          <div style={{ fontSize: 13, opacity: 0.7 }}>Keine Zutaten (nur Pantry).</div>
+                        ) : (
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {recipe.ingredients.map((ing, idx) => (
+                              <li key={`${recipe.title}-text-${idx}`}>{ing}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div style={cardStyles.messageBox}>{shopMessage}</div>
+              )}
               <button
                 style={{ ...styles.button, marginTop: 10 }}
                 onClick={async () => {
@@ -484,7 +511,28 @@ export default function WeeklyPlanPage() {
             </div>
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
-              {shopItems.length === 0 && pantryUsed.length === 0 && pantryUncertain.length === 0 ? (
+              {shopMode === "per_recipe" ? (
+                perRecipe.length === 0 ? (
+                  <div style={{ fontSize: 13 }}>{shopMessage}</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    {perRecipe.map((recipe, recipeIdx) => (
+                      <div key={`${recipe.title}-${recipeIdx}`}>
+                        <div style={{ fontWeight: 700, marginBottom: 6 }}>{recipe.title}</div>
+                        {recipe.ingredients.length === 0 ? (
+                          <div style={{ fontSize: 13, opacity: 0.7 }}>Keine Zutaten (nur Pantry).</div>
+                        ) : (
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {recipe.ingredients.map((ing, idx) => (
+                              <li key={`${recipe.title}-${idx}`}>{ing}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : shopItems.length === 0 && pantryUsed.length === 0 && pantryUncertain.length === 0 ? (
                 <div style={{ fontSize: 13 }}>{shopMessage}</div>
               ) : (
                 <>

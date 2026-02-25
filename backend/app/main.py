@@ -7,7 +7,7 @@ import asyncio
 import ipaddress
 import socket
 import hashlib
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Literal
 from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit, urljoin
 
@@ -16,7 +16,12 @@ from sqlmodel import create_engine, Session, SQLModel, text as sql_text, select
 
 from app.models import Recipe, AppState
 from app.services import swap_service
-from app.services.shop_ai import transform_shop_list
+from app.services.shop_output import (
+    build_shop_payload,
+    SHOP_OUTPUT_AI,
+    SHOP_OUTPUT_PER_RECIPE,
+    SHOP_OUTPUT_MODES,
+)
 
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -97,13 +102,13 @@ DEFAULT_PANTRY_ITEMS = [
 ]
 DEFAULT_PREFERENCES = {"tags": []}
 DEFAULT_TELEGRAM = {"auto_send_plan": False, "auto_send_shop": False}
+DEFAULT_SHOP_SETTINGS = {"shop_output_mode": SHOP_OUTPUT_AI}
 
 APP_STATE_SETTINGS_PANTRY = "settings_pantry"
 APP_STATE_SETTINGS_PREFERENCES = "settings_preferences"
 APP_STATE_SETTINGS_TELEGRAM = "settings_telegram"
+APP_STATE_SETTINGS_SHOP = "settings_shop"
 APP_STATE_TELEGRAM_LAST_CHAT_ID = "telegram_last_chat_id"
-
-PUNCT_RE = re.compile(r"[.,;:!?()\[\]{}\"'`´/\\|]+")
 
 IMPORT_FETCH_MAX_BYTES = 3 * 1024 * 1024
 IMPORT_FETCH_MAX_REDIRECTS = 5
@@ -311,20 +316,6 @@ def _clear_swap_avoid_list(week_start: date) -> None:
     _db_set_app_state_value(_swap_avoid_key(week_start), json.dumps([]))
 
 
-def _normalize_ingredient(value: str) -> str:
-    if not value:
-        return ""
-    s = value.strip().lower()
-    s = PUNCT_RE.sub(" ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    if not s:
-        return ""
-    if " " not in s:
-        if s.endswith("en") and len(s) > 4:
-            s = s[:-2]
-        elif s.endswith("e") and len(s) > 3:
-            s = s[:-1]
-    return s
 
 
 def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:
@@ -725,10 +716,6 @@ def _openai_extract_recipe_draft(
     return data
 
 
-def _clean_display_name(value: str) -> str:
-    s = value.strip()
-    s = re.sub(r"\s+", " ", s)
-    return s
 
 
 def _validate_pantry_items(items: List["PantryItemPayload"]) -> List[Dict[str, Any]]:
@@ -808,178 +795,24 @@ def _get_settings_telegram() -> Dict[str, Any]:
     }
 
 
-def _build_pantry_alias_map(items: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    alias_map: Dict[str, Dict[str, Any]] = {}
-    for item in items:
-        name = item.get("name", "")
-        uncertain = bool(item.get("uncertain"))
-        aliases = item.get("aliases") or []
-        candidates = [name] + list(aliases)
-        for cand in candidates:
-            norm = _normalize_ingredient(str(cand))
-            if not norm:
-                continue
-            if norm not in alias_map:
-                alias_map[norm] = {"name": name, "uncertain": uncertain}
-    return alias_map
+def _get_settings_shop() -> Dict[str, Any]:
+    data = _db_get_app_state_json(APP_STATE_SETTINGS_SHOP, DEFAULT_SHOP_SETTINGS)
+    if not isinstance(data, dict):
+        return dict(DEFAULT_SHOP_SETTINGS)
+    mode = data.get("shop_output_mode", SHOP_OUTPUT_AI)
+    if mode not in SHOP_OUTPUT_MODES:
+        mode = SHOP_OUTPUT_AI
+    return {"shop_output_mode": mode}
 
 
-def _aggregate_shop_items(days: Dict[str, str]) -> Dict[str, Any]:
-    pantry_items = _get_settings_pantry()
-    pantry_map = _build_pantry_alias_map(pantry_items)
-
-    buy_counts: Dict[str, int] = {}
-    buy_display: Dict[str, str] = {}
-    buy_lines: List[str] = []
-    pantry_used_counts: Dict[str, int] = {}
-    pantry_uncertain_counts: Dict[str, int] = {}
-
-    with Session(engine) as session:
-        for d in range(1, 8):
-            rid = days.get(str(d))
-            if not rid or (isinstance(rid, str) and rid.startswith("KI:")):
-                continue
-            r = session.get(Recipe, rid)
-            if not r:
-                continue
-            for ing in (r.ingredients or []):
-                raw = (ing or "").strip()
-                if not raw:
-                    continue
-                norm = _normalize_ingredient(raw)
-                if not norm:
-                    continue
-                pantry_entry = pantry_map.get(norm)
-                if pantry_entry:
-                    key = pantry_entry["name"]
-                    if pantry_entry.get("uncertain"):
-                        pantry_uncertain_counts[key] = pantry_uncertain_counts.get(key, 0) + 1
-                    else:
-                        pantry_used_counts[key] = pantry_used_counts.get(key, 0) + 1
-                    continue
-
-                display = _clean_display_name(raw)
-                buy_lines.append(display)
-                if norm not in buy_display:
-                    buy_display[norm] = display
-                buy_counts[norm] = buy_counts.get(norm, 0) + 1
-
-    def _to_list(counts: Dict[str, int], display_map: Optional[Dict[str, str]] = None):
-        if display_map is None:
-            items = [{"name": k, "count": v} for k, v in counts.items()]
-        else:
-            items = [{"name": display_map[k], "count": v} for k, v in counts.items()]
-        return sorted(items, key=lambda x: x["name"].lower())
-
-    buy_list = _to_list(buy_counts, buy_display)
-    pantry_used_list = _to_list(pantry_used_counts)
-    pantry_uncertain_list = _to_list(pantry_uncertain_counts)
-
-    message_lines: List[str] = []
-    if not buy_list:
-        message_lines.append("🧺 Einkaufsliste ist leer (oder alle Zutaten sind Pantry).")
-    else:
-        message_lines.append("🧺 Einkaufsliste (aggregiert):")
-        for item in buy_list:
-            cnt = item["count"]
-            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
-
-    if pantry_used_list:
-        message_lines.append("")
-        message_lines.append("Pantry verwendet:")
-        for item in pantry_used_list:
-            cnt = item["count"]
-            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
-
-    if pantry_uncertain_list:
-        message_lines.append("")
-        message_lines.append("Pantry unsicher:")
-        for item in pantry_uncertain_list:
-            cnt = item["count"]
-            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
-
-    return {
-        "buy": buy_list,
-        "buy_lines": buy_lines,
-        "pantry_used": pantry_used_list,
-        "pantry_uncertain_used": pantry_uncertain_list,
-        "message": "\n".join(message_lines),
-    }
 
 
-def _format_shop_message(
-    buy_lines: List[str],
-    pantry_used_list: List[Dict[str, Any]],
-    pantry_uncertain_list: List[Dict[str, Any]],
-    note: Optional[str] = None,
-) -> str:
-    message_lines: List[str] = []
-    if not buy_lines:
-        message_lines.append("🧺 Einkaufsliste ist leer (oder alle Zutaten sind Pantry).")
-    else:
-        message_lines.append("🧺 Einkaufsliste:")
-        for line in buy_lines:
-            message_lines.append(f"- {line}")
-
-    if pantry_used_list:
-        message_lines.append("")
-        message_lines.append("Pantry verwendet:")
-        for item in pantry_used_list:
-            cnt = item["count"]
-            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
-
-    if pantry_uncertain_list:
-        message_lines.append("")
-        message_lines.append("Pantry unsicher:")
-        for item in pantry_uncertain_list:
-            cnt = item["count"]
-            message_lines.append(f"- {item['name']}" + (f"  x{cnt}" if cnt > 1 else ""))
-
-    if note:
-        message_lines.append("")
-        message_lines.append(note)
-
-    return "\n".join(message_lines)
-
-
-def _build_shop_payload(days: Dict[str, str]) -> Dict[str, Any]:
-    aggregated = _aggregate_shop_items(days)
-    buy_lines = aggregated.get("buy_lines") or []
-    ai_lines, ai_note = transform_shop_list(buy_lines, locale="de")
-
-    warning = None
-    ai_applied = False
-    if ai_lines is not None:
-        ai_applied = True
-        buy_items = [{"name": line, "count": 1} for line in ai_lines]
-        message = _format_shop_message(
-            ai_lines,
-            aggregated["pantry_used"],
-            aggregated["pantry_uncertain_used"],
-        )
-    else:
-        buy_items = aggregated["buy"]
-        message = aggregated["message"]
-        if ai_note:
-            warning = ai_note
-            message = f"{message}\n\n{ai_note}"
-
-    return {
-        "buy": buy_items,
-        "pantry_used": aggregated["pantry_used"],
-        "pantry_uncertain_used": aggregated["pantry_uncertain_used"],
-        "message": message,
-        "warning": warning,
-        "ai_applied": ai_applied,
-    }
-
-
-def _send_telegram_sync(chat_id: int, text_msg: str) -> None:
+def _send_telegram_sync(chat_id: int, text_msg: str, parse_mode: Optional[str] = None) -> None:
     try:
-        asyncio.run(_tg_send(chat_id, text_msg))
+        asyncio.run(_tg_send(chat_id, text_msg, parse_mode))
     except RuntimeError:
         loop = asyncio.get_event_loop()
-        loop.create_task(_tg_send(chat_id, text_msg))
+        loop.create_task(_tg_send(chat_id, text_msg, parse_mode))
 
 @app.get("/api/recipes")
 def api_list_recipes(limit: int = 50, q: Optional[str] = None):
@@ -1112,6 +945,10 @@ class TelegramSettingsPayload(BaseModel):
     auto_send_shop: bool = False
 
 
+class ShopSettingsPayload(BaseModel):
+    shop_output_mode: Literal["ai_consolidated", "per_recipe"] = SHOP_OUTPUT_AI
+
+
 @app.get("/api/recipes/{recipe_id}")
 def api_get_recipe(recipe_id: UUID):
     if engine is None:
@@ -1211,12 +1048,14 @@ def api_get_settings():
     pantry = _get_settings_pantry()
     preferences = _get_settings_preferences()
     telegram = _get_settings_telegram()
+    shop = _get_settings_shop()
     last_chat_id = _db_get_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID)
     return {
         "ok": True,
         "pantry": {"items": pantry},
         "preferences": preferences,
         "telegram": telegram,
+        "shop": shop,
         "telegram_last_chat_id": last_chat_id,
     }
 
@@ -1250,6 +1089,18 @@ def api_put_settings_telegram(payload: TelegramSettingsPayload):
     }
     _db_set_app_state_value(APP_STATE_SETTINGS_TELEGRAM, json.dumps(data))
     return {"ok": True, "telegram": data}
+
+
+@app.put("/api/settings/shop")
+def api_put_settings_shop(payload: ShopSettingsPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    mode = payload.shop_output_mode
+    if mode not in SHOP_OUTPUT_MODES:
+        mode = SHOP_OUTPUT_AI
+    data = {"shop_output_mode": mode}
+    _db_set_app_state_value(APP_STATE_SETTINGS_SHOP, json.dumps(data))
+    return {"ok": True, "shop": data}
 
 
 @app.get("/api/settings/preferences/options")
@@ -1451,7 +1302,13 @@ def api_weekly_shop(notify: int = 0):
         }
 
     days = base["days"]
-    shop_payload = _build_shop_payload(days)
+    shop_settings = _get_settings_shop()
+    shop_payload = build_shop_payload(
+        shop_settings.get("shop_output_mode"),
+        days,
+        engine,
+        _get_settings_pantry(),
+    )
     response = {
         "ok": True,
         "week_start": week_start.isoformat(),
@@ -1461,7 +1318,10 @@ def api_weekly_shop(notify: int = 0):
         "pantry_uncertain_used": shop_payload["pantry_uncertain_used"],
         "message": shop_payload["message"],
         "ai_applied": shop_payload["ai_applied"],
+        "mode": shop_payload.get("mode"),
     }
+    if shop_payload.get("per_recipe") is not None:
+        response["per_recipe"] = shop_payload.get("per_recipe")
     if shop_payload.get("warning"):
         response["warning"] = shop_payload["warning"]
     if notify == 1:
@@ -1469,7 +1329,9 @@ def api_weekly_shop(notify: int = 0):
         if telegram_settings.get("auto_send_shop"):
             last_chat_id = _db_get_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID)
             if last_chat_id:
-                _send_telegram_sync(int(last_chat_id), response["message"])
+                telegram_message = shop_payload.get("telegram_message") or response["message"]
+                telegram_parse_mode = shop_payload.get("telegram_parse_mode")
+                _send_telegram_sync(int(last_chat_id), telegram_message, telegram_parse_mode)
             else:
                 response["warning"] = "Send any message to the bot once to register the chat."
     return response
@@ -1488,7 +1350,7 @@ def _is_allowed(from_id: int) -> bool:
     return str(from_id) in allowed_ids
 
 
-async def _tg_send(chat_id: int, text_msg: str) -> None:
+async def _tg_send(chat_id: int, text_msg: str, parse_mode: Optional[str] = None) -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         print("TELEGRAM_BOT_TOKEN missing", flush=True)
@@ -1497,7 +1359,10 @@ async def _tg_send(chat_id: int, text_msg: str) -> None:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.post(url, json={"chat_id": chat_id, "text": text_msg})
+            payload: Dict[str, Any] = {"chat_id": chat_id, "text": text_msg}
+            if parse_mode:
+                payload["parse_mode"] = parse_mode
+            r = await client.post(url, json=payload)
             if r.status_code != 200:
                 print(f"Telegram send failed: {r.status_code} {r.text}", flush=True)
     except Exception as e:
@@ -1905,8 +1770,16 @@ async def telegram_webhook(request: Request):
             await _tg_send(chat_id, "Kein Plan vorhanden. Erst `plan` ausführen.")
             return {"ok": True}
 
-        shop_payload = _build_shop_payload(base["days"])
-        await _tg_send(chat_id, shop_payload["message"])
+        shop_settings = _get_settings_shop()
+        shop_payload = build_shop_payload(
+            shop_settings.get("shop_output_mode"),
+            base["days"],
+            engine,
+            _get_settings_pantry(),
+        )
+        telegram_message = shop_payload.get("telegram_message") or shop_payload["message"]
+        telegram_parse_mode = shop_payload.get("telegram_parse_mode")
+        await _tg_send(chat_id, telegram_message, telegram_parse_mode)
         return {"ok": True}
 
 
