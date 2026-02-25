@@ -15,6 +15,7 @@ type SettingsResponse = {
   pantry: { items: PantryItem[] };
   preferences: { tags: string[] };
   telegram: { auto_send_plan: boolean; auto_send_shop: boolean };
+  shop?: { shop_output_mode?: "ai_consolidated" | "per_recipe" };
   telegram_last_chat_id: string | null;
 };
 
@@ -83,6 +84,9 @@ export default function SettingsPage() {
   const [telegramSaving, setTelegramSaving] = useState(false);
   const [telegramMessage, setTelegramMessage] = useState<string | null>(null);
   const [telegramLastChatId, setTelegramLastChatId] = useState<string | null>(null);
+  const [shopOutputMode, setShopOutputMode] = useState<"ai_consolidated" | "per_recipe">("ai_consolidated");
+  const [shopSaving, setShopSaving] = useState(false);
+  const [shopMessage, setShopMessage] = useState<string | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
@@ -101,6 +105,7 @@ export default function SettingsPage() {
       setSelectedTags(settingsData.preferences?.tags ?? []);
       setTelegram(settingsData.telegram ?? { auto_send_plan: false, auto_send_shop: false });
       setTelegramLastChatId(settingsData.telegram_last_chat_id ?? null);
+      setShopOutputMode(settingsData.shop?.shop_output_mode ?? "ai_consolidated");
       setPreferenceOptions(optionsData.tags ?? []);
     } catch (e) {
       setError(getErrorMessage(e, "Fehler beim Laden"));
@@ -169,6 +174,25 @@ export default function SettingsPage() {
       setTelegramMessage(getErrorMessage(e, "Fehler beim Speichern"));
     } finally {
       setTelegramSaving(false);
+    }
+  };
+
+  const handleShopSave = async () => {
+    setShopSaving(true);
+    setShopMessage(null);
+    try {
+      const res = await fetch("/api/settings/shop", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shop_output_mode: shopOutputMode }),
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      await res.json();
+      setShopMessage("Gespeichert.");
+    } catch (e) {
+      setShopMessage(getErrorMessage(e, "Fehler beim Speichern"));
+    } finally {
+      setShopSaving(false);
     }
   };
 
@@ -326,6 +350,29 @@ export default function SettingsPage() {
           </button>
         </div>
         {telegramMessage ? <div style={styles.small}>{telegramMessage}</div> : null}
+      </div>
+
+      <div style={cardStyles.section}>
+        <div style={{ fontWeight: 800, marginBottom: 10 }}>Einkaufsliste</div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <label style={cardStyles.row}>
+            <span>Ausgabeformat</span>
+            <select
+              style={styles.input}
+              value={shopOutputMode}
+              onChange={(e) => setShopOutputMode(e.target.value as "ai_consolidated" | "per_recipe")}
+            >
+              <option value="ai_consolidated">Konsolidiert (AI)</option>
+              <option value="per_recipe">Pro Rezept</option>
+            </select>
+          </label>
+        </div>
+        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button style={styles.buttonPrimary} onClick={handleShopSave} disabled={shopSaving}>
+            {shopSaving ? "Speichere…" : "Einkaufsliste speichern"}
+          </button>
+        </div>
+        {shopMessage ? <div style={styles.small}>{shopMessage}</div> : null}
       </div>
     </Page>
   );
