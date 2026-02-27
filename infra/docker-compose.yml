@@ -23,7 +23,7 @@ services:
         GIT_SHA: ${GIT_SHA:-local}
     environment:
       DATABASE_URL: postgresql+psycopg://familyops:familyops@db:5432/familyops
-      AUTO_MIGRATE: "0"
+      AUTO_MIGRATE: "1"
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ALLOWLIST: ${TELEGRAM_ALLOWLIST:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
