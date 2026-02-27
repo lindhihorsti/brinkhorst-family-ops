@@ -29,6 +29,7 @@ services:
       AUTO_MIGRATE: "0"
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_MODEL_ACTIVITIES: ${OPENAI_MODEL_ACTIVITIES:-gpt-5.2}
 
     networks:
       - appnet

@@ -50,6 +50,16 @@ Den erzeugten Hash in `infra/.env` eintragen:
 DENNIS_PWHASH='...hash...'
 ```
 
+OpenAI-Konfiguration (lokal):
+
+```env
+OPENAI_API_KEY=sk-...
+# Rezepte-Import + Shop-Formatierung
+OPENAI_MODEL=gpt-4o-mini
+# "Was machen wir heute?" (Ideen-Generator)
+OPENAI_MODEL_ACTIVITIES=gpt-5.2
+```
+
 ## Start / Stop
 
 ```bash
