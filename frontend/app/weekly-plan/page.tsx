@@ -522,11 +522,26 @@ export default function WeeklyPlanPage() {
                         {recipe.ingredients.length === 0 ? (
                           <div style={{ fontSize: 13, opacity: 0.7 }}>Keine Zutaten (nur Pantry).</div>
                         ) : (
-                          <ul style={{ margin: 0, paddingLeft: 18 }}>
-                            {recipe.ingredients.map((ing, idx) => (
-                              <li key={`${recipe.title}-${idx}`}>{ing}</li>
-                            ))}
-                          </ul>
+                          <div style={{ display: "grid", gap: 6 }}>
+                            {recipe.ingredients.map((ing, idx) => {
+                              const key = `per-${recipe.title}-${recipeIdx}-${idx}`;
+                              return (
+                                <label key={key} style={cardStyles.checkboxRow}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!checked[key]}
+                                    onChange={(e) =>
+                                      setChecked((prev) => ({
+                                        ...prev,
+                                        [key]: e.target.checked,
+                                      }))
+                                    }
+                                  />
+                                  <span>{ing}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     ))}
