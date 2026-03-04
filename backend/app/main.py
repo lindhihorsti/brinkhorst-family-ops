@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urljoin
 import httpx
 from sqlmodel import create_engine, Session, SQLModel, text as sql_text, select
 
-from app.models import Recipe, AppState
+from app.models import Recipe, AppState, FamilyMember, ChoreTask, ChoreCompletion, PinboardNote, Birthday, MealHistory
 from app.services import swap_service
 from app.services.shop_output import (
     build_shop_payload,
@@ -1200,6 +1200,9 @@ class RecipeCreate(BaseModel):
     ingredients: List[str] = []
     time_minutes: Optional[int] = None
     difficulty: Optional[int] = None
+    servings: Optional[int] = 4
+    photo_url: Optional[str] = None
+    collection_name: Optional[str] = None
 
 
 class RecipeImportPreviewRequest(BaseModel):
@@ -1214,6 +1217,10 @@ class RecipeUpdate(BaseModel):
     time_minutes: Optional[int] = None
     difficulty: Optional[int] = None
     is_active: Optional[bool] = None
+    servings: Optional[int] = None
+    photo_url: Optional[str] = None
+    collection_name: Optional[str] = None
+    rating: Optional[float] = None
 
 
 @app.post("/api/recipes/import/preview")
@@ -1375,6 +1382,9 @@ def api_create_recipe(payload: RecipeCreate):
             ingredients=payload.ingredients or [],
             time_minutes=payload.time_minutes,
             difficulty=payload.difficulty,
+            servings=payload.servings or 4,
+            photo_url=payload.photo_url,
+            collection_name=payload.collection_name,
             created_by="dennis",
         )
         session.add(r)
@@ -2031,13 +2041,30 @@ def _format_plan(days: Dict[str, str]) -> str:
 
 
 def _build_new_week_plan() -> Dict[str, str]:
-    # pick 7 unique suggestions
     preferences = _get_settings_preferences()
     tags = preferences.get("tags") or []
     prefer_max = int(7 * 0.5) if tags else 0
+
+    # Get last 2 weeks of meal history to avoid recent repeats
+    recent_ids: List[str] = []
+    if engine:
+        try:
+            with engine.connect() as conn:
+                two_weeks_ago = (date.today() - timedelta(days=14)).isoformat()
+                rows = conn.execute(
+                    sql_text(
+                        "SELECT DISTINCT recipe_id::text FROM public.meal_history "
+                        "WHERE cooked_on >= :since ORDER BY cooked_on DESC LIMIT 14"
+                    ),
+                    {"since": two_weeks_ago},
+                ).fetchall()
+                recent_ids = [str(r[0]) for r in rows]
+        except Exception:
+            pass
+
     picked_ids, dummy_titles = swap_service.pick_recipes_for_days(
         engine,
-        existing_ids=[],
+        existing_ids=recent_ids,
         count=7,
         prefer_tags=tags,
         prefer_max=prefer_max,
@@ -2272,7 +2299,803 @@ async def telegram_webhook(request: Request):
         await _tg_send(chat_id, "🗑️ Draft verworfen.")
         return {"ok": True}
 
+    # --- was ---
+    if cmd.lower() in {"was", "heute", "/was"}:
+        base = _db_get_weekly_plan(week_start)
+        if not base:
+            await _tg_send(chat_id, "Kein Plan vorhanden. Erst `plan` ausführen.")
+            return {"ok": True}
+        day_num = today.isoweekday()  # 1=Mo 7=So
+        rid = base["days"].get(str(day_num))
+        title = _resolve_day_title(rid)
+        label = DAY_LABELS.get(day_num, "Heute")
+        tomorrow_num = (day_num % 7) + 1
+        rid_tomorrow = base["days"].get(str(tomorrow_num))
+        title_tomorrow = _resolve_day_title(rid_tomorrow)
+        label_tomorrow = DAY_LABELS.get(tomorrow_num, "Morgen")
+        await _tg_send(chat_id, f"🍳 {label}: {title}\n🗓️ {label_tomorrow}: {title_tomorrow}")
+        return {"ok": True}
+
+    # --- notiz ---
+    if cmd.lower().startswith("notiz ") or cmd.lower().startswith("/notiz "):
+        text_content = re.sub(r"^/?notiz\s+", "", cmd, flags=re.IGNORECASE).strip()
+        if text_content and engine:
+            with Session(engine) as session:
+                note = PinboardNote(content=text_content, author_name="Telegram")
+                session.add(note)
+                session.commit()
+            await _tg_send(chat_id, f"📌 Notiz gespeichert: {text_content}")
+        else:
+            await _tg_send(chat_id, "Beispiel: notiz Schulausflug Freitag!")
+        return {"ok": True}
+
+    # --- aufgabe ---
+    if cmd.lower().startswith("aufgabe ") or cmd.lower().startswith("/aufgabe "):
+        title_text = re.sub(r"^/?aufgabe\s+", "", cmd, flags=re.IGNORECASE).strip()
+        if title_text and engine:
+            with Session(engine) as session:
+                chore = ChoreTask(title=title_text)
+                session.add(chore)
+                session.commit()
+            await _tg_send(chat_id, f"✅ Aufgabe erstellt: {title_text}")
+        else:
+            await _tg_send(chat_id, "Beispiel: aufgabe Bad putzen")
+        return {"ok": True}
+
+    # --- status ---
+    if cmd.lower() in {"status", "/status"}:
+        lines = ["📊 Family Ops Status"]
+        # plan
+        base = _db_get_weekly_plan(week_start)
+        if base:
+            day_num = today.isoweekday()
+            rid = base["days"].get(str(day_num))
+            lines.append(f"🍳 Heute: {_resolve_day_title(rid)}")
+        else:
+            lines.append("📅 Kein Wochenplan vorhanden")
+        # open chores
+        if engine:
+            try:
+                with Session(engine) as session:
+                    chores = list(session.exec(select(ChoreTask).where(ChoreTask.is_active == True)).all())  # noqa
+                    if chores:
+                        lines.append(f"📋 Offene Aufgaben: {len(chores)}")
+            except Exception:
+                pass
+            # upcoming birthdays (next 14 days)
+            try:
+                with Session(engine) as session:
+                    all_bdays = list(session.exec(select(Birthday)).all())
+                    upcoming = []
+                    for b in all_bdays:
+                        bday_this_year = b.birth_date.replace(year=today.year)
+                        if bday_this_year < today:
+                            bday_this_year = bday_this_year.replace(year=today.year + 1)
+                        diff = (bday_this_year - today).days
+                        if 0 <= diff <= 14:
+                            upcoming.append((diff, b.name))
+                    if upcoming:
+                        upcoming.sort()
+                        for diff, name in upcoming[:3]:
+                            if diff == 0:
+                                lines.append(f"🎂 Heute: {name} hat Geburtstag!")
+                            else:
+                                lines.append(f"🎂 In {diff} Tagen: {name}")
+            except Exception:
+                pass
+        await _tg_send(chat_id, "\n".join(lines))
+        return {"ok": True}
+
+    # --- geburtstag ---
+    if cmd.lower() in {"geburtstag", "geburtstage", "/geburtstag"}:
+        if not engine:
+            await _tg_send(chat_id, "DB nicht verfügbar.")
+            return {"ok": True}
+        with Session(engine) as session:
+            all_bdays = list(session.exec(select(Birthday)).all())
+        if not all_bdays:
+            await _tg_send(chat_id, "Keine Geburtstage gespeichert.")
+            return {"ok": True}
+        lines = ["🎂 Geburtstage (nächste 30 Tage):"]
+        upcoming = []
+        for b in all_bdays:
+            bday_this_year = b.birth_date.replace(year=today.year)
+            if bday_this_year < today:
+                bday_this_year = bday_this_year.replace(year=today.year + 1)
+            diff = (bday_this_year - today).days
+            if diff <= 30:
+                upcoming.append((diff, b.name, bday_this_year.strftime("%d.%m.")))
+        upcoming.sort()
+        if upcoming:
+            for diff, name, date_str in upcoming:
+                if diff == 0:
+                    lines.append(f"🎉 Heute: {name}!")
+                else:
+                    lines.append(f"In {diff} Tagen ({date_str}): {name}")
+        else:
+            lines.append("Keine Geburtstage in den nächsten 30 Tagen.")
+        await _tg_send(chat_id, "\n".join(lines))
+        return {"ok": True}
+
     # default
     print(f"ALLOWED USER {from_id} SENT: {message_text}", flush=True)
-    await _tg_send(chat_id, "Unbekannter Befehl. Nutze: add | list | plan | swap | confirm | cancel")
+    help_text = (
+        "Befehle:\n"
+        "add | list | plan | swap | confirm | cancel | shop\n"
+        "was — heutiges Rezept\n"
+        "notiz [text] — Pinnwand\n"
+        "aufgabe [text] — neue Aufgabe\n"
+        "status — Überblick\n"
+        "geburtstag — Geburtstage"
+    )
+    await _tg_send(chat_id, help_text)
     return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Family Members
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FamilyMemberCreate(BaseModel):
+    name: str
+    color: str = "#888888"
+    initials: str = "?"
+    telegram_id: Optional[str] = None
+    dietary_restrictions: List[str] = []
+
+
+class FamilyMemberUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    initials: Optional[str] = None
+    telegram_id: Optional[str] = None
+    dietary_restrictions: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+
+@app.get("/api/family")
+def api_list_family():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        members = list(session.exec(
+            select(FamilyMember).where(FamilyMember.is_active == True).order_by(FamilyMember.created_at)  # noqa
+        ))
+    return {"ok": True, "members": members}
+
+
+@app.post("/api/family")
+def api_create_family_member(payload: FamilyMemberCreate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    member = FamilyMember(
+        name=payload.name.strip(),
+        color=payload.color or "#888888",
+        initials=(payload.initials or payload.name[:2]).upper()[:2],
+        telegram_id=payload.telegram_id,
+        dietary_restrictions=payload.dietary_restrictions or [],
+    )
+    with Session(engine) as session:
+        session.add(member)
+        session.commit()
+        session.refresh(member)
+    return member
+
+
+@app.patch("/api/family/{member_id}")
+def api_update_family_member(member_id: UUID, payload: FamilyMemberUpdate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        m = session.get(FamilyMember, member_id)
+        if not m:
+            raise HTTPException(404, "Not found")
+        for k, v in payload.model_dump(exclude_unset=True).items():
+            setattr(m, k, v)
+        session.add(m)
+        session.commit()
+        session.refresh(m)
+    return m
+
+
+@app.delete("/api/family/{member_id}")
+def api_delete_family_member(member_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        m = session.get(FamilyMember, member_id)
+        if not m:
+            raise HTTPException(404, "Not found")
+        m.is_active = False
+        session.add(m)
+        session.commit()
+    return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Chore Manager
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ChoreCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    recurrence: str = "weekly"
+    assigned_to: List[str] = []
+    points: int = 1
+
+
+class ChoreUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    recurrence: Optional[str] = None
+    assigned_to: Optional[List[str]] = None
+    points: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class ChoreCompletePayload(BaseModel):
+    completed_by: str  # family member id
+
+
+@app.get("/api/chores")
+def api_list_chores():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        chores = list(session.exec(
+            select(ChoreTask).where(ChoreTask.is_active == True).order_by(ChoreTask.created_at)  # noqa
+        ))
+        # Attach today's completions
+        today_str = date.today().isoformat()
+        completions_today = list(session.exec(
+            select(ChoreCompletion).where(
+                sql_text("completed_on::text = :d"),
+                {"d": today_str}
+            )
+        ))
+        completed_today_ids = {str(c.chore_id) for c in completions_today}
+
+    result = []
+    for c in chores:
+        d = c.model_dump()
+        d["id"] = str(c.id)
+        d["completed_today"] = str(c.id) in completed_today_ids
+        result.append(d)
+    return {"ok": True, "chores": result}
+
+
+@app.post("/api/chores")
+def api_create_chore(payload: ChoreCreate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    chore = ChoreTask(
+        title=payload.title.strip(),
+        description=payload.description,
+        recurrence=payload.recurrence,
+        assigned_to=payload.assigned_to or [],
+        points=payload.points,
+    )
+    with Session(engine) as session:
+        session.add(chore)
+        session.commit()
+        session.refresh(chore)
+    return chore
+
+
+@app.patch("/api/chores/{chore_id}")
+def api_update_chore(chore_id: UUID, payload: ChoreUpdate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        c = session.get(ChoreTask, chore_id)
+        if not c:
+            raise HTTPException(404, "Not found")
+        for k, v in payload.model_dump(exclude_unset=True).items():
+            setattr(c, k, v)
+        session.add(c)
+        session.commit()
+        session.refresh(c)
+    return c
+
+
+@app.delete("/api/chores/{chore_id}")
+def api_delete_chore(chore_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        c = session.get(ChoreTask, chore_id)
+        if not c:
+            raise HTTPException(404, "Not found")
+        c.is_active = False
+        session.add(c)
+        session.commit()
+    return {"ok": True}
+
+
+@app.post("/api/chores/{chore_id}/complete")
+def api_complete_chore(chore_id: UUID, payload: ChoreCompletePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    try:
+        member_uuid = UUID(payload.completed_by)
+    except ValueError:
+        raise HTTPException(400, "Invalid completed_by UUID")
+    with Session(engine) as session:
+        c = session.get(ChoreTask, chore_id)
+        if not c:
+            raise HTTPException(404, "Chore not found")
+        completion = ChoreCompletion(chore_id=chore_id, completed_by=member_uuid)
+        session.add(completion)
+        # advance rotation
+        if c.assigned_to:
+            c.current_idx = (c.current_idx + 1) % len(c.assigned_to)
+            session.add(c)
+        session.commit()
+    return {"ok": True}
+
+
+@app.get("/api/chores/stats")
+def api_chore_stats():
+    """Points scoreboard for current month."""
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    month_start = date.today().replace(day=1).isoformat()
+    with engine.connect() as conn:
+        rows = conn.execute(
+            sql_text("""
+                SELECT cc.completed_by::text, fm.name, SUM(ct.points) as total_points
+                FROM public.chore_completions cc
+                JOIN public.chore_tasks ct ON ct.id = cc.chore_id
+                LEFT JOIN public.family_members fm ON fm.id = cc.completed_by
+                WHERE cc.completed_on >= :since
+                GROUP BY cc.completed_by, fm.name
+                ORDER BY total_points DESC
+            """),
+            {"since": month_start},
+        ).fetchall()
+    return {
+        "ok": True,
+        "period": f"seit {month_start}",
+        "scores": [{"member_id": r[0], "name": r[1] or "Unbekannt", "points": int(r[2])} for r in rows],
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Pinboard
+# ─────────────────────────────────────────────────────────────────────────────
+
+PINBOARD_TAGS = {"allgemein", "schule", "einkauf", "wichtig", "event"}
+
+
+class PinboardNoteCreate(BaseModel):
+    content: str
+    author_name: Optional[str] = None
+    author_id: Optional[str] = None
+    tag: str = "allgemein"
+    expires_on: Optional[str] = None  # ISO date string
+
+
+class PinboardNoteUpdate(BaseModel):
+    content: Optional[str] = None
+    tag: Optional[str] = None
+    expires_on: Optional[str] = None
+
+
+@app.get("/api/pinboard")
+def api_list_pinboard():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    today = date.today()
+    with Session(engine) as session:
+        # Return notes that haven't expired
+        notes = list(session.exec(
+            select(PinboardNote).order_by(PinboardNote.created_at.desc()).limit(50)
+        ))
+    result = []
+    for n in notes:
+        if n.expires_on and n.expires_on < today:
+            continue  # skip expired
+        d = {
+            "id": str(n.id),
+            "content": n.content,
+            "author_name": n.author_name,
+            "author_id": str(n.author_id) if n.author_id else None,
+            "tag": n.tag,
+            "expires_on": n.expires_on.isoformat() if n.expires_on else None,
+            "created_at": n.created_at.isoformat(),
+        }
+        result.append(d)
+    return {"ok": True, "notes": result}
+
+
+@app.post("/api/pinboard")
+def api_create_pinboard_note(payload: PinboardNoteCreate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    content = (payload.content or "").strip()
+    if not content:
+        raise HTTPException(400, "content required")
+    tag = payload.tag if payload.tag in PINBOARD_TAGS else "allgemein"
+    expires = None
+    if payload.expires_on:
+        try:
+            expires = date.fromisoformat(payload.expires_on)
+        except ValueError:
+            pass
+    author_uuid = None
+    if payload.author_id:
+        try:
+            author_uuid = UUID(payload.author_id)
+        except ValueError:
+            pass
+    note = PinboardNote(
+        content=content,
+        author_name=payload.author_name,
+        author_id=author_uuid,
+        tag=tag,
+        expires_on=expires,
+    )
+    with Session(engine) as session:
+        session.add(note)
+        session.commit()
+        session.refresh(note)
+    return {"ok": True, "id": str(note.id)}
+
+
+@app.delete("/api/pinboard/{note_id}")
+def api_delete_pinboard_note(note_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        n = session.get(PinboardNote, note_id)
+        if not n:
+            raise HTTPException(404, "Not found")
+        session.delete(n)
+        session.commit()
+    return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Birthdays
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BirthdayCreate(BaseModel):
+    name: str
+    birth_date: str  # ISO date
+    relation: str = "Familie"
+    gift_ideas: List[str] = []
+    notes: Optional[str] = None
+    member_id: Optional[str] = None
+
+
+class BirthdayUpdate(BaseModel):
+    name: Optional[str] = None
+    birth_date: Optional[str] = None
+    relation: Optional[str] = None
+    gift_ideas: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
+def _days_until_birthday(birth_date: date, today: date) -> int:
+    bday = birth_date.replace(year=today.year)
+    if bday < today:
+        bday = bday.replace(year=today.year + 1)
+    return (bday - today).days
+
+
+def _age_on_birthday(birth_date: date, today: date) -> int:
+    bday_this_year = birth_date.replace(year=today.year)
+    if bday_this_year < today:
+        return today.year - birth_date.year + 1
+    return today.year - birth_date.year
+
+
+@app.get("/api/birthdays")
+def api_list_birthdays():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    today = date.today()
+    with Session(engine) as session:
+        all_bdays = list(session.exec(select(Birthday).order_by(Birthday.name)))
+    result = []
+    for b in all_bdays:
+        days_until = _days_until_birthday(b.birth_date, today)
+        result.append({
+            "id": str(b.id),
+            "name": b.name,
+            "birth_date": b.birth_date.isoformat(),
+            "relation": b.relation,
+            "gift_ideas": b.gift_ideas or [],
+            "notes": b.notes,
+            "member_id": str(b.member_id) if b.member_id else None,
+            "days_until": days_until,
+            "age_next": _age_on_birthday(b.birth_date, today),
+            "created_at": b.created_at.isoformat(),
+        })
+    result.sort(key=lambda x: x["days_until"])
+    return {"ok": True, "birthdays": result}
+
+
+@app.post("/api/birthdays")
+def api_create_birthday(payload: BirthdayCreate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    try:
+        bdate = date.fromisoformat(payload.birth_date)
+    except ValueError:
+        raise HTTPException(400, "Invalid birth_date format (YYYY-MM-DD)")
+    member_uuid = None
+    if payload.member_id:
+        try:
+            member_uuid = UUID(payload.member_id)
+        except ValueError:
+            pass
+    b = Birthday(
+        name=payload.name.strip(),
+        birth_date=bdate,
+        relation=payload.relation or "Familie",
+        gift_ideas=payload.gift_ideas or [],
+        notes=payload.notes,
+        member_id=member_uuid,
+    )
+    with Session(engine) as session:
+        session.add(b)
+        session.commit()
+        session.refresh(b)
+    return {"ok": True, "id": str(b.id)}
+
+
+@app.patch("/api/birthdays/{birthday_id}")
+def api_update_birthday(birthday_id: UUID, payload: BirthdayUpdate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        b = session.get(Birthday, birthday_id)
+        if not b:
+            raise HTTPException(404, "Not found")
+        data = payload.model_dump(exclude_unset=True)
+        if "birth_date" in data:
+            try:
+                data["birth_date"] = date.fromisoformat(data["birth_date"])
+            except ValueError:
+                raise HTTPException(400, "Invalid birth_date")
+        for k, v in data.items():
+            setattr(b, k, v)
+        session.add(b)
+        session.commit()
+        session.refresh(b)
+    return {"ok": True}
+
+
+@app.delete("/api/birthdays/{birthday_id}")
+def api_delete_birthday(birthday_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        b = session.get(Birthday, birthday_id)
+        if not b:
+            raise HTTPException(404, "Not found")
+        session.delete(b)
+        session.commit()
+    return {"ok": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Meal History
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MealHistoryCreate(BaseModel):
+    recipe_id: str
+    cooked_on: Optional[str] = None  # ISO date, defaults to today
+    rating: Optional[float] = None
+    cooked_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@app.get("/api/meal-history")
+def api_list_meal_history(limit: int = 30):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with engine.connect() as conn:
+        rows = conn.execute(
+            sql_text("""
+                SELECT mh.id, mh.recipe_id, mh.cooked_on, mh.rating, mh.cooked_by,
+                       mh.notes, mh.created_at, r.title as recipe_title
+                FROM public.meal_history mh
+                LEFT JOIN public.recipes r ON r.id = mh.recipe_id
+                ORDER BY mh.cooked_on DESC
+                LIMIT :lim
+            """),
+            {"lim": limit},
+        ).mappings().fetchall()
+    return {
+        "ok": True,
+        "history": [dict(r) for r in rows],
+    }
+
+
+@app.post("/api/meal-history")
+def api_create_meal_history(payload: MealHistoryCreate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    try:
+        recipe_uuid = UUID(payload.recipe_id)
+    except ValueError:
+        raise HTTPException(400, "Invalid recipe_id")
+    cooked_on = date.today()
+    if payload.cooked_on:
+        try:
+            cooked_on = date.fromisoformat(payload.cooked_on)
+        except ValueError:
+            raise HTTPException(400, "Invalid cooked_on date")
+    cooked_by_uuid = None
+    if payload.cooked_by:
+        try:
+            cooked_by_uuid = UUID(payload.cooked_by)
+        except ValueError:
+            pass
+    if payload.rating is not None and not (1.0 <= payload.rating <= 5.0):
+        raise HTTPException(400, "rating must be 1.0-5.0")
+    entry = MealHistory(
+        recipe_id=recipe_uuid,
+        cooked_on=cooked_on,
+        rating=payload.rating,
+        cooked_by=cooked_by_uuid,
+        notes=payload.notes,
+    )
+    with Session(engine) as session:
+        session.add(entry)
+        # also update recipe rating average & cooked_count
+        try:
+            r = session.get(Recipe, recipe_uuid)
+            if r:
+                r.cooked_count = (r.cooked_count or 0) + 1
+                if payload.rating:
+                    # simple rolling average
+                    prev_avg = float(r.rating or 0)
+                    prev_count = max((r.cooked_count or 1) - 1, 0)
+                    new_avg = ((prev_avg * prev_count) + payload.rating) / r.cooked_count
+                    r.rating = round(new_avg, 1)
+                session.add(r)
+        except Exception:
+            pass
+        session.commit()
+        session.refresh(entry)
+    return {"ok": True, "id": str(entry.id)}
+
+
+@app.get("/api/meal-history/stats")
+def api_meal_history_stats():
+    """Top recipes, weekly cooking count."""
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with engine.connect() as conn:
+        top_recipes = conn.execute(
+            sql_text("""
+                SELECT r.id::text, r.title, COUNT(*) as times, AVG(mh.rating) as avg_rating
+                FROM public.meal_history mh
+                JOIN public.recipes r ON r.id = mh.recipe_id
+                GROUP BY r.id, r.title
+                ORDER BY times DESC
+                LIMIT 10
+            """)
+        ).mappings().fetchall()
+        weeks_cooked = conn.execute(
+            sql_text("""
+                SELECT DATE_TRUNC('week', cooked_on::timestamp)::date as week,
+                       COUNT(*) as meals
+                FROM public.meal_history
+                WHERE cooked_on >= CURRENT_DATE - INTERVAL '12 weeks'
+                GROUP BY 1 ORDER BY 1
+            """)
+        ).mappings().fetchall()
+    return {
+        "ok": True,
+        "top_recipes": [dict(r) for r in top_recipes],
+        "weeks": [{"week": str(r["week"]), "meals": r["meals"]} for r in weeks_cooked],
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Enhanced health + system metrics
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/system/metrics")
+def api_system_metrics():
+    """Extended metrics for the health dashboard."""
+    if engine is None:
+        return {"ok": False, "error": "DATABASE_URL missing"}
+    metrics: Dict[str, Any] = {}
+    try:
+        with engine.connect() as conn:
+            metrics["recipes_total"] = conn.execute(
+                sql_text("SELECT COUNT(*) FROM public.recipes WHERE is_active = true")
+            ).scalar_one()
+            metrics["weeks_planned"] = conn.execute(
+                sql_text("SELECT COUNT(*) FROM public.weekly_plans")
+            ).scalar_one()
+            metrics["family_members"] = conn.execute(
+                sql_text("SELECT COUNT(*) FROM public.family_members WHERE is_active = true")
+            ).scalar_one() if _table_exists(conn, "family_members") else 0
+            metrics["pinboard_notes"] = conn.execute(
+                sql_text("SELECT COUNT(*) FROM public.pinboard_notes WHERE (expires_on IS NULL OR expires_on >= CURRENT_DATE)")
+            ).scalar_one() if _table_exists(conn, "pinboard_notes") else 0
+            metrics["birthdays"] = conn.execute(
+                sql_text("SELECT COUNT(*) FROM public.birthdays")
+            ).scalar_one() if _table_exists(conn, "birthdays") else 0
+            metrics["open_chores"] = conn.execute(
+                sql_text("SELECT COUNT(*) FROM public.chore_tasks WHERE is_active = true")
+            ).scalar_one() if _table_exists(conn, "chore_tasks") else 0
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "metrics": metrics}
+
+
+def _table_exists(conn, table_name: str) -> bool:
+    try:
+        result = conn.execute(
+            sql_text(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = :t)"
+            ),
+            {"t": table_name},
+        ).scalar_one()
+        return bool(result)
+    except Exception:
+        return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Recipe rating endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RecipeRatingPayload(BaseModel):
+    rating: float  # 1.0 - 5.0
+
+
+@app.post("/api/recipes/{recipe_id}/rate")
+def api_rate_recipe(recipe_id: UUID, payload: RecipeRatingPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if not (1.0 <= payload.rating <= 5.0):
+        raise HTTPException(400, "rating must be 1.0-5.0")
+    with Session(engine) as session:
+        r = session.get(Recipe, recipe_id)
+        if not r:
+            raise HTTPException(404, "Not found")
+        count = (r.cooked_count or 0) + 1
+        prev_avg = float(r.rating or payload.rating)
+        prev_count = max(count - 1, 1)
+        new_avg = round(((prev_avg * prev_count) + payload.rating) / count, 1)
+        r.rating = new_avg
+        r.cooked_count = count
+        session.add(r)
+        session.commit()
+        session.refresh(r)
+    return {"ok": True, "rating": r.rating, "cooked_count": r.cooked_count}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PREMIUM: Weekly plan cook assignment
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CookAssignmentPayload(BaseModel):
+    assignments: Dict[str, str]  # {"1": "member-uuid", "3": "member-uuid"}
+
+
+@app.put("/api/weekly/assign-cooks")
+def api_assign_cooks(payload: CookAssignmentPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    with engine.connect() as conn:
+        conn.execute(
+            sql_text("""
+                UPDATE public.weekly_plans
+                SET assigned_cooks = (:cooks)::jsonb, updated_at = now()
+                WHERE week_start_date = :ws
+            """),
+            {"cooks": json.dumps(payload.assignments), "ws": week_start.isoformat()},
+        )
+        conn.commit()
+    return {"ok": True, "assigned_cooks": payload.assignments}

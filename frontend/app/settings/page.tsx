@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { api, type FamilyMember } from "../lib/api";
 import { getErrorMessage } from "../lib/errors";
-import { BtnLink, Page, styles } from "../lib/ui";
+import { Avatar, BtnLink, ConfirmModal, Modal, Page, styles } from "../lib/ui";
 
 type PantryItem = {
   name: string;
@@ -67,9 +68,17 @@ function textToAliases(value: string) {
     .filter((v) => v.length > 0);
 }
 
+const MEMBER_COLORS = ["#e8673a", "#2b7fff", "#7c3aed", "#d97706", "#db2777", "#16a34a", "#0891b2", "#9d174d"];
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [memberForm, setMemberForm] = useState<{ name: string; initials: string; color: string } | null>(null);
+  const [memberSaving, setMemberSaving] = useState(false);
+  const [deleteMemberId, setDeleteMemberId] = useState<string | null>(null);
 
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [pantrySaving, setPantrySaving] = useState(false);
@@ -114,8 +123,21 @@ export default function SettingsPage() {
     }
   };
 
+  const loadMembers = async () => {
+    setMembersLoading(true);
+    try {
+      const data = await api.listFamilyMembers();
+      setMembers(data);
+    } catch {
+      // non-critical, table may not exist yet
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadAll();
+    loadMembers();
   }, []);
 
   const handlePantrySave = async () => {
@@ -196,15 +218,112 @@ export default function SettingsPage() {
     }
   };
 
+  const handleMemberSave = async () => {
+    if (!memberForm) return;
+    setMemberSaving(true);
+    try {
+      await api.createFamilyMember({
+        name: memberForm.name,
+        initials: memberForm.initials || memberForm.name.slice(0, 2).toUpperCase(),
+        color: memberForm.color,
+        dietary_restrictions: [],
+        is_active: true,
+      });
+      setMemberForm(null);
+      await loadMembers();
+    } catch {
+      // ignore for now
+    } finally {
+      setMemberSaving(false);
+    }
+  };
+
+  const handleMemberDelete = async (id: string) => {
+    try {
+      await api.deleteFamilyMember(id);
+      await loadMembers();
+    } catch {
+      // ignore
+    }
+  };
+
   const tagsByRow = useMemo(() => {
     if (!preferenceOptions.length) return [] as string[];
     return preferenceOptions;
   }, [preferenceOptions]);
 
   return (
-    <Page title="Einstellungen" subtitle="Basisvorrat, Präferenzen, Telegram" right={<BtnLink href="/kueche">Back</BtnLink>}>
+    <Page title="Einstellungen" subtitle="Familie, Basisvorrat, Präferenzen, Telegram" right={<BtnLink href="/kueche">Küche</BtnLink>} navCurrent="/kueche">
+      <ConfirmModal
+        open={deleteMemberId !== null}
+        title="Mitglied entfernen"
+        message="Familienmitglied wirklich entfernen?"
+        confirmLabel="Entfernen"
+        dangerConfirm
+        onConfirm={() => { if (deleteMemberId) handleMemberDelete(deleteMemberId); }}
+        onClose={() => setDeleteMemberId(null)}
+      />
+
+      <Modal
+        open={memberForm !== null}
+        title="Familienmitglied hinzufügen"
+        onClose={() => setMemberForm(null)}
+        footer={
+          <div style={{ display: "flex", gap: 10 }}>
+            <button style={{ ...styles.button, flex: 1 }} onClick={() => setMemberForm(null)}>Abbrechen</button>
+            <button style={{ ...styles.buttonPrimary, flex: 1 }} onClick={handleMemberSave} disabled={memberSaving || !memberForm?.name}>
+              {memberSaving ? "Speichere…" : "Hinzufügen"}
+            </button>
+          </div>
+        }
+      >
+        {memberForm && (
+          <div style={styles.col}>
+            <label style={styles.label}>Name</label>
+            <input style={styles.input} value={memberForm.name} onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })} placeholder="z.B. Anna" />
+            <label style={styles.label}>Kürzel (max 2 Zeichen)</label>
+            <input style={styles.input} value={memberForm.initials} onChange={(e) => setMemberForm({ ...memberForm, initials: e.target.value.slice(0, 2).toUpperCase() })} placeholder="z.B. AN" maxLength={2} />
+            <label style={styles.label}>Farbe</label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {MEMBER_COLORS.map((c) => (
+                <button key={c} onClick={() => setMemberForm({ ...memberForm, color: c })} style={{ width: 32, height: 32, borderRadius: 999, background: c, border: memberForm.color === c ? "3px solid var(--fg)" : "2px solid transparent", cursor: "pointer" }} />
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {loading ? <div style={styles.small}>Einstellungen werden geladen…</div> : null}
-      {error ? <div style={{ ...styles.small, color: "#b91c1c" }}>{error}</div> : null}
+      {error ? <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div> : null}
+
+      <div style={cardStyles.section}>
+        <div style={{ ...styles.rowBetween, marginBottom: 10 }}>
+          <div style={{ fontWeight: 800 }}>Familienmitglieder</div>
+          <button style={styles.button} onClick={() => setMemberForm({ name: "", initials: "", color: MEMBER_COLORS[0] })}>+ Hinzufügen</button>
+        </div>
+        {membersLoading ? (
+          <div style={styles.small}>Lade…</div>
+        ) : members.length === 0 ? (
+          <div style={styles.small}>Noch keine Mitglieder. Füge welche hinzu.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {members.map((m) => (
+              <div key={m.id} style={{ ...styles.rowBetween }}>
+                <div style={styles.row}>
+                  <Avatar initials={m.initials} color={m.color} size={36} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{m.name}</div>
+                    {m.dietary_restrictions.length > 0 && (
+                      <div style={styles.small}>{m.dietary_restrictions.join(", ")}</div>
+                    )}
+                  </div>
+                </div>
+                <button style={{ ...styles.button, padding: "4px 10px", fontSize: 13 }} onClick={() => setDeleteMemberId(m.id)}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={cardStyles.section}>
         <div style={{ fontWeight: 800, marginBottom: 10 }}>Basisvorrat</div>

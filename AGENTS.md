@@ -17,21 +17,30 @@ Your job is to implement requested features safely and deliver changes that the 
    - Never force-push. Never rewrite shared history.
    - Commit locally only. The user decides when to push/merge.
 
-3. **Minimal changes**
+3. **Feature documentation is mandatory (before and after implementation)**
+   - Before coding, create/update a feature note in `docs/agent-tasks/` describing scope, planned files, and test plan.
+   - After coding, update the same feature note with what was actually implemented, validation results, and follow-ups.
+   - Keep the feature doc aligned with the final diff so another reviewer can understand the change without reverse-engineering commits.
+
+4. **Merge flow discipline**
+   - Implement on feature/fix branches only; never code directly on `main`.
+   - Merge to `main` only after review/approval.
+
+5. **Minimal changes**
    - Prefer the smallest possible code change that meets the requirement.
    - Avoid refactors unless explicitly required.
    - Keep diffs reviewable.
 
-4. **Keep backward compatibility**
+6. **Keep backward compatibility**
    - API changes must be additive unless the task explicitly permits breaking changes.
    - UI changes should degrade gracefully when an API call fails.
 
-5. **Deterministic builds**
+7. **Deterministic builds**
    - If you add build metadata (e.g. git SHA), ensure:
      - CI provides the value (e.g. `GITHUB_SHA` build args)
      - local has safe fallback (e.g. `"local"`)
 
-6. **Fail fast with evidence**
+8. **Fail fast with evidence**
    - If something breaks, provide:
      - the failing command
      - the relevant log excerpt
