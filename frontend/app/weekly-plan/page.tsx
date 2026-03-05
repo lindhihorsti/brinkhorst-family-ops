@@ -69,23 +69,24 @@ const daysList = [
 const cardStyles: Record<string, React.CSSProperties> = {
   section: { ...styles.card, marginBottom: 14 },
   buttonRow: { display: "flex", gap: 10, flexWrap: "wrap" },
-  muted: { fontSize: 12, opacity: 0.7 },
+  muted: { fontSize: 12, color: "var(--fg-muted)" },
   grid: { display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" },
   dayCard: {
-    border: "1px solid #eee",
-    borderRadius: 14,
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-md)",
     padding: 12,
-    background: "#fff",
+    background: "var(--bg-subtle)",
   },
-  dayLabel: { fontSize: 12, fontWeight: 800, marginBottom: 6 },
-  dayTitle: { fontSize: 14, fontWeight: 700, lineHeight: 1.2 },
+  dayLabel: { fontSize: 12, fontWeight: 800, marginBottom: 6, color: "var(--fg-muted)" },
+  dayTitle: { fontSize: 14, fontWeight: 700, lineHeight: 1.2, color: "var(--fg)" },
   messageBox: {
-    border: "1px solid #eee",
-    borderRadius: 12,
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius-md)",
     padding: 12,
-    background: "#fafafa",
+    background: "var(--bg-subtle)",
     fontSize: 12,
     whiteSpace: "pre-wrap",
+    color: "var(--fg)",
   },
   checkboxRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 8 },
   toggleRow: { display: "flex", gap: 8, marginTop: 10 },
@@ -288,7 +289,7 @@ export default function WeeklyPlanPage() {
   const perRecipe = shopData?.per_recipe ?? [];
 
   return (
-    <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Back</BtnLink>}>
+    <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Küche</BtnLink>} navCurrent="/kueche" icon="📅" iconAccent="#e8673a">
       <div style={{ ...cardStyles.section, marginBottom: 18 }}>
         <div style={cardStyles.buttonRow}>
           <button style={styles.buttonPrimary} onClick={handlePlan} disabled={planLoading}>
@@ -312,7 +313,7 @@ export default function WeeklyPlanPage() {
           <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Lade aktuellen Plan…</div>
         ) : null}
         {currentError ? (
-          <div style={{ marginTop: 10, fontSize: 12, color: "#b91c1c" }}>{currentError}</div>
+          <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{currentError}</div>
         ) : null}
         {planWarning ? (
           <div style={{ marginTop: 10, fontSize: 12 }}>{planWarning}</div>
@@ -434,7 +435,7 @@ export default function WeeklyPlanPage() {
           </div>
         )}
         {swapError ? (
-          <div style={{ marginTop: 10, fontSize: 12, color: "#b91c1c" }}>{swapError}</div>
+          <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{swapError}</div>
         ) : null}
       </div>
 
@@ -463,7 +464,7 @@ export default function WeeklyPlanPage() {
         </div>
 
         {shopError ? (
-          <div style={{ marginBottom: 10, fontSize: 12, color: "#b91c1c" }}>{shopError}</div>
+          <div style={{ marginBottom: 10, fontSize: 12, color: "var(--danger)" }}>{shopError}</div>
         ) : null}
         {shopWarning ? (
           <div style={{ marginBottom: 10, fontSize: 12 }}>{shopWarning}</div>

@@ -1,0 +1,14 @@
+-- Pinnwand categories + chore settings
+-- New API routes store their data in the existing app_state table as JSON,
+-- so no schema changes are required.
+--
+-- Default values are returned by the backend when the keys are absent,
+-- so no seed INSERTs are needed either.
+--
+-- Relevant app_state keys written by the new routes:
+--   pinboard_categories  → JSON array of {id, label, color}
+--   chore_settings       → JSON object {max_points: int}
+--
+-- This file is intentionally a no-op; it exists to keep the migration
+-- sequence complete and to document the intent.
+SELECT 1;

@@ -1,10 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Recipe, type RecipeCreate, type RecipeImportDraft } from "../lib/api";
 import { getErrorMessage } from "../lib/errors";
-import { BtnLink, Chip, Page, styles } from "../lib/ui";
+import { BtnLink, Chip, ConfirmModal, Page, StarRating, styles } from "../lib/ui";
 
 export default function RecipesPage() {
   const [q, setQ] = useState("");
@@ -14,6 +15,9 @@ export default function RecipesPage() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  const [collectionFilter, setCollectionFilter] = useState<string | null>(null);
+  const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
 
   const [importOpen, setImportOpen] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2>(1);
@@ -28,6 +32,14 @@ export default function RecipesPage() {
   const [ingredientText, setIngredientText] = useState("");
 
   const query = useMemo(() => q.trim(), [q]);
+  const collections = useMemo(() => {
+    const names = items.map((r) => r.collection_name).filter((c): c is string => !!c);
+    return Array.from(new Set(names));
+  }, [items]);
+  const filteredItems = useMemo(
+    () => (collectionFilter ? items.filter((r) => r.collection_name === collectionFilter) : items),
+    [items, collectionFilter]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -160,10 +172,6 @@ export default function RecipesPage() {
   };
 
   const archiveRecipe = async (id: string) => {
-    const confirmed = window.confirm(
-      "Rezept wirklich archivieren?"
-    );
-    if (!confirmed) return;
     setArchiveError(null);
     setArchivingId(id);
     try {
@@ -180,56 +188,89 @@ export default function RecipesPage() {
     <Page
       title="Rezepte"
       subtitle=""
-      right={<BtnLink href="/kueche">Back</BtnLink>}
+      right={<BtnLink href="/kueche">Küche</BtnLink>}
+      navCurrent="/kueche"
+      icon="📖"
+      iconAccent="#e8673a"
     >
+      <ConfirmModal
+        open={confirmArchiveId !== null}
+        title="Rezept archivieren"
+        message="Rezept wirklich archivieren? Es wird nicht mehr im Wochenplan vorgeschlagen."
+        confirmLabel="Archivieren"
+        onConfirm={() => { if (confirmArchiveId) archiveRecipe(confirmArchiveId); }}
+        onClose={() => setConfirmArchiveId(null)}
+      />
+
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Suchen… (Titel oder Tag)"
-        style={{ ...styles.input, marginBottom: 14 }}
+        style={{ ...styles.input, marginBottom: 10 }}
       />
 
-      {err ? (
-        <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff" }}>
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Fehler</div>
-          <div style={{ fontSize: 13 }}>{err}</div>
+      {collections.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+          <Chip text="Alle" active={!collectionFilter} onClick={() => setCollectionFilter(null)} />
+          {collections.map((c) => (
+            <Chip key={c} text={c} active={collectionFilter === c} onClick={() => setCollectionFilter(c === collectionFilter ? null : c)} />
+          ))}
         </div>
+      )}
+
+      {err ? (
+        <div style={styles.errorBox}>{err}</div>
       ) : null}
       {archiveError ? (
-        <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff", marginTop: 10 }}>
-          <div style={{ fontWeight: 800, marginBottom: 6 }}>Archivieren fehlgeschlagen</div>
-          <div style={{ fontSize: 13 }}>{archiveError}</div>
-        </div>
+        <div style={{ ...styles.errorBox, marginTop: 10 }}>{archiveError}</div>
       ) : null}
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: "10px 0", opacity: 0.75 }}>Lade…</div>
-      ) : items.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "10px 0", color: "var(--fg-muted)" }}>Lade…</div>
+      ) : filteredItems.length === 0 ? (
         <div style={styles.card}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Keine Rezepte gefunden.</div>
-          <div style={{ fontSize: 13, opacity: 0.85 }}>Lege eins neu an.</div>
+          <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>Lege eins neu an.</div>
         </div>
       ) : (
         <div style={{ display: "grid", gap: 12, paddingBottom: 74 }}>
-          {items.map((r) => (
+          {filteredItems.map((r) => (
             <div key={r.id} style={styles.card}>
-              <Link href={`/recipes/${r.id}`} style={{ textDecoration: "none", color: "#000", display: "block" }}>
+              <Link href={`/recipes/${r.id}`} style={{ textDecoration: "none", color: "var(--fg)", display: "block" }}>
                 <div style={styles.rowBetween}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>
+                  {r.photo_url ? (
+                    <div style={{ position: "relative", width: 60, height: 60, borderRadius: "var(--radius-md)", overflow: "hidden", flexShrink: 0 }}>
+                      <Image src={r.photo_url} alt={r.title} fill style={{ objectFit: "cover" }} unoptimized />
+                    </div>
+                  ) : null}
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.2 }}>
                       {r.title}
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>
+                    <div style={{ marginTop: 4, fontSize: 12, color: "var(--fg-muted)" }}>
                       {r.time_minutes ? `${r.time_minutes} min` : "—"} ·{" "}
                       {r.difficulty ? `Diff ${r.difficulty}` : "—"} ·{" "}
                       {r.ingredients?.length ? `${r.ingredients.length} Zutaten` : "keine Zutaten"}
+                      {r.cooked_count ? ` · ${r.cooked_count}× gekocht` : ""}
                     </div>
+                    {r.rating ? (
+                      <div style={{ marginTop: 4 }}>
+                        <StarRating value={r.rating} readonly />
+                      </div>
+                    ) : null}
+                    {r.collection_name ? (
+                      <div style={{ marginTop: 4 }}>
+                        <span style={{ ...styles.chip, background: "var(--kueche-accent)22", borderColor: "var(--kueche-accent)44", color: "var(--kueche-accent)" }}>
+                          {r.collection_name}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
-                  <div style={{ fontWeight: 800, opacity: 0.6 }}>›</div>
+                  <div style={{ fontWeight: 800, color: "var(--fg-muted)" }}>›</div>
                 </div>
 
                 {r.tags?.length ? (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
                     {r.tags.slice(0, 6).map((t) => (
                       <Chip key={t} text={t} />
                     ))}
@@ -239,7 +280,7 @@ export default function RecipesPage() {
               </Link>
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
                 <button
-                  onClick={() => archiveRecipe(r.id)}
+                  onClick={() => setConfirmArchiveId(r.id)}
                   style={styles.button}
                   disabled={archivingId === r.id}
                 >

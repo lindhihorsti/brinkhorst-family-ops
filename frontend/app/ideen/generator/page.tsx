@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { getErrorMessage } from "../../lib/errors";
+import { BottomNav } from "../../lib/ui";
 
 type ActivitiesSettings = {
   default_location: string;
@@ -56,10 +56,10 @@ const IO_OPTIONS = ["egal", "drinnen", "draußen"] as const;
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100dvh",
-    background: "#fff",
-    color: "#000",
-    fontFamily:
-      'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"',
+    background: "var(--bg)",
+    color: "var(--fg)",
+    fontFamily: "var(--font)",
+    paddingBottom: "var(--nav-height)",
   },
   container: {
     maxWidth: 420,
@@ -73,74 +73,74 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     marginBottom: 22,
   },
-  title: { fontSize: 26, fontWeight: 700, margin: 0, lineHeight: 1.2, color: "#000" },
+  title: { fontSize: 26, fontWeight: 700, margin: 0, lineHeight: 1.2, color: "var(--fg)" },
   button: {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     padding: "8px 12px",
     fontSize: 13,
     fontWeight: 700,
-    color: "#000",
-    background: "#fff",
+    color: "var(--fg)",
+    background: "var(--bg)",
     textDecoration: "none",
     cursor: "pointer",
   },
   section: {
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     borderRadius: 18,
     padding: 16,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-    background: "#fff",
-    color: "#000",
+    boxShadow: "var(--shadow-sm)",
+    background: "var(--bg)",
+    color: "var(--fg)",
   },
   label: { fontSize: 13, fontWeight: 700, marginBottom: 6 },
   input: {
     width: "100%",
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     borderRadius: 14,
     padding: "10px 12px",
     fontSize: 16,
     outline: "none",
-    color: "#000",
-    background: "#fff",
+    color: "var(--fg)",
+    background: "var(--bg)",
   },
   select: {
     width: "100%",
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     borderRadius: 14,
     padding: "10px 12px",
     fontSize: 16,
     outline: "none",
-    color: "#000",
-    background: "#fff",
+    color: "var(--fg)",
+    background: "var(--bg)",
   },
   textarea: {
     width: "100%",
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     borderRadius: 14,
     padding: "10px 12px",
     fontSize: 15,
     outline: "none",
-    color: "#000",
-    background: "#fff",
+    color: "var(--fg)",
+    background: "var(--bg)",
     resize: "vertical",
   },
   chipRow: { display: "flex", gap: 8, flexWrap: "wrap" },
   chip: {
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     borderRadius: 999,
     padding: "6px 12px",
     fontSize: 12,
-    background: "#fff",
-    color: "#000",
+    background: "var(--bg)",
+    color: "var(--fg)",
     cursor: "pointer",
   },
   chipActive: {
-    background: "#eaf4ff",
-    borderColor: "#8ab6e6",
+    background: "var(--aktivitaet-accent)22",
+    borderColor: "var(--aktivitaet-accent)",
   },
   stepTitle: { fontSize: 15, fontWeight: 700, marginBottom: 12 },
   row: { display: "grid", gap: 12 },
@@ -150,12 +150,12 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
-    border: "1px solid #000",
+    border: "1px solid var(--fg)",
     padding: "12px 14px",
     fontSize: 15,
     fontWeight: 800,
-    color: "#fff",
-    background: "#000",
+    color: "var(--bg)",
+    background: "var(--fg)",
     textDecoration: "none",
     cursor: "pointer",
   },
@@ -164,29 +164,29 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 16,
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     padding: "12px 14px",
     fontSize: 14,
     fontWeight: 700,
-    color: "#000",
-    background: "#fff",
+    color: "var(--fg)",
+    background: "var(--bg)",
     textDecoration: "none",
     cursor: "pointer",
   },
   cardStack: { display: "grid", gap: 14 },
   resultCard: {
-    border: "1px solid #ddd",
+    border: "1px solid var(--border)",
     borderRadius: 18,
     padding: 16,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-    background: "#fff",
-    color: "#000",
+    boxShadow: "var(--shadow-sm)",
+    background: "var(--bg)",
+    color: "var(--fg)",
   },
   resultTitle: { fontSize: 16, fontWeight: 700, margin: 0 },
-  resultMeta: { fontSize: 12, margin: "6px 0 0 0" },
+  resultMeta: { fontSize: 12, margin: "6px 0 0 0", color: "var(--fg-muted)" },
   resultWhy: { fontSize: 13, marginTop: 10 },
   sources: { fontSize: 12, marginTop: 10, display: "grid", gap: 4 },
-  error: { color: "#b91c1c", fontSize: 12 },
+  error: { color: "var(--danger)", fontSize: 12 },
 };
 
 function ChipButton({
@@ -312,26 +312,21 @@ export default function IdeenGeneratorPage() {
 
   return (
     <main style={styles.page}>
-      <div style={{ display: "flex", justifyContent: "center", marginTop: 12, marginBottom: 10 }}>
-        <Image
-          src="/logo.PNG"
-          alt="Family Ops"
-          width={600}
-          height={380}
-          priority
-          style={{
-            width: 220,
-            height: "auto",
-          }}
-        />
-      </div>
       <div style={styles.container}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
+          <span style={{
+            width: 104, height: 104, borderRadius: 28,
+            background: "#2b7fff22",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 64,
+          }}>💡</span>
+        </div>
         <div style={styles.headerRow}>
           <div>
             <h1 style={styles.title}>Ideen-Generator</h1>
           </div>
-          <Link href="/ideen" style={styles.button}>
-            Zurück
+          <Link href="/" style={styles.button}>
+            Home
           </Link>
         </div>
 
@@ -530,6 +525,7 @@ export default function IdeenGeneratorPage() {
           </section>
         ) : null}
       </div>
+      <BottomNav current="/ideen" />
     </main>
   );
 }
