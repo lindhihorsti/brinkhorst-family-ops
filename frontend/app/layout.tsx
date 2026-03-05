@@ -45,6 +45,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Family Ops" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}`,
+          }}
+        />
         {children}
       </body>
     </html>

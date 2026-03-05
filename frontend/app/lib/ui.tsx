@@ -230,6 +230,8 @@ export function Page({
   right,
   noBottomNav,
   navCurrent,
+  icon,
+  iconAccent,
   children,
 }: {
   title: string;
@@ -237,11 +239,25 @@ export function Page({
   right?: React.ReactNode;
   noBottomNav?: boolean;
   navCurrent?: string;
+  icon?: string;
+  iconAccent?: string;
   children: React.ReactNode;
 }) {
   return (
     <div style={noBottomNav ? styles.pageNoNav : styles.page}>
       <div style={styles.container}>
+        {icon && (
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
+            <span style={{
+              width: 104, height: 104, borderRadius: 28,
+              background: iconAccent ? iconAccent + "22" : "var(--bg-subtle)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 64,
+            }}>
+              {icon}
+            </span>
+          </div>
+        )}
         <div style={styles.headerRow}>
           <div>
             <h1 style={styles.title}>{title}</h1>
@@ -508,6 +524,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/ideen", label: "Ideen", icon: "💡" },
   { href: "/aufgaben", label: "Aufgaben", icon: "✅" },
   { href: "/pinnwand", label: "Pinnwand", icon: "📌" },
+  { href: "/einstellungen", label: "Einst.", icon: "⚙️" },
 ];
 
 export function BottomNav({ current }: { current?: string }) {
@@ -517,7 +534,7 @@ export function BottomNav({ current }: { current?: string }) {
         <Link
           key={item.href}
           href={item.href}
-          className={`bottom-nav-item${current === item.href ? " active" : ""}`}
+          className={`bottom-nav-item${current === item.href || (item.href !== "/" && current?.startsWith(item.href)) ? " active" : ""}`}
         >
           <span style={{ fontSize: 20 }}>{item.icon}</span>
           <span>{item.label}</span>

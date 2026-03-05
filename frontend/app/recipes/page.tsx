@@ -190,6 +190,8 @@ export default function RecipesPage() {
       subtitle=""
       right={<BtnLink href="/kueche">Küche</BtnLink>}
       navCurrent="/kueche"
+      icon="📖"
+      iconAccent="#e8673a"
     >
       <ConfirmModal
         open={confirmArchiveId !== null}

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, type Recipe } from "../../lib/api";
 import { getErrorMessage } from "../../lib/errors";
-import { BtnLink, Chip, Page, styles } from "../../lib/ui";
+import { BtnLink, Chip, ConfirmModal, Page, styles } from "../../lib/ui";
 
 export default function RecipeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -20,6 +20,7 @@ export default function RecipeDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   useEffect(() => {
     if (!id) return; // <- wichtig
@@ -45,10 +46,6 @@ export default function RecipeDetailPage() {
 
   const archiveRecipe = async () => {
     if (!id) return;
-    const confirmed = window.confirm(
-      "Rezept wirklich archivieren?"
-    );
-    if (!confirmed) return;
     setArchiveError(null);
     setArchiving(true);
     try {
@@ -62,6 +59,16 @@ export default function RecipeDetailPage() {
   };
 
   return (
+    <>
+    <ConfirmModal
+      open={confirmArchive}
+      title="Rezept archivieren"
+      message="Rezept wirklich archivieren? Es wird nicht mehr im Wochenplan vorgeschlagen."
+      confirmLabel={archiving ? "Archivieren…" : "Archivieren"}
+      dangerConfirm
+      onConfirm={() => { setConfirmArchive(false); archiveRecipe(); }}
+      onClose={() => setConfirmArchive(false)}
+    />
     <Page
       title={item?.title ?? "Rezept"}
       subtitle={item?.id ? `ID: ${item.id}` : " "}
@@ -161,7 +168,7 @@ export default function RecipeDetailPage() {
             Bearbeiten
           </Link>
           <button
-            onClick={archiveRecipe}
+            onClick={() => setConfirmArchive(true)}
             style={{ ...styles.buttonDanger, width: "100%", justifyContent: "center" }}
             disabled={archiving}
           >
@@ -170,5 +177,6 @@ export default function RecipeDetailPage() {
         </div>
       </div>
     </Page>
+    </>
   );
 }

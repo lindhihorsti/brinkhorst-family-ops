@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { BottomNav } from "./lib/ui";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 type HealthAll = {
   api: boolean | null;
   db: boolean | null;
@@ -22,6 +24,18 @@ type Metrics = {
   open_chores?: number;
 };
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const USE_CASES = [
+  { href: "/kueche",      icon: "🍳", title: "Küchen- & Wochenplan",    sub: "Rezepte · Wochenplan · Einkauf",        accent: "var(--kueche-accent)" },
+  { href: "/ideen",       icon: "💡", title: "Was unternehmen wir?",     sub: "Ausflüge & Aktivitäten generieren",     accent: "var(--aktivitaet-accent)" },
+  { href: "/aufgaben",    icon: "✅", title: "Haushaltsaufgaben",        sub: "Checklisten · Zuweisung · Punkte",      accent: "var(--aufgaben-accent)" },
+  { href: "/pinnwand",    icon: "📌", title: "Familienpinnwand",         sub: "Notizen · Erinnerungen · Nachrichten",  accent: "var(--pinnwand-accent)" },
+  { href: "/geburtstage", icon: "🎂", title: "Geburtstage & Geschenke", sub: "Erinnerungen · Wunschlisten",           accent: "var(--geburtstage-accent)" },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function shortSha(value?: string | null) {
   const trimmed = (value ?? "").trim();
   if (!trimmed || trimmed === "local") return "local";
@@ -37,6 +51,8 @@ function labelFrom(ok: boolean | null) {
   if (ok === null) return "…";
   return ok ? "OK" : "DOWN";
 }
+
+// ── OverallBadge ──────────────────────────────────────────────────────────────
 
 function OverallBadge({ all }: { all: HealthAll }) {
   const { color, label } = useMemo(() => {
@@ -59,13 +75,7 @@ function OverallBadge({ all }: { all: HealthAll }) {
   );
 }
 
-const USE_CASES = [
-  { href: "/kueche",     icon: "🍳", title: "Küchen- & Wochenplan",    sub: "Rezepte · Wochenplan · Einkauf",          accent: "var(--kueche-accent)" },
-  { href: "/ideen",      icon: "💡", title: "Was unternehmen wir?",     sub: "Ausflüge & Aktivitäten generieren",        accent: "var(--aktivitaet-accent)" },
-  { href: "/aufgaben",   icon: "✅", title: "Haushaltsaufgaben",        sub: "Checklisten · Zuweisung · Punkte",         accent: "var(--aufgaben-accent)" },
-  { href: "/pinnwand",   icon: "📌", title: "Familienpinnwand",         sub: "Notizen · Erinnerungen · Nachrichten",     accent: "var(--pinnwand-accent)" },
-  { href: "/geburtstage",icon: "🎂", title: "Geburtstage & Geschenke", sub: "Erinnerungen · Wunschlisten",              accent: "var(--geburtstage-accent)" },
-];
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
   const [all, setAll] = useState<HealthAll>({ api: null, db: null, bot: null, scheduler: null, ai: null });
@@ -75,80 +85,61 @@ export default function LandingPage() {
 
   useEffect(() => {
     let cancelled = false;
-
     const check = async () => {
       const [apiRes, db, bot, scheduler, ai, metricsRes] = await Promise.all([
         fetch("/api/health", { cache: "no-store" })
           .then((r) => r.ok ? r.json() : Promise.reject())
           .then((j) => ({ ok: j?.status === "ok", sha: shortSha(j?.git_sha) }))
           .catch(() => ({ ok: false, sha: "local" })),
-        fetch("/api/db/ping", { cache: "no-store" })
-          .then((r) => r.ok ? r.json() : Promise.reject())
-          .then((j) => j?.ok === true).catch(() => false),
-        fetch("/api/bot/status", { cache: "no-store" })
-          .then((r) => r.ok ? r.json() : Promise.reject())
-          .then((j) => j?.ok === true).catch(() => false),
-        fetch("/api/jobs/status", { cache: "no-store" })
-          .then((r) => r.ok ? r.json() : Promise.reject())
-          .then((j) => j?.ok === true).catch(() => false),
-        fetch("/api/ai/status", { cache: "no-store" })
-          .then((r) => r.ok ? r.json() : Promise.reject())
-          .then((j) => j?.ok === true).catch(() => false),
-        fetch("/api/system/metrics", { cache: "no-store" })
-          .then((r) => r.ok ? r.json() : Promise.reject())
-          .then((j) => j?.metrics ?? {}).catch(() => ({})),
+        fetch("/api/db/ping", { cache: "no-store" }).then((r) => r.ok ? r.json() : Promise.reject()).then((j) => j?.ok === true).catch(() => false),
+        fetch("/api/bot/status", { cache: "no-store" }).then((r) => r.ok ? r.json() : Promise.reject()).then((j) => j?.ok === true).catch(() => false),
+        fetch("/api/jobs/status", { cache: "no-store" }).then((r) => r.ok ? r.json() : Promise.reject()).then((j) => j?.ok === true).catch(() => false),
+        fetch("/api/ai/status", { cache: "no-store" }).then((r) => r.ok ? r.json() : Promise.reject()).then((j) => j?.ok === true).catch(() => false),
+        fetch("/api/system/metrics", { cache: "no-store" }).then((r) => r.ok ? r.json() : Promise.reject()).then((j) => j?.metrics ?? {}).catch(() => ({})),
       ]);
-
       if (!cancelled) {
         setAll({ api: apiRes.ok, db, bot, scheduler, ai });
         setBackendSha(apiRes.sha);
         setMetrics(metricsRes);
       }
     };
-
     check();
     const t = setInterval(check, 20000);
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
+  const tile = (accent: string) => ({
+    border: "1px solid var(--border)", borderRadius: 20, padding: "14px 16px",
+    boxShadow: "var(--shadow-sm)", background: "var(--bg)",
+    display: "flex", alignItems: "center", gap: 14,
+  });
+
+  const iconBox = (accent: string) => ({
+    width: 44, height: 44, borderRadius: 14,
+    background: accent + "22",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 22, flexShrink: 0,
+  });
+
   return (
     <main style={{
-      minHeight: "100dvh",
-      background: "var(--bg)",
-      color: "var(--fg)",
-      fontFamily: "var(--font)",
-      paddingBottom: "var(--nav-height)",
+      minHeight: "100dvh", background: "var(--bg)", color: "var(--fg)",
+      fontFamily: "var(--font)", paddingBottom: "var(--nav-height)",
     }}>
       {/* Logo */}
       <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 4 }}>
         <Image src="/logo.PNG" alt="Family Ops" width={600} height={380} priority
-          style={{ width: 280, height: "auto" }} />
+          className="logo-img" style={{ width: 280, height: "auto" }} />
       </div>
 
       <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 22px 40px" }}>
 
         {/* Use Case Grid */}
-        <div style={{ display: "grid", gap: 12, marginBottom: 24 }}>
+        <div style={{ display: "grid", gap: 12, marginBottom: 12 }}>
           {USE_CASES.map((uc) => (
             <Link key={uc.href} href={uc.href} style={{ textDecoration: "none" }}>
-              <div className="nav-tile" style={{
-                border: "1px solid var(--border)",
-                borderRadius: 20,
-                padding: "14px 16px",
-                boxShadow: "var(--shadow-sm)",
-                background: "var(--bg)",
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-              }}>
-                <span style={{
-                  width: 44, height: 44, borderRadius: 14,
-                  background: uc.accent + "22",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 22, flexShrink: 0,
-                }}>
-                  {uc.icon}
-                </span>
+              <div className="nav-tile" style={tile(uc.accent)}>
+                <span style={iconBox(uc.accent)}>{uc.icon}</span>
                 <div>
                   <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{uc.title}</p>
                   <p style={{ fontSize: 12, marginTop: 2, color: "var(--fg-muted)" }}>{uc.sub}</p>
@@ -158,20 +149,27 @@ export default function LandingPage() {
           ))}
         </div>
 
+        {/* Spacer */}
+        <div style={{ height: 32 }} />
+
+        {/* Settings tile */}
+        <Link href="/einstellungen" style={{ textDecoration: "none", display: "block", marginBottom: 24 }}>
+          <div className="nav-tile" style={tile("var(--fg-muted)")}>
+            <span style={{ ...iconBox("var(--fg-muted)"), background: "var(--bg-subtle)" }}>⚙️</span>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Einstellungen</p>
+              <p style={{ fontSize: 12, marginTop: 2, color: "var(--fg-muted)" }}>Familie · Küche · Aktivitäten · Design</p>
+            </div>
+          </div>
+        </Link>
+
         {/* Health + Metrics */}
-        <div style={{
-          border: "1px solid var(--border)", borderRadius: 20,
-          padding: 16, background: "var(--bg)",
-        }}>
+        <div style={{ border: "1px solid var(--border)", borderRadius: 20, padding: 16, background: "var(--bg)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <p style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>System</p>
             <OverallBadge all={all} />
           </div>
-
-          {/* Service dots */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12,
-          }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
             {[
               { key: "api", label: "API" },
               { key: "db", label: "Datenbank" },
@@ -184,48 +182,28 @@ export default function LandingPage() {
                 <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: dotColor(val), display: "block" }} />
                   <span style={{ color: "var(--fg-muted)" }}>{label}</span>
-                  <span style={{ fontWeight: 600, color: val === null ? "var(--fg-muted)" : val ? "#16a34a" : "#ef4444" }}>
-                    {labelFrom(val)}
-                  </span>
+                  <span style={{ fontWeight: 600, color: val === null ? "var(--fg-muted)" : val ? "#16a34a" : "#ef4444" }}>{labelFrom(val)}</span>
                 </div>
               );
             })}
           </div>
-
-          {/* Metrics row */}
           {Object.keys(metrics).length > 0 && (
-            <div style={{
-              display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12,
-              paddingTop: 10, borderTop: "1px solid var(--border)", color: "var(--fg-muted)",
-            }}>
-              {metrics.recipes_total !== undefined && (
-                <span><strong style={{ color: "var(--fg)" }}>{metrics.recipes_total}</strong> Rezepte</span>
-              )}
-              {metrics.weeks_planned !== undefined && (
-                <span><strong style={{ color: "var(--fg)" }}>{metrics.weeks_planned}</strong> Wochen geplant</span>
-              )}
-              {metrics.family_members !== undefined && metrics.family_members > 0 && (
-                <span><strong style={{ color: "var(--fg)" }}>{metrics.family_members}</strong> Familienmitglieder</span>
-              )}
-              {metrics.open_chores !== undefined && metrics.open_chores > 0 && (
-                <span><strong style={{ color: "var(--fg)" }}>{metrics.open_chores}</strong> offene Aufgaben</span>
-              )}
-              {metrics.pinboard_notes !== undefined && metrics.pinboard_notes > 0 && (
-                <span><strong style={{ color: "var(--fg)" }}>{metrics.pinboard_notes}</strong> Pinnwand-Notizen</span>
-              )}
-              {metrics.birthdays !== undefined && metrics.birthdays > 0 && (
-                <span><strong style={{ color: "var(--fg)" }}>{metrics.birthdays}</strong> Geburtstage</span>
-              )}
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, paddingTop: 10, borderTop: "1px solid var(--border)", color: "var(--fg-muted)" }}>
+              {metrics.recipes_total !== undefined && <span><strong style={{ color: "var(--fg)" }}>{metrics.recipes_total}</strong> Rezepte</span>}
+              {metrics.weeks_planned !== undefined && <span><strong style={{ color: "var(--fg)" }}>{metrics.weeks_planned}</strong> Wochen geplant</span>}
+              {metrics.family_members !== undefined && metrics.family_members > 0 && <span><strong style={{ color: "var(--fg)" }}>{metrics.family_members}</strong> Familienmitglieder</span>}
+              {metrics.open_chores !== undefined && metrics.open_chores > 0 && <span><strong style={{ color: "var(--fg)" }}>{metrics.open_chores}</strong> offene Aufgaben</span>}
+              {metrics.pinboard_notes !== undefined && metrics.pinboard_notes > 0 && <span><strong style={{ color: "var(--fg)" }}>{metrics.pinboard_notes}</strong> Pinnwand-Notizen</span>}
+              {metrics.birthdays !== undefined && metrics.birthdays > 0 && <span><strong style={{ color: "var(--fg)" }}>{metrics.birthdays}</strong> Geburtstage</span>}
             </div>
           )}
-
-          <div style={{ marginTop: 10, fontSize: 11, color: "var(--fg-muted)", display: "flex", gap: 12 }}>
-            <span>FE: {frontendSha}</span>
-            <span>BE: {backendSha}</span>
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)", fontSize: 11, color: "var(--fg-muted)", display: "flex", gap: 12 }}>
+            <span>Frontend: {frontendSha}</span>
+            <span>Backend: {backendSha}</span>
           </div>
         </div>
-      </div>
 
+      </div>
       <BottomNav current="/" />
     </main>
   );

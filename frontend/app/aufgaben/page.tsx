@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Avatar,
   BottomNav,
+  ConfirmModal,
   Modal,
   ProgressBar,
   Skeleton,
@@ -57,6 +59,7 @@ function AufgabenInner() {
   const [chores, setChores] = useState<Chore[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [scores, setScores] = useState<ScoreEntry[]>([]);
+  const [maxPoints, setMaxPoints] = useState(3);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,12 +72,13 @@ function AufgabenInner() {
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newRecurrence, setNewRecurrence] = useState<"daily" | "weekly" | "monthly">("weekly");
-  const [newPoints, setNewPoints] = useState<1 | 2 | 3>(1);
+  const [newPoints, setNewPoints] = useState(1);
   const [newSaving, setNewSaving] = useState(false);
   const [newError, setNewError] = useState<string | null>(null);
 
   // Delete
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // ─── Load data ──────────────────────────────────────────────────────────────
 
@@ -82,16 +86,18 @@ function AufgabenInner() {
     setLoading(true);
     setError(null);
     try {
-      const [choresRes, statsRes, familyRes] = await Promise.all([
+      const [choresRes, statsRes, familyRes, settingsRes] = await Promise.all([
         fetch("/api/chores"),
         fetch("/api/chores/stats"),
         fetch("/api/family"),
+        fetch("/api/chores/settings"),
       ]);
 
-      const [choresData, statsData, familyData] = await Promise.all([
+      const [choresData, statsData, familyData, settingsData] = await Promise.all([
         choresRes.json(),
         statsRes.json(),
         familyRes.json(),
+        settingsRes.json().catch(() => null),
       ]);
 
       if (!choresRes.ok || !choresData.ok) throw new Error(choresData.error ?? "Fehler beim Laden der Aufgaben");
@@ -101,6 +107,7 @@ function AufgabenInner() {
       setChores((choresData.chores ?? []).filter((c: Chore) => c.is_active));
       setScores(statsData.scores ?? []);
       setMembers(familyData.members ?? []);
+      if (settingsData?.ok) setMaxPoints(settingsData.settings?.max_points ?? 3);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unbekannter Fehler");
     } finally {
@@ -145,7 +152,6 @@ function AufgabenInner() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Aufgabe wirklich löschen?")) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/chores/${id}`, { method: "DELETE" });
@@ -201,13 +207,32 @@ function AufgabenInner() {
 
   return (
     <div className="section-aufgaben" style={styles.page}>
+      <ConfirmModal
+        open={confirmDeleteId !== null}
+        title="Aufgabe löschen"
+        message="Aufgabe wirklich löschen?"
+        confirmLabel="Löschen"
+        dangerConfirm
+        onConfirm={() => { if (confirmDeleteId) handleDelete(confirmDeleteId); }}
+        onClose={() => setConfirmDeleteId(null)}
+      />
       <div style={styles.container}>
+        {/* Icon */}
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
+          <span style={{
+            width: 104, height: 104, borderRadius: 28,
+            background: "#7c3aed22",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 64,
+          }}>✅</span>
+        </div>
         {/* Header */}
         <div style={styles.headerRow}>
           <div>
             <h1 style={{ ...styles.title, color: ACCENT }}>Aufgaben</h1>
             <p style={styles.subtitle}>Haushaltsaufgaben der Familie</p>
           </div>
+          <Link href="/" style={styles.button}>Home</Link>
         </div>
 
         {/* Error */}
@@ -219,6 +244,73 @@ function AufgabenInner() {
                 Erneut versuchen
               </button>
             </div>
+          </div>
+        ) : null}
+
+        {/* Scoreboard */}
+        {scores.length > 0 ? (
+          <div style={{ marginBottom: 24 }}>
+            <h2
+              style={{
+                fontSize: "var(--font-size-lg)",
+                fontWeight: 700,
+                marginBottom: 14,
+                color: "var(--fg)",
+              }}
+            >
+              Monatliche Punkte
+            </h2>
+            <div style={{ display: "grid", gap: 14 }}>
+              {scores
+                .slice()
+                .sort((a, b) => b.points - a.points)
+                .map((entry, idx) => {
+                  const member = memberById(entry.member_id);
+                  return (
+                    <div key={entry.member_id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span
+                        style={{
+                          fontSize: "var(--font-size-sm)",
+                          fontWeight: 700,
+                          color: idx === 0 ? ACCENT : "var(--fg-muted)",
+                          width: 18,
+                          textAlign: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {idx + 1}
+                      </span>
+                      {member ? (
+                        <Avatar initials={member.initials} color={member.color} size={28} />
+                      ) : null}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: 5,
+                          }}
+                        >
+                          <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 600 }}>
+                            {entry.name}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "var(--font-size-sm)",
+                              fontWeight: 700,
+                              color: idx === 0 ? ACCENT : "var(--fg-muted)",
+                            }}
+                          >
+                            {entry.points} Pkt.
+                          </span>
+                        </div>
+                        <ProgressBar value={entry.points} max={maxScore} />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div style={{ height: 1, background: "var(--border)", margin: "20px 0 0 0" }} />
           </div>
         ) : null}
 
@@ -358,7 +450,7 @@ function AufgabenInner() {
                     }}
                   >
                     <button
-                      onClick={() => handleDelete(chore.id)}
+                      onClick={() => setConfirmDeleteId(chore.id)}
                       disabled={deletingId === chore.id}
                       style={{
                         ...styles.button,
@@ -392,73 +484,6 @@ function AufgabenInner() {
           </div>
         )}
 
-        {/* Scoreboard */}
-        {scores.length > 0 ? (
-          <div style={{ marginTop: 32 }}>
-            <div style={{ height: 1, background: "var(--border)", margin: "0 0 20px 0" }} />
-            <h2
-              style={{
-                fontSize: "var(--font-size-lg)",
-                fontWeight: 700,
-                marginBottom: 14,
-                color: "var(--fg)",
-              }}
-            >
-              Monatliche Punkte
-            </h2>
-            <div style={{ display: "grid", gap: 14 }}>
-              {scores
-                .slice()
-                .sort((a, b) => b.points - a.points)
-                .map((entry, idx) => {
-                  const member = memberById(entry.member_id);
-                  return (
-                    <div key={entry.member_id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span
-                        style={{
-                          fontSize: "var(--font-size-sm)",
-                          fontWeight: 700,
-                          color: idx === 0 ? ACCENT : "var(--fg-muted)",
-                          width: 18,
-                          textAlign: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {idx + 1}
-                      </span>
-                      {member ? (
-                        <Avatar initials={member.initials} color={member.color} size={28} />
-                      ) : null}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            marginBottom: 5,
-                          }}
-                        >
-                          <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 600 }}>
-                            {entry.name}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: "var(--font-size-sm)",
-                              fontWeight: 700,
-                              color: idx === 0 ? ACCENT : "var(--fg-muted)",
-                            }}
-                          >
-                            {entry.points} Pkt.
-                          </span>
-                        </div>
-                        <ProgressBar value={entry.points} max={maxScore} />
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        ) : null}
-
         {/* Bottom padding for FAB */}
         <div style={{ height: 80 }} />
       </div>
@@ -484,39 +509,47 @@ function AufgabenInner() {
         title={`Wer hat "${completeChore?.title ?? ""}" erledigt?`}
         onClose={() => !completing && setCompleteChore(null)}
       >
-        <div style={{ display: "grid", gap: 10 }}>
-          {members.map((member) => (
-            <button
-              key={member.id}
-              onClick={() => handleComplete(member.id)}
-              disabled={completing}
-              style={{
-                ...styles.button,
-                width: "100%",
-                justifyContent: "flex-start",
-                gap: 12,
-                padding: "12px 14px",
-                borderRadius: "var(--radius-md)",
-                fontSize: "var(--font-size-md)",
-              }}
+        {members.length === 0 ? (
+          <div style={styles.col}>
+            <p style={{ fontSize: "var(--font-size-sm)", color: "var(--fg-muted)", margin: 0 }}>
+              Noch keine Familienmitglieder angelegt. Füge sie zuerst in den Einstellungen hinzu.
+            </p>
+            <Link
+              href="/einstellungen/familie"
+              style={{ ...styles.buttonPrimary, textAlign: "center" }}
+              onClick={() => setCompleteChore(null)}
             >
-              <Avatar initials={member.initials} color={member.color} size={32} />
-              <span style={{ fontWeight: 600 }}>{member.name}</span>
-            </button>
-          ))}
-          {completing ? (
-            <div
-              style={{
-                textAlign: "center",
-                fontSize: "var(--font-size-sm)",
-                color: "var(--fg-muted)",
-                marginTop: 4,
-              }}
-            >
-              Speichere…
-            </div>
-          ) : null}
-        </div>
+              Zu den Einstellungen
+            </Link>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {members.map((member) => (
+              <button
+                key={member.id}
+                onClick={() => handleComplete(member.id)}
+                disabled={completing}
+                style={{
+                  ...styles.button,
+                  width: "100%",
+                  justifyContent: "flex-start",
+                  gap: 12,
+                  padding: "12px 14px",
+                  borderRadius: "var(--radius-md)",
+                  fontSize: "var(--font-size-md)",
+                }}
+              >
+                <Avatar initials={member.initials} color={member.color} size={32} />
+                <span style={{ fontWeight: 600 }}>{member.name}</span>
+              </button>
+            ))}
+            {completing ? (
+              <div style={{ textAlign: "center", fontSize: "var(--font-size-sm)", color: "var(--fg-muted)", marginTop: 4 }}>
+                Speichere…
+              </div>
+            ) : null}
+          </div>
+        )}
       </Modal>
 
       {/* New chore modal */}
@@ -617,12 +650,12 @@ function AufgabenInner() {
             <select
               id="chore-points"
               value={newPoints}
-              onChange={(e) => setNewPoints(Number(e.target.value) as 1 | 2 | 3)}
+              onChange={(e) => setNewPoints(Number(e.target.value))}
               style={styles.input}
             >
-              <option value={1}>1 Punkt</option>
-              <option value={2}>2 Punkte</option>
-              <option value={3}>3 Punkte</option>
+              {Array.from({ length: maxPoints }, (_, i) => i + 1).map((p) => (
+                <option key={p} value={p}>{p} {p === 1 ? "Punkt" : "Punkte"}</option>
+              ))}
             </select>
           </div>
         </div>

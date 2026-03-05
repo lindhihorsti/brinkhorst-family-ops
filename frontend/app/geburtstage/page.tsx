@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   BottomNav,
+  BtnLink,
   ConfirmModal,
   Modal,
   Page,
@@ -486,6 +487,10 @@ function GeburtstageInner() {
       <Page
         title="Geburtstage"
         subtitle="Alle Geburtstage im Blick"
+        right={<BtnLink href="/">Home</BtnLink>}
+        navCurrent="/geburtstage"
+        icon="🎂"
+        iconAccent="#db2777"
       >
         {/* ── Heute & Diese Woche ─────────────────────────────────────── */}
         {!loading && upcoming.length > 0 && (
@@ -608,9 +613,6 @@ function GeburtstageInner() {
           + Geburtstag
         </button>
       </div>
-
-      {/* ── Bottom Nav ───────────────────────────────────────────────── */}
-      <BottomNav current="/geburtstage" />
 
       {/* ── Add / Edit Modal ─────────────────────────────────────────── */}
       <BirthdayFormModal

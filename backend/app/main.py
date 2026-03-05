@@ -124,6 +124,17 @@ APP_STATE_SETTINGS_TELEGRAM = "settings_telegram"
 APP_STATE_SETTINGS_SHOP = "settings_shop"
 APP_STATE_SETTINGS_ACTIVITIES = "settings_activities"
 APP_STATE_TELEGRAM_LAST_CHAT_ID = "telegram_last_chat_id"
+APP_STATE_PINBOARD_CATEGORIES = "pinboard_categories"
+APP_STATE_CHORE_SETTINGS = "chore_settings"
+
+DEFAULT_PINBOARD_CATEGORIES = [
+    {"id": "allgemein", "label": "Allgemein", "color": "#6b7280"},
+    {"id": "schule",    "label": "Schule",    "color": "#3b82f6"},
+    {"id": "einkauf",   "label": "Einkauf",   "color": "#10b981"},
+    {"id": "wichtig",   "label": "Wichtig",   "color": "#ef4444"},
+    {"id": "event",     "label": "Event",     "color": "#8b5cf6"},
+]
+DEFAULT_CHORE_SETTINGS = {"max_points": 3}
 
 IMPORT_FETCH_MAX_BYTES = 3 * 1024 * 1024
 IMPORT_FETCH_MAX_REDIRECTS = 5
@@ -2546,12 +2557,8 @@ def api_list_chores():
             select(ChoreTask).where(ChoreTask.is_active == True).order_by(ChoreTask.created_at)  # noqa
         ))
         # Attach today's completions
-        today_str = date.today().isoformat()
         completions_today = list(session.exec(
-            select(ChoreCompletion).where(
-                sql_text("completed_on::text = :d"),
-                {"d": today_str}
-            )
+            select(ChoreCompletion).where(ChoreCompletion.completed_on == date.today())
         ))
         completed_today_ids = {str(c.chore_id) for c in completions_today}
 
@@ -2660,11 +2667,50 @@ def api_chore_stats():
     }
 
 
+class ChoreSettingsPayload(BaseModel):
+    max_points: int
+
+
+@app.get("/api/chores/settings")
+def api_get_chore_settings():
+    data = _db_get_app_state_json(APP_STATE_CHORE_SETTINGS, DEFAULT_CHORE_SETTINGS)
+    return {"ok": True, "settings": data}
+
+
+@app.put("/api/chores/settings")
+def api_put_chore_settings(payload: ChoreSettingsPayload):
+    max_points = max(1, min(10, payload.max_points))
+    data = {"max_points": max_points}
+    _db_set_app_state_value(APP_STATE_CHORE_SETTINGS, json.dumps(data))
+    return {"ok": True, "settings": data}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PREMIUM: Pinboard
 # ─────────────────────────────────────────────────────────────────────────────
 
 PINBOARD_TAGS = {"allgemein", "schule", "einkauf", "wichtig", "event"}
+
+
+class PinboardCategoriesPayload(BaseModel):
+    categories: List[Dict[str, Any]]
+
+
+@app.get("/api/pinboard/categories")
+def api_get_pinboard_categories():
+    data = _db_get_app_state_json(APP_STATE_PINBOARD_CATEGORIES, DEFAULT_PINBOARD_CATEGORIES)
+    return {"ok": True, "categories": data}
+
+
+@app.put("/api/pinboard/categories")
+def api_put_pinboard_categories(payload: PinboardCategoriesPayload):
+    cleaned = [
+        {"id": str(c.get("id", "")), "label": str(c.get("label", "")), "color": str(c.get("color", "#6b7280"))}
+        for c in payload.categories
+        if c.get("id") and c.get("label")
+    ]
+    _db_set_app_state_value(APP_STATE_PINBOARD_CATEGORIES, json.dumps(cleaned, ensure_ascii=False))
+    return {"ok": True, "categories": cleaned}
 
 
 class PinboardNoteCreate(BaseModel):
@@ -2715,7 +2761,9 @@ def api_create_pinboard_note(payload: PinboardNoteCreate):
     content = (payload.content or "").strip()
     if not content:
         raise HTTPException(400, "content required")
-    tag = payload.tag if payload.tag in PINBOARD_TAGS else "allgemein"
+    dynamic_ids = {c["id"] for c in _db_get_app_state_json(APP_STATE_PINBOARD_CATEGORIES, DEFAULT_PINBOARD_CATEGORIES)}
+    all_valid_tags = PINBOARD_TAGS | dynamic_ids
+    tag = payload.tag if payload.tag in all_valid_tags else "allgemein"
     expires = None
     if payload.expires_on:
         try:

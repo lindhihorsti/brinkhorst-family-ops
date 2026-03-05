@@ -289,7 +289,7 @@ export default function WeeklyPlanPage() {
   const perRecipe = shopData?.per_recipe ?? [];
 
   return (
-    <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Küche</BtnLink>} navCurrent="/kueche">
+    <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Küche</BtnLink>} navCurrent="/kueche" icon="📅" iconAccent="#e8673a">
       <div style={{ ...cardStyles.section, marginBottom: 18 }}>
         <div style={cardStyles.buttonRow}>
           <button style={styles.buttonPrimary} onClick={handlePlan} disabled={planLoading}>

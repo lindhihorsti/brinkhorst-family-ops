@@ -150,7 +150,8 @@ export const api = {
       body: JSON.stringify({ rating }),
     }),
 
-  listFamilyMembers: () => http<FamilyMember[]>(`/api/family`),
+  listFamilyMembers: () =>
+    http<{ ok: boolean; members: FamilyMember[] }>(`/api/family`).then((r) => r.members ?? []),
 
   createFamilyMember: (payload: Omit<FamilyMember, "id" | "created_at">) =>
     http<FamilyMember>(`/api/family`, { method: "POST", body: JSON.stringify(payload) }),

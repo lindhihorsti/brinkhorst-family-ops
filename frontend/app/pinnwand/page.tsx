@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   BottomNav,
+  BtnLink,
   ConfirmModal,
   Modal,
   Page,
@@ -13,7 +14,9 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Tag = "allgemein" | "schule" | "einkauf" | "wichtig" | "event";
+type Tag = string;
+
+type Category = { id: string; label: string; color: string };
 
 interface Note {
   id: string;
@@ -29,31 +32,23 @@ interface Note {
 
 const ACCENT = "#d97706";
 
-const TAGS: Tag[] = ["allgemein", "schule", "einkauf", "wichtig", "event"];
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: "allgemein", label: "Allgemein", color: "#6b7280" },
+  { id: "schule",    label: "Schule",    color: "#3b82f6" },
+  { id: "einkauf",   label: "Einkauf",   color: "#10b981" },
+  { id: "wichtig",   label: "Wichtig",   color: "#ef4444" },
+  { id: "event",     label: "Event",     color: "#8b5cf6" },
+];
 
-const TAG_LABELS: Record<Tag, string> = {
-  allgemein: "Allgemein",
-  schule: "Schule",
-  einkauf: "Einkauf",
-  wichtig: "Wichtig",
-  event: "Event",
-};
-
-const TAG_BG: Record<Tag, string> = {
-  allgemein: "#f7f7f7",
-  schule: "#eff6ff",
-  einkauf: "#f0fdf4",
-  wichtig: "#fff1f2",
-  event: "#faf5ff",
-};
-
-const TAG_COLOR: Record<Tag, string> = {
-  allgemein: "#6b7280",
-  schule: "#2563eb",
-  einkauf: "#16a34a",
-  wichtig: "#dc2626",
-  event: "#7c3aed",
-};
+function catColor(cats: Category[], id: string): string {
+  return cats.find((c) => c.id === id)?.color ?? "#6b7280";
+}
+function catLabel(cats: Category[], id: string): string {
+  return cats.find((c) => c.id === id)?.label ?? id;
+}
+function catBg(color: string): string {
+  return color + "18";
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,7 +70,8 @@ function relativeTime(dateStr: string): string {
 
 // ─── Tag chip ────────────────────────────────────────────────────────────────
 
-function TagChip({ tag }: { tag: Tag }) {
+function TagChip({ tag, cats }: { tag: Tag; cats: Category[] }) {
+  const color = catColor(cats, tag);
   return (
     <span
       style={{
@@ -85,26 +81,27 @@ function TagChip({ tag }: { tag: Tag }) {
         padding: "2px 9px",
         fontSize: "var(--font-size-xs)",
         fontWeight: 600,
-        color: TAG_COLOR[tag],
-        background: TAG_BG[tag],
-        border: `1px solid ${TAG_COLOR[tag]}33`,
+        color,
+        background: catBg(color),
+        border: `1px solid ${color}33`,
       }}
     >
-      {TAG_LABELS[tag]}
+      {catLabel(cats, tag)}
     </span>
   );
 }
 
 // ─── Note card ───────────────────────────────────────────────────────────────
 
-function NoteCard({ note, onDelete }: { note: Note; onDelete: (id: string) => void }) {
+function NoteCard({ note, cats, onDelete }: { note: Note; cats: Category[]; onDelete: (id: string) => void }) {
+  const color = catColor(cats, note.tag);
   return (
     <div
       style={{
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
         padding: "14px 14px 12px",
-        background: TAG_BG[note.tag],
+        background: catBg(color),
         boxShadow: "var(--shadow-sm)",
         display: "flex",
         flexDirection: "column",
@@ -141,7 +138,7 @@ function NoteCard({ note, onDelete }: { note: Note; onDelete: (id: string) => vo
         </button>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-        <TagChip tag={note.tag} />
+        <TagChip tag={note.tag} cats={cats} />
         <span style={{ fontSize: "var(--font-size-xs)", color: "var(--fg-muted)" }}>
           {note.author_name ? `${note.author_name} · ` : ""}
           {relativeTime(note.created_at)}
@@ -157,6 +154,7 @@ function PinnwandInner() {
   const { toast } = useToast();
 
   const [notes, setNotes] = useState<Note[]>([]);
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [filterTag, setFilterTag] = useState<Tag | null>(null);
@@ -174,19 +172,26 @@ function PinnwandInner() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ── Load notes ──
+  // ── Load notes + categories ──
 
   const loadNotes = async () => {
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch("/api/pinboard");
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.ok) {
-        setErr(data?.error ?? "Fehler beim Laden");
+      const [notesRes, catsRes] = await Promise.all([
+        fetch("/api/pinboard"),
+        fetch("/api/pinboard/categories"),
+      ]);
+      const [notesData, catsData] = await Promise.all([
+        notesRes.json().catch(() => null),
+        catsRes.json().catch(() => null),
+      ]);
+      if (!notesRes.ok || !notesData?.ok) {
+        setErr(notesData?.error ?? "Fehler beim Laden");
         return;
       }
-      setNotes(data.notes ?? []);
+      setNotes(notesData.notes ?? []);
+      if (catsRes.ok && catsData?.ok) setCategories(catsData.categories ?? DEFAULT_CATEGORIES);
     } catch {
       setErr("Netzwerkfehler");
     } finally {
@@ -284,6 +289,10 @@ function PinnwandInner() {
       <Page
         title="Pinnwand"
         subtitle="Notizen & Nachrichten für die Familie"
+        right={<BtnLink href="/">Home</BtnLink>}
+        navCurrent="/pinnwand"
+        icon="📌"
+        iconAccent="#d97706"
       >
         {/* Filter chips */}
         <div
@@ -305,35 +314,38 @@ function PinnwandInner() {
           >
             Alle
           </span>
-          {TAGS.map((tag) => (
-            <span
-              key={tag}
-              onClick={() => setFilterTag(filterTag === tag ? null : tag)}
-              role="button"
-              style={
-                filterTag === tag
-                  ? {
-                      display: "inline-flex",
-                      alignItems: "center",
-                      borderRadius: "var(--radius-pill)",
-                      padding: "4px 10px",
-                      fontSize: "var(--font-size-xs)",
-                      fontWeight: 700,
-                      color: TAG_COLOR[tag],
-                      background: TAG_BG[tag],
-                      border: `2px solid ${TAG_COLOR[tag]}`,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }
-                  : {
-                      ...styles.chip,
-                      cursor: "pointer",
-                    }
-              }
-            >
-              {TAG_LABELS[tag]}
-            </span>
-          ))}
+          {categories.map((cat) => {
+            const active = filterTag === cat.id;
+            return (
+              <span
+                key={cat.id}
+                onClick={() => setFilterTag(active ? null : cat.id)}
+                role="button"
+                style={
+                  active
+                    ? {
+                        display: "inline-flex",
+                        alignItems: "center",
+                        borderRadius: "var(--radius-pill)",
+                        padding: "4px 10px",
+                        fontSize: "var(--font-size-xs)",
+                        fontWeight: 700,
+                        color: cat.color,
+                        background: catBg(cat.color),
+                        border: `2px solid ${cat.color}`,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }
+                    : {
+                        ...styles.chip,
+                        cursor: "pointer",
+                      }
+                }
+              >
+                {cat.label}
+              </span>
+            );
+          })}
         </div>
 
         {/* Error */}
@@ -356,7 +368,7 @@ function PinnwandInner() {
         ) : (
           <div style={{ display: "grid", gap: 12, paddingBottom: 80 }}>
             {visible.map((note) => (
-              <NoteCard key={note.id} note={note} onDelete={confirmDelete} />
+              <NoteCard key={note.id} note={note} cats={categories} onDelete={confirmDelete} />
             ))}
           </div>
         )}
@@ -376,9 +388,6 @@ function PinnwandInner() {
           </button>
         </div>
       </Page>
-
-      {/* BottomNav */}
-      <BottomNav current="/pinnwand" />
 
       {/* New note modal */}
       <Modal
@@ -433,10 +442,10 @@ function PinnwandInner() {
           <div>
             <label style={styles.label}>Kategorie</label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {TAGS.map((tag) => (
+              {categories.map((cat) => (
                 <span
-                  key={tag}
-                  onClick={() => setFormTag(tag)}
+                  key={cat.id}
+                  onClick={() => setFormTag(cat.id)}
                   role="button"
                   style={{
                     display: "inline-flex",
@@ -446,13 +455,13 @@ function PinnwandInner() {
                     fontSize: "var(--font-size-xs)",
                     fontWeight: 600,
                     cursor: "pointer",
-                    color: formTag === tag ? "#fff" : TAG_COLOR[tag],
-                    background: formTag === tag ? TAG_COLOR[tag] : TAG_BG[tag],
-                    border: `1px solid ${TAG_COLOR[tag]}`,
+                    color: formTag === cat.id ? "#fff" : cat.color,
+                    background: formTag === cat.id ? cat.color : catBg(cat.color),
+                    border: `1px solid ${cat.color}`,
                     transition: "background 0.15s",
                   }}
                 >
-                  {TAG_LABELS[tag]}
+                  {cat.label}
                 </span>
               ))}
             </div>
