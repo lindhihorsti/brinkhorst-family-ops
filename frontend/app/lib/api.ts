@@ -117,7 +117,9 @@ export type Expense = {
   title: string;
   amount: number;
   paid_by: string;
+  paid_by_member_id?: string | null;
   split_among: string[];
+  split_among_member_ids?: string[];
   category: string;
   date: string;
   notes?: string | null;
@@ -128,7 +130,9 @@ export type ExpenseCreate = {
   title: string;
   amount: number;
   paid_by: string;
+  paid_by_member_id?: string | null;
   split_among: string[];
+  split_among_member_ids?: string[];
   category: string;
   date: string;
   notes?: string | null;

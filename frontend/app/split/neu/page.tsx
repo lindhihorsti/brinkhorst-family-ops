@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api, type FamilyMember } from "../../lib/api";
 import { getErrorMessage } from "../../lib/errors";
 import { BtnLink, Page, styles } from "../../lib/ui";
+import { createExpensePayload, defaultExpenseSelection } from "../expense-form.mjs";
 
 const CATEGORIES = ["Haushalt", "Essen", "Freizeit", "Transport", "Sonstiges"];
 
@@ -18,8 +19,8 @@ export default function NeuePage() {
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
-  const [paidBy, setPaidBy] = useState("");
-  const [splitAmong, setSplitAmong] = useState<string[]>([]);
+  const [paidById, setPaidById] = useState("");
+  const [splitAmongIds, setSplitAmongIds] = useState<string[]>([]);
   const [category, setCategory] = useState("Sonstiges");
   const [date, setDate] = useState(todayIso());
   const [notes, setNotes] = useState("");
@@ -30,16 +31,15 @@ export default function NeuePage() {
     api.listFamilyMembers().then((ms) => {
       const active = ms.filter((m) => m.is_active);
       setMembers(active);
-      if (active.length > 0) {
-        setPaidBy(active[0].name);
-        setSplitAmong(active.map((m) => m.name));
-      }
+      const defaults = defaultExpenseSelection(active);
+      setPaidById(defaults.paidById);
+      setSplitAmongIds(defaults.splitAmongIds);
     }).catch(() => {});
   }, []);
 
-  const toggleSplit = (name: string) => {
-    setSplitAmong((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+  const toggleSplit = (memberId: string) => {
+    setSplitAmongIds((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
     );
   };
 
@@ -48,19 +48,20 @@ export default function NeuePage() {
     if (!title.trim()) { setErr("Titel fehlt."); return; }
     const amountNum = parseFloat(amount.replace(",", "."));
     if (!amount || isNaN(amountNum) || amountNum <= 0) { setErr("Betrag ungültig."); return; }
-    if (!paidBy) { setErr("Wer hat gezahlt?"); return; }
-    if (splitAmong.length === 0) { setErr("Mindestens eine Person für Aufteilung wählen."); return; }
+    if (!paidById) { setErr("Wer hat gezahlt?"); return; }
+    if (splitAmongIds.length === 0) { setErr("Mindestens eine Person für Aufteilung wählen."); return; }
     setSaving(true);
     try {
-      await api.createExpense({
+      await api.createExpense(createExpensePayload({
+        members,
         title: title.trim(),
         amount: amountNum,
-        paid_by: paidBy,
-        split_among: splitAmong,
+        paidById,
+        splitAmongIds,
         category,
         date,
         notes: notes.trim() || null,
-      });
+      }));
       router.push("/split");
     } catch (e) {
       setErr(getErrorMessage(e, "Fehler beim Speichern"));
@@ -71,8 +72,8 @@ export default function NeuePage() {
 
   const perPerson = (() => {
     const n = parseFloat(amount.replace(",", "."));
-    if (!n || isNaN(n) || splitAmong.length === 0) return null;
-    return (n / splitAmong.length).toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!n || isNaN(n) || splitAmongIds.length === 0) return null;
+    return (n / splitAmongIds.length).toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   })();
 
   return (
@@ -140,15 +141,15 @@ export default function NeuePage() {
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => setPaidBy(m.name)}
+                    onClick={() => setPaidById(m.id)}
                     style={{
                       padding: "8px 14px",
                       borderRadius: 999,
-                      border: `1.5px solid ${paidBy === m.name ? "var(--split-accent)" : "var(--border)"}`,
-                      background: paidBy === m.name ? "#f0fdf4" : "var(--bg)",
-                      fontWeight: paidBy === m.name ? 700 : 400,
+                      border: `1.5px solid ${paidById === m.id ? "var(--split-accent)" : "var(--border)"}`,
+                      background: paidById === m.id ? "#f0fdf4" : "var(--bg)",
+                      fontWeight: paidById === m.id ? 700 : 400,
                       fontSize: 14,
-                      color: paidBy === m.name ? "var(--split-accent)" : "var(--fg)",
+                      color: paidById === m.id ? "var(--split-accent)" : "var(--fg)",
                       cursor: "pointer",
                     }}
                   >
@@ -162,12 +163,12 @@ export default function NeuePage() {
               <label style={styles.small}>Aufgeteilt unter</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                 {members.map((m) => {
-                  const selected = splitAmong.includes(m.name);
+                  const selected = splitAmongIds.includes(m.id);
                   return (
                     <button
                       key={m.id}
                       type="button"
-                      onClick={() => toggleSplit(m.name)}
+                      onClick={() => toggleSplit(m.id)}
                       style={{
                         padding: "8px 14px",
                         borderRadius: 999,
