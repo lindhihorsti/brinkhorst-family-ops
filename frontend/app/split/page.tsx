@@ -31,7 +31,7 @@ function fmtDate(iso: string) {
 // ─── Inner page ──────────────────────────────────────────────────────────────
 
 function SplitContent() {
-  const { addToast } = useToast();
+  const { toast: addToast } = useToast();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balance, setBalance] = useState<BalanceResult | null>(null);
   const [loading, setLoading] = useState(true);
