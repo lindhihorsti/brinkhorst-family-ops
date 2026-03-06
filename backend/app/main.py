@@ -7,13 +7,20 @@ import asyncio
 import ipaddress
 import socket
 import hashlib
-from typing import Dict, Any, Optional, List, Tuple, Literal
+from typing import Dict, Any, Optional, List, Tuple, Literal, Mapping
 from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit, urljoin
 
 import httpx
 from sqlmodel import create_engine, Session, SQLModel, text as sql_text, select
 
+from app.domain_utils import (
+    age_on_next_birthday,
+    birthday_for_year,
+    compute_expense_balances,
+    days_until_birthday,
+    expense_party_label,
+)
 from app.models import Recipe, AppState, FamilyMember, ChoreTask, ChoreCompletion, PinboardNote, Birthday, MealHistory, Expense
 from app.services import swap_service
 from app.services.shop_output import (
@@ -55,6 +62,20 @@ AUTO_MIGRATE = os.getenv("AUTO_MIGRATE", "0").strip() == "1"
 if engine and AUTO_MIGRATE:
     from app import models  # noqa: F401  (ensures all tables are registered)
     SQLModel.metadata.create_all(engine)
+
+    with engine.connect() as conn:
+        # Local dev keeps AUTO_MIGRATE enabled; additive ALTERs bridge existing volumes
+        # that were created before the latest SQL migration was added.
+        conn.execute(
+            sql_text(
+                """
+                ALTER TABLE IF EXISTS public.expenses
+                    ADD COLUMN IF NOT EXISTS paid_by_member_id UUID,
+                    ADD COLUMN IF NOT EXISTS split_among_member_ids UUID[] NOT NULL DEFAULT '{}'
+                """
+            )
+        )
+        conn.commit()
 
 GIT_SHA = os.getenv("GIT_SHA", "local").strip() or "local"
 
@@ -2379,9 +2400,9 @@ async def telegram_webhook(request: Request):
                     all_bdays = list(session.exec(select(Birthday)).all())
                     upcoming = []
                     for b in all_bdays:
-                        bday_this_year = b.birth_date.replace(year=today.year)
+                        bday_this_year = birthday_for_year(b.birth_date, today.year)
                         if bday_this_year < today:
-                            bday_this_year = bday_this_year.replace(year=today.year + 1)
+                            bday_this_year = birthday_for_year(b.birth_date, today.year + 1)
                         diff = (bday_this_year - today).days
                         if 0 <= diff <= 14:
                             upcoming.append((diff, b.name))
@@ -2410,9 +2431,9 @@ async def telegram_webhook(request: Request):
         lines = ["🎂 Geburtstage (nächste 30 Tage):"]
         upcoming = []
         for b in all_bdays:
-            bday_this_year = b.birth_date.replace(year=today.year)
+            bday_this_year = birthday_for_year(b.birth_date, today.year)
             if bday_this_year < today:
-                bday_this_year = bday_this_year.replace(year=today.year + 1)
+                bday_this_year = birthday_for_year(b.birth_date, today.year + 1)
             diff = (bday_this_year - today).days
             if diff <= 30:
                 upcoming.append((diff, b.name, bday_this_year.strftime("%d.%m.")))
@@ -2824,20 +2845,6 @@ class BirthdayUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-def _days_until_birthday(birth_date: date, today: date) -> int:
-    bday = birth_date.replace(year=today.year)
-    if bday < today:
-        bday = bday.replace(year=today.year + 1)
-    return (bday - today).days
-
-
-def _age_on_birthday(birth_date: date, today: date) -> int:
-    bday_this_year = birth_date.replace(year=today.year)
-    if bday_this_year < today:
-        return today.year - birth_date.year + 1
-    return today.year - birth_date.year
-
-
 @app.get("/api/birthdays")
 def api_list_birthdays():
     if engine is None:
@@ -2847,7 +2854,7 @@ def api_list_birthdays():
         all_bdays = list(session.exec(select(Birthday).order_by(Birthday.name)))
     result = []
     for b in all_bdays:
-        days_until = _days_until_birthday(b.birth_date, today)
+        days_until = days_until_birthday(b.birth_date, today)
         result.append({
             "id": str(b.id),
             "name": b.name,
@@ -2857,7 +2864,7 @@ def api_list_birthdays():
             "notes": b.notes,
             "member_id": str(b.member_id) if b.member_id else None,
             "days_until": days_until,
-            "age_next": _age_on_birthday(b.birth_date, today),
+            "age_next": age_on_next_birthday(b.birth_date, today),
             "created_at": b.created_at.isoformat(),
         })
     result.sort(key=lambda x: x["days_until"])
@@ -3161,24 +3168,93 @@ class ExpenseCreate(BaseModel):
     amount: float
     paid_by: str
     split_among: List[str]
+    paid_by_member_id: Optional[str] = None
+    split_among_member_ids: List[str] = []
     category: str = "Sonstiges"
     date: Optional[str] = None
     notes: Optional[str] = None
 
 
-def _compute_balances(rows) -> Dict[str, float]:
-    net: Dict[str, float] = {}
+def _family_member_lookup() -> Dict[str, str]:
+    if engine is None:
+        return {}
+    with Session(engine) as session:
+        members = list(session.exec(select(FamilyMember).where(FamilyMember.is_active == True)))  # noqa
+    return {str(member.id): member.name for member in members if member.id}
+
+
+def _parse_uuid_value(raw: Optional[str], field_name: str) -> Optional[UUID]:
+    if not raw:
+        return None
+    try:
+        return UUID(raw)
+    except ValueError:
+        raise HTTPException(400, f"{field_name} muss eine gültige UUID sein")
+
+
+def _parse_uuid_list(values: List[str], field_name: str) -> List[UUID]:
+    parsed: List[UUID] = []
+    for value in values:
+        try:
+            parsed.append(UUID(value))
+        except ValueError:
+            raise HTTPException(400, f"{field_name} enthält eine ungültige UUID")
+    return parsed
+
+
+def _serialize_expense_row(row: Mapping[str, Any], member_lookup: Dict[str, str]) -> Dict[str, Any]:
+    paid_by_member_id = str(row["paid_by_member_id"]) if row.get("paid_by_member_id") else None
+    split_member_ids = [str(member_id) for member_id in list(row.get("split_among_member_ids") or [])]
+    split_names_raw = list(row.get("split_among") or [])
+
+    paid_by_label = expense_party_label(paid_by_member_id, row.get("paid_by"), member_lookup)
+    split_labels: List[str] = []
+    if split_member_ids:
+        for idx, member_id in enumerate(split_member_ids):
+            fallback_name = split_names_raw[idx] if idx < len(split_names_raw) else None
+            split_labels.append(expense_party_label(member_id, fallback_name, member_lookup))
+    else:
+        split_labels = split_names_raw
+
+    return {
+        "id": str(row["id"]),
+        "title": row["title"],
+        "amount": float(row["amount"]),
+        "paid_by": paid_by_label,
+        "paid_by_member_id": paid_by_member_id,
+        "split_among": split_labels,
+        "split_among_member_ids": split_member_ids,
+        "category": row["category"],
+        "date": row["date"].isoformat() if row["date"] else None,
+        "notes": row["notes"],
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+    }
+
+
+def _aggregate_expense_person_totals(rows, member_lookup: Dict[str, str]) -> List[Dict[str, Any]]:
+    totals: Dict[str, float] = {}
     for row in rows:
-        amount = float(row["amount"])
-        paid_by = row["paid_by"]
-        split_among = list(row["split_among"] or [])
-        if not split_among:
-            continue
-        share = amount / len(split_among)
-        net[paid_by] = net.get(paid_by, 0.0) + amount
-        for person in split_among:
-            net[person] = net.get(person, 0.0) - share
-    return {p: round(v, 2) for p, v in net.items()}
+        member_id = str(row["paid_by_member_id"]) if row.get("paid_by_member_id") else None
+        label = expense_party_label(member_id, row.get("paid_by"), member_lookup)
+        totals[label] = round(totals.get(label, 0.0) + float(row["amount"]), 2)
+    return [
+        {"person": person, "total": total}
+        for person, total in sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def _aggregate_expense_person_monthly(rows, member_lookup: Dict[str, str]) -> List[Dict[str, Any]]:
+    totals: Dict[Tuple[str, str], float] = {}
+    for row in rows:
+        member_id = str(row["paid_by_member_id"]) if row.get("paid_by_member_id") else None
+        label = expense_party_label(member_id, row.get("paid_by"), member_lookup)
+        month = row["month"]
+        key = (month, label)
+        totals[key] = round(totals.get(key, 0.0) + float(row["amount"]), 2)
+    return [
+        {"month": month, "person": person, "total": total}
+        for (month, person), total in sorted(totals.items(), key=lambda item: (item[0][0], item[0][1]))
+    ]
 
 
 def _simplify_debts(net: Dict[str, float]) -> List[Dict[str, Any]]:
@@ -3205,10 +3281,11 @@ def _simplify_debts(net: Dict[str, float]) -> List[Dict[str, Any]]:
 def api_list_expenses(limit: int = 200):
     if engine is None:
         raise HTTPException(500, "DATABASE_URL missing")
+    member_lookup = _family_member_lookup()
     with engine.connect() as conn:
         rows = conn.execute(
             sql_text("""
-                SELECT id, title, amount, paid_by, split_among, category, date, notes, created_at
+                SELECT id, title, amount, paid_by, paid_by_member_id, split_among, split_among_member_ids, category, date, notes, created_at
                 FROM public.expenses
                 ORDER BY date DESC, created_at DESC
                 LIMIT :lim
@@ -3217,20 +3294,7 @@ def api_list_expenses(limit: int = 200):
         ).mappings().fetchall()
     return {
         "ok": True,
-        "expenses": [
-            {
-                "id": str(r["id"]),
-                "title": r["title"],
-                "amount": float(r["amount"]),
-                "paid_by": r["paid_by"],
-                "split_among": list(r["split_among"] or []),
-                "category": r["category"],
-                "date": r["date"].isoformat() if r["date"] else None,
-                "notes": r["notes"],
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            }
-            for r in rows
-        ],
+        "expenses": [_serialize_expense_row(r, member_lookup) for r in rows],
     }
 
 
@@ -3246,6 +3310,8 @@ def api_create_expense(payload: ExpenseCreate):
         raise HTTPException(400, "paid_by darf nicht leer sein")
     if not payload.split_among:
         raise HTTPException(400, "split_among darf nicht leer sein")
+    if payload.split_among_member_ids and len(payload.split_among_member_ids) != len(payload.split_among):
+        raise HTTPException(400, "split_among_member_ids muss zur split_among-Liste passen")
     category = payload.category if payload.category in EXPENSE_CATEGORIES else "Sonstiges"
     expense_date = date.today()
     if payload.date:
@@ -3253,11 +3319,15 @@ def api_create_expense(payload: ExpenseCreate):
             expense_date = date.fromisoformat(payload.date)
         except ValueError:
             raise HTTPException(400, "Ungültiges Datum")
+    paid_by_member_id = _parse_uuid_value(payload.paid_by_member_id, "paid_by_member_id")
+    split_member_ids = _parse_uuid_list(payload.split_among_member_ids or [], "split_among_member_ids")
     entry = Expense(
         title=payload.title.strip(),
         amount=payload.amount,
         paid_by=payload.paid_by.strip(),
+        paid_by_member_id=paid_by_member_id,
         split_among=payload.split_among,
+        split_among_member_ids=split_member_ids,
         category=category,
         expense_date=expense_date,
         notes=payload.notes,
@@ -3266,19 +3336,25 @@ def api_create_expense(payload: ExpenseCreate):
         session.add(entry)
         session.commit()
         session.refresh(entry)
+    member_lookup = _family_member_lookup()
     return {
         "ok": True,
-        "expense": {
-            "id": str(entry.id),
-            "title": entry.title,
-            "amount": float(entry.amount),
-            "paid_by": entry.paid_by,
-            "split_among": entry.split_among,
-            "category": entry.category,
-            "date": entry.expense_date.isoformat() if entry.expense_date else None,
-            "notes": entry.notes,
-            "created_at": entry.created_at.isoformat() if entry.created_at else None,
-        },
+        "expense": _serialize_expense_row(
+            {
+                "id": entry.id,
+                "title": entry.title,
+                "amount": entry.amount,
+                "paid_by": entry.paid_by,
+                "paid_by_member_id": entry.paid_by_member_id,
+                "split_among": entry.split_among,
+                "split_among_member_ids": entry.split_among_member_ids,
+                "category": entry.category,
+                "date": entry.expense_date,
+                "notes": entry.notes,
+                "created_at": entry.created_at,
+            },
+            member_lookup,
+        ),
     }
 
 
@@ -3299,11 +3375,12 @@ def api_delete_expense(expense_id: UUID):
 def api_expenses_balance():
     if engine is None:
         raise HTTPException(500, "DATABASE_URL missing")
+    member_lookup = _family_member_lookup()
     with engine.connect() as conn:
         rows = conn.execute(
-            sql_text("SELECT amount, paid_by, split_among FROM public.expenses"),
+            sql_text("SELECT amount, paid_by, paid_by_member_id, split_among, split_among_member_ids FROM public.expenses"),
         ).mappings().fetchall()
-    net = _compute_balances(rows)
+    net = compute_expense_balances(rows, member_lookup)
     debts = _simplify_debts(net)
     return {"ok": True, "net_balances": net, "debts": debts}
 
@@ -3312,6 +3389,7 @@ def api_expenses_balance():
 def api_expenses_report():
     if engine is None:
         raise HTTPException(500, "DATABASE_URL missing")
+    member_lookup = _family_member_lookup()
     with engine.connect() as conn:
         by_cat = conn.execute(
             sql_text("""
@@ -3335,11 +3413,8 @@ def api_expenses_report():
 
         by_person_total = conn.execute(
             sql_text("""
-                SELECT paid_by,
-                       ROUND(SUM(amount)::numeric, 2) AS total
+                SELECT paid_by, paid_by_member_id, amount
                 FROM public.expenses
-                GROUP BY paid_by
-                ORDER BY total DESC
             """),
         ).mappings().fetchall()
 
@@ -3347,11 +3422,10 @@ def api_expenses_report():
             sql_text("""
                 SELECT to_char(date, 'YYYY-MM') AS month,
                        paid_by,
-                       ROUND(SUM(amount)::numeric, 2) AS total
+                       paid_by_member_id,
+                       amount
                 FROM public.expenses
                 WHERE date >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
-                GROUP BY month, paid_by
-                ORDER BY month, paid_by
             """),
         ).mappings().fetchall()
 
@@ -3372,22 +3446,19 @@ def api_expenses_report():
         ).scalar_one()
 
         all_exp = conn.execute(
-            sql_text("SELECT amount, paid_by, split_among FROM public.expenses"),
+            sql_text("SELECT amount, paid_by, paid_by_member_id, split_among, split_among_member_ids FROM public.expenses"),
         ).mappings().fetchall()
 
-    net = _compute_balances(all_exp)
+    net = compute_expense_balances(all_exp, member_lookup)
     debts = _simplify_debts(net)
-    open_balance = max((d["amount"] for d in debts), default=0.0)
+    open_balance = round(sum(d["amount"] for d in debts), 2)
 
     return {
         "ok": True,
         "by_category": [{"category": r["category"], "total": float(r["total"])} for r in by_cat],
-        "by_person_total": [{"person": r["paid_by"], "total": float(r["total"])} for r in by_person_total],
+        "by_person_total": _aggregate_expense_person_totals(by_person_total, member_lookup),
         "monthly_totals": [{"month": r["month"], "total": float(r["total"])} for r in monthly],
-        "by_person_monthly": [
-            {"month": r["month"], "person": r["paid_by"], "total": float(r["total"])}
-            for r in by_person_monthly
-        ],
+        "by_person_monthly": _aggregate_expense_person_monthly(by_person_monthly, member_lookup),
         "summary": {
             "total_month": float(month_total),
             "total_all": float(all_total),

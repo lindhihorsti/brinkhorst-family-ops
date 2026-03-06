@@ -147,9 +147,14 @@ class Expense(SQLModel, table=True):
     title: str
     amount: float = Field(sa_column=Column(Numeric(10, 2), nullable=False))
     paid_by: str
+    paid_by_member_id: Optional[UUID] = Field(default=None, sa_column=Column(PG_UUID(as_uuid=True), nullable=True))
     split_among: List[str] = Field(
         default_factory=list,
         sa_column=Column(ARRAY(String), nullable=False, server_default="{}")
+    )
+    split_among_member_ids: List[UUID] = Field(
+        default_factory=list,
+        sa_column=Column(ARRAY(PG_UUID(as_uuid=True)), nullable=False, server_default="{}")
     )
     category: str = "Sonstiges"
     expense_date: date = Field(
