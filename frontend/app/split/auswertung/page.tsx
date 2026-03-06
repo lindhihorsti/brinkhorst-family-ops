@@ -107,18 +107,17 @@ function MonthlyBarChart({ data }: { data: { label: string; value: number }[] })
         {data.map((d, i) => (
           <div
             key={i}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer" }}
             onClick={() => setSelected(selected === i ? null : i)}
-          >
-            <div style={{
-              width: "100%",
-              height: d.value > 0 ? `${(d.value / max) * 100}%` : "2px",
-              background: selected === i ? "#059669" : "#05966955",
+            style={{
+              flex: 1,
+              height: d.value > 0 ? `${(d.value / max) * 100}%` : 2,
+              minHeight: d.value > 0 ? 4 : 2,
+              background: selected === i ? "#059669" : "#05966966",
               borderRadius: "3px 3px 0 0",
               transition: "background 0.15s",
-              minHeight: d.value > 0 ? 4 : 2,
-            }} />
-          </div>
+              cursor: "pointer",
+            }}
+          />
         ))}
       </div>
       <div style={{ display: "flex", gap: 3 }}>
