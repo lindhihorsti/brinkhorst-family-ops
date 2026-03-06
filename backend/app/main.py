@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urljoin
 import httpx
 from sqlmodel import create_engine, Session, SQLModel, text as sql_text, select
 
-from app.models import Recipe, AppState, FamilyMember, ChoreTask, ChoreCompletion, PinboardNote, Birthday, MealHistory
+from app.models import Recipe, AppState, FamilyMember, ChoreTask, ChoreCompletion, PinboardNote, Birthday, MealHistory, Expense
 from app.services import swap_service
 from app.services.shop_output import (
     build_shop_payload,
@@ -3147,3 +3147,240 @@ def api_assign_cooks(payload: CookAssignmentPayload):
         )
         conn.commit()
     return {"ok": True, "assigned_cooks": payload.assignments}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPLIT: Ausgaben-Tracking
+# ─────────────────────────────────────────────────────────────────────────────
+
+EXPENSE_CATEGORIES = ["Haushalt", "Essen", "Freizeit", "Transport", "Sonstiges"]
+
+
+class ExpenseCreate(BaseModel):
+    title: str
+    amount: float
+    paid_by: str
+    split_among: List[str]
+    category: str = "Sonstiges"
+    date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+def _compute_balances(rows) -> Dict[str, float]:
+    net: Dict[str, float] = {}
+    for row in rows:
+        amount = float(row["amount"])
+        paid_by = row["paid_by"]
+        split_among = list(row["split_among"] or [])
+        if not split_among:
+            continue
+        share = amount / len(split_among)
+        net[paid_by] = net.get(paid_by, 0.0) + amount
+        for person in split_among:
+            net[person] = net.get(person, 0.0) - share
+    return {p: round(v, 2) for p, v in net.items()}
+
+
+def _simplify_debts(net: Dict[str, float]) -> List[Dict[str, Any]]:
+    creditors = [[p, v] for p, v in net.items() if v > 0.005]
+    debtors = [[p, -v] for p, v in net.items() if v < -0.005]
+    creditors.sort(key=lambda x: -x[1])
+    debtors.sort(key=lambda x: -x[1])
+    result = []
+    i, j = 0, 0
+    while i < len(debtors) and j < len(creditors):
+        amount = min(debtors[i][1], creditors[j][1])
+        if amount > 0.005:
+            result.append({"from": debtors[i][0], "to": creditors[j][0], "amount": round(amount, 2)})
+        debtors[i][1] -= amount
+        creditors[j][1] -= amount
+        if debtors[i][1] < 0.005:
+            i += 1
+        if creditors[j][1] < 0.005:
+            j += 1
+    return result
+
+
+@app.get("/api/expenses")
+def api_list_expenses(limit: int = 200):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with engine.connect() as conn:
+        rows = conn.execute(
+            sql_text("""
+                SELECT id, title, amount, paid_by, split_among, category, date, notes, created_at
+                FROM public.expenses
+                ORDER BY date DESC, created_at DESC
+                LIMIT :lim
+            """),
+            {"lim": limit},
+        ).mappings().fetchall()
+    return {
+        "ok": True,
+        "expenses": [
+            {
+                "id": str(r["id"]),
+                "title": r["title"],
+                "amount": float(r["amount"]),
+                "paid_by": r["paid_by"],
+                "split_among": list(r["split_among"] or []),
+                "category": r["category"],
+                "date": r["date"].isoformat() if r["date"] else None,
+                "notes": r["notes"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@app.post("/api/expenses")
+def api_create_expense(payload: ExpenseCreate):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if not payload.title.strip():
+        raise HTTPException(400, "title darf nicht leer sein")
+    if payload.amount <= 0:
+        raise HTTPException(400, "amount muss positiv sein")
+    if not payload.paid_by.strip():
+        raise HTTPException(400, "paid_by darf nicht leer sein")
+    if not payload.split_among:
+        raise HTTPException(400, "split_among darf nicht leer sein")
+    category = payload.category if payload.category in EXPENSE_CATEGORIES else "Sonstiges"
+    expense_date = date.today()
+    if payload.date:
+        try:
+            expense_date = date.fromisoformat(payload.date)
+        except ValueError:
+            raise HTTPException(400, "Ungültiges Datum")
+    entry = Expense(
+        title=payload.title.strip(),
+        amount=payload.amount,
+        paid_by=payload.paid_by.strip(),
+        split_among=payload.split_among,
+        category=category,
+        date=expense_date,
+        notes=payload.notes,
+    )
+    with Session(engine) as session:
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+    return {
+        "ok": True,
+        "expense": {
+            "id": str(entry.id),
+            "title": entry.title,
+            "amount": float(entry.amount),
+            "paid_by": entry.paid_by,
+            "split_among": entry.split_among,
+            "category": entry.category,
+            "date": entry.date.isoformat() if entry.date else None,
+            "notes": entry.notes,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        },
+    }
+
+
+@app.delete("/api/expenses/{expense_id}")
+def api_delete_expense(expense_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        entry = session.get(Expense, expense_id)
+        if not entry:
+            raise HTTPException(404, "Nicht gefunden")
+        session.delete(entry)
+        session.commit()
+    return {"ok": True}
+
+
+@app.get("/api/expenses/balance")
+def api_expenses_balance():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with engine.connect() as conn:
+        rows = conn.execute(
+            sql_text("SELECT amount, paid_by, split_among FROM public.expenses"),
+        ).mappings().fetchall()
+    net = _compute_balances(rows)
+    debts = _simplify_debts(net)
+    return {"ok": True, "net_balances": net, "debts": debts}
+
+
+@app.get("/api/expenses/report")
+def api_expenses_report():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with engine.connect() as conn:
+        by_cat = conn.execute(
+            sql_text("""
+                SELECT category, ROUND(SUM(amount)::numeric, 2) AS total
+                FROM public.expenses
+                GROUP BY category
+                ORDER BY total DESC
+            """),
+        ).mappings().fetchall()
+
+        monthly = conn.execute(
+            sql_text("""
+                SELECT to_char(date, 'YYYY-MM') AS month,
+                       ROUND(SUM(amount)::numeric, 2) AS total
+                FROM public.expenses
+                WHERE date >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
+                GROUP BY month
+                ORDER BY month
+            """),
+        ).mappings().fetchall()
+
+        by_person_monthly = conn.execute(
+            sql_text("""
+                SELECT to_char(date, 'YYYY-MM') AS month,
+                       paid_by,
+                       ROUND(SUM(amount)::numeric, 2) AS total
+                FROM public.expenses
+                WHERE date >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
+                GROUP BY month, paid_by
+                ORDER BY month, paid_by
+            """),
+        ).mappings().fetchall()
+
+        month_total = conn.execute(
+            sql_text("""
+                SELECT COALESCE(ROUND(SUM(amount)::numeric, 2), 0)
+                FROM public.expenses
+                WHERE date_trunc('month', date) = date_trunc('month', CURRENT_DATE)
+            """),
+        ).scalar_one()
+
+        all_total = conn.execute(
+            sql_text("SELECT COALESCE(ROUND(SUM(amount)::numeric, 2), 0) FROM public.expenses"),
+        ).scalar_one()
+
+        count = conn.execute(
+            sql_text("SELECT COUNT(*) FROM public.expenses"),
+        ).scalar_one()
+
+        all_exp = conn.execute(
+            sql_text("SELECT amount, paid_by, split_among FROM public.expenses"),
+        ).mappings().fetchall()
+
+    net = _compute_balances(all_exp)
+    debts = _simplify_debts(net)
+    open_balance = max((d["amount"] for d in debts), default=0.0)
+
+    return {
+        "ok": True,
+        "by_category": [{"category": r["category"], "total": float(r["total"])} for r in by_cat],
+        "monthly_totals": [{"month": r["month"], "total": float(r["total"])} for r in monthly],
+        "by_person_monthly": [
+            {"month": r["month"], "person": r["paid_by"], "total": float(r["total"])}
+            for r in by_person_monthly
+        ],
+        "summary": {
+            "total_month": float(month_total),
+            "total_all": float(all_total),
+            "expense_count": int(count),
+            "open_balance": open_balance,
+        },
+    }

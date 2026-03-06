@@ -112,6 +112,45 @@ async function http<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type Expense = {
+  id: string;
+  title: string;
+  amount: number;
+  paid_by: string;
+  split_among: string[];
+  category: string;
+  date: string;
+  notes?: string | null;
+  created_at?: string;
+};
+
+export type ExpenseCreate = {
+  title: string;
+  amount: number;
+  paid_by: string;
+  split_among: string[];
+  category: string;
+  date: string;
+  notes?: string | null;
+};
+
+export type BalanceResult = {
+  net_balances: Record<string, number>;
+  debts: { from: string; to: string; amount: number }[];
+};
+
+export type ExpenseReport = {
+  by_category: { category: string; total: number }[];
+  monthly_totals: { month: string; total: number }[];
+  by_person_monthly: { month: string; person: string; total: number }[];
+  summary: {
+    total_month: number;
+    total_all: number;
+    expense_count: number;
+    open_balance: number;
+  };
+};
+
 export const api = {
   listRecipes: (q?: string) =>
     http<Recipe[]>(`/api/recipes${q ? `?q=${encodeURIComponent(q)}` : ""}`),
@@ -172,4 +211,22 @@ export const api = {
 
   deleteBirthday: (id: string) =>
     http<{ ok: boolean }>(`/api/birthdays/${id}`, { method: "DELETE" }),
+
+  listExpenses: () =>
+    http<{ ok: boolean; expenses: Expense[] }>(`/api/expenses`).then((r) => r.expenses ?? []),
+
+  createExpense: (payload: ExpenseCreate) =>
+    http<{ ok: boolean; expense: Expense }>(`/api/expenses`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteExpense: (id: string) =>
+    http<{ ok: boolean }>(`/api/expenses/${id}`, { method: "DELETE" }),
+
+  getExpenseBalance: () =>
+    http<{ ok: boolean } & BalanceResult>(`/api/expenses/balance`),
+
+  getExpenseReport: () =>
+    http<{ ok: boolean } & ExpenseReport>(`/api/expenses/report`),
 };

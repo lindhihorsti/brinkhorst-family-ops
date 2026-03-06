@@ -137,6 +137,29 @@ class PinboardNote(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Expense(SQLModel, table=True):
+    __tablename__ = "expenses"
+
+    id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    )
+    title: str
+    amount: float = Field(sa_column=Column(Numeric(10, 2), nullable=False))
+    paid_by: str
+    split_among: List[str] = Field(
+        default_factory=list,
+        sa_column=Column(ARRAY(String), nullable=False, server_default="{}")
+    )
+    category: str = "Sonstiges"
+    date: date = Field(
+        default_factory=date.today,
+        sa_column=Column(Date, nullable=False, server_default=text("CURRENT_DATE"))
+    )
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Birthday(SQLModel, table=True):
     __tablename__ = "birthdays"
 
