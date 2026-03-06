@@ -319,7 +319,7 @@ export default function RecipesPage() {
             justifyContent: "center",
             alignItems: "center",
             padding: 18,
-            zIndex: 20,
+            zIndex: 200,
           }}
         >
           <div style={{ ...styles.card, width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto" }}>
