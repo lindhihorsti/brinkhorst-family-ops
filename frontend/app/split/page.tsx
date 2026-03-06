@@ -76,7 +76,7 @@ function SplitContent() {
       title="Ausgaben & Split"
       subtitle="Wer hat was gezahlt · Salden"
       icon="💸"
-      iconAccent="var(--split-accent)"
+      iconAccent="#059669"
       right={
         <div style={{ display: "flex", gap: 8 }}>
           <BtnLink href="/">Home</BtnLink>

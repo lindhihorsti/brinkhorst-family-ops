@@ -224,7 +224,7 @@ export default function AuswertungPage() {
       title="Auswertung"
       subtitle="Ausgaben-Analyse & Charts"
       icon="📊"
-      iconAccent="var(--split-accent)"
+      iconAccent="#059669"
       right={<BtnLink href="/split">Zurück</BtnLink>}
       navCurrent="/split"
     >

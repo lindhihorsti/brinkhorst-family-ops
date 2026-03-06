@@ -80,7 +80,7 @@ export default function NeuePage() {
       title="Neue Ausgabe"
       subtitle="Ausgabe erfassen"
       icon="➕"
-      iconAccent="var(--split-accent)"
+      iconAccent="#059669"
       right={<BtnLink href="/split">Zurück</BtnLink>}
       navCurrent="/split"
     >
