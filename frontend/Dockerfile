@@ -8,7 +8,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ARG GIT_SHA=local
+ARG BUILD_DATE=local
 ENV NEXT_PUBLIC_GIT_SHA=$GIT_SHA
+ENV NEXT_PUBLIC_BUILD_DATE=$BUILD_DATE
 RUN npm run build
 
 FROM node:20-bullseye AS runner

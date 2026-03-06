@@ -5,7 +5,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 ARG GIT_SHA=local
+ARG BUILD_DATE=local
 ENV GIT_SHA=$GIT_SHA
+ENV BUILD_DATE=$BUILD_DATE
 
 COPY app ./app
 

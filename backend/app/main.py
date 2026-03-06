@@ -78,6 +78,7 @@ if engine and AUTO_MIGRATE:
         conn.commit()
 
 GIT_SHA = os.getenv("GIT_SHA", "local").strip() or "local"
+BUILD_DATE = os.getenv("BUILD_DATE", "local").strip() or "local"
 
 DAY_LABELS = {
     1: "Mo",
@@ -180,7 +181,7 @@ def _on_startup():
 # -----------------------------
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "git_sha": GIT_SHA}
+    return {"status": "ok", "git_sha": GIT_SHA, "build_date": BUILD_DATE}
 
 
 @app.get("/api/db/ping")

@@ -56,8 +56,12 @@ export default function EinstellungenPage() {
       fontFamily: "var(--font)", paddingBottom: "var(--nav-height)",
     }}>
       <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 4 }}>
-        <Image src="/logo.PNG" alt="Family Ops" width={600} height={380} priority
-          className="logo-img" style={{ width: 200, height: "auto" }} />
+        <div className="logo-stage">
+          <Image src="/logo.PNG" alt="Family Ops" width={600} height={380} priority
+            className="logo-img logo-img-light" style={{ width: 200, height: "auto" }} />
+          <Image src="/logo-dark.png" alt="Family Ops Dark" width={1152} height={768} priority
+            className="logo-img logo-img-dark" style={{ width: 268, height: "auto" }} />
+        </div>
       </div>
 
       <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 22px 40px" }}>

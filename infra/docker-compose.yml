@@ -21,6 +21,7 @@ services:
       context: ../backend
       args:
         GIT_SHA: ${GIT_SHA:-local}
+        BUILD_DATE: ${BUILD_DATE:-local}
     environment:
       DATABASE_URL: postgresql+psycopg://familyops:familyops@db:5432/familyops
       AUTO_MIGRATE: "1"
@@ -42,6 +43,7 @@ services:
       context: ../frontend
       args:
         GIT_SHA: ${GIT_SHA:-local}
+        BUILD_DATE: ${BUILD_DATE:-local}
     networks:
       - appnet
     restart: unless-stopped
