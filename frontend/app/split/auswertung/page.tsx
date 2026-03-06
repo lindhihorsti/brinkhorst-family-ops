@@ -99,6 +99,7 @@ function HBarChart({ data, color }: { data: { label: string; value: number }[]; 
 // ─── Line chart (SVG) ─────────────────────────────────────────────────────────
 
 const CHART_H = 100;
+const MONTH_COLORS = ["#059669","#3b82f6","#f59e0b","#8b5cf6","#ef4444","#ec4899","#0ea5e9","#84cc16","#f97316","#14b8a6","#a855f7","#6366f1"];
 
 function MonthlyBarChart({ data }: { data: { label: string; value: number }[] }) {
   const [selected, setSelected] = useState<number | null>(null);
@@ -115,7 +116,7 @@ function MonthlyBarChart({ data }: { data: { label: string; value: number }[] })
               style={{
                 flex: 1,
                 height: barPx,
-                background: selected === i ? "#059669" : "#05966966",
+                background: selected === i ? MONTH_COLORS[i % MONTH_COLORS.length] : MONTH_COLORS[i % MONTH_COLORS.length] + "99",
                 borderRadius: "3px 3px 0 0",
                 transition: "background 0.15s",
                 cursor: "pointer",
