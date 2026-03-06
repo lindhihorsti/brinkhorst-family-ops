@@ -14,6 +14,7 @@
   --aufgaben-accent:   #7c3aed;  /* purple */
   --pinnwand-accent:   #d97706;  /* amber */
   --geburtstage-accent:#db2777;  /* pink */
+  --split-accent:      #059669;  /* emerald */
 
   /* Semantic */
   --success: #16a34a;
@@ -163,13 +164,20 @@ a { color: inherit; text-decoration: none; }
   border-top: 1px solid var(--border);
   display: flex;
   align-items: stretch;
+  justify-content: center;
   z-index: 100;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.bottom-nav::-webkit-scrollbar { display: none; }
 
 .bottom-nav-item {
-  flex: 1;
+  flex: none;
+  min-width: 62px;
   display: flex;
   flex-direction: column;
   align-items: center;

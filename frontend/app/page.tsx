@@ -32,6 +32,7 @@ const USE_CASES = [
   { href: "/aufgaben",    icon: "✅", title: "Haushaltsaufgaben",        sub: "Checklisten · Zuweisung · Punkte",      accent: "var(--aufgaben-accent)" },
   { href: "/pinnwand",    icon: "📌", title: "Familienpinnwand",         sub: "Notizen · Erinnerungen · Nachrichten",  accent: "var(--pinnwand-accent)" },
   { href: "/geburtstage", icon: "🎂", title: "Geburtstage & Geschenke", sub: "Erinnerungen · Wunschlisten",           accent: "var(--geburtstage-accent)" },
+  { href: "/split",       icon: "💸", title: "Ausgaben & Split",        sub: "Wer hat was gezahlt · Salden · Abrechnung", accent: "var(--split-accent)" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
