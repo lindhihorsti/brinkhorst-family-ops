@@ -141,6 +141,7 @@ export type BalanceResult = {
 
 export type ExpenseReport = {
   by_category: { category: string; total: number }[];
+  by_person_total: { person: string; total: number }[];
   monthly_totals: { month: string; total: number }[];
   by_person_monthly: { month: string; person: string; total: number }[];
   summary: {

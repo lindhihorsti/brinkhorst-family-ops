@@ -3327,9 +3327,19 @@ def api_expenses_report():
                 SELECT to_char(date, 'YYYY-MM') AS month,
                        ROUND(SUM(amount)::numeric, 2) AS total
                 FROM public.expenses
-                WHERE date >= date_trunc('month', CURRENT_DATE) - INTERVAL '5 months'
+                WHERE date >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
                 GROUP BY month
                 ORDER BY month
+            """),
+        ).mappings().fetchall()
+
+        by_person_total = conn.execute(
+            sql_text("""
+                SELECT paid_by,
+                       ROUND(SUM(amount)::numeric, 2) AS total
+                FROM public.expenses
+                GROUP BY paid_by
+                ORDER BY total DESC
             """),
         ).mappings().fetchall()
 
@@ -3372,6 +3382,7 @@ def api_expenses_report():
     return {
         "ok": True,
         "by_category": [{"category": r["category"], "total": float(r["total"])} for r in by_cat],
+        "by_person_total": [{"person": r["paid_by"], "total": float(r["total"])} for r in by_person_total],
         "monthly_totals": [{"month": r["month"], "total": float(r["total"])} for r in monthly],
         "by_person_monthly": [
             {"month": r["month"], "person": r["paid_by"], "total": float(r["total"])}

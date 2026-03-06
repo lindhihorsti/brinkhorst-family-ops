@@ -33,31 +33,36 @@ function shortMonth(yyyymm: string) {
 function DonutChart({ segments }: { segments: { label: string; value: number; color: string }[] }) {
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (total === 0) return null;
-  const r = 38;
-  const C = 2 * Math.PI * r;
-  let cumulative = 0;
+  const cx = 60, cy = 60, r = 38, sw = 16;
+
+  function polar(angleDeg: number) {
+    const rad = (angleDeg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
+  function arc(startDeg: number, endDeg: number) {
+    const s = polar(endDeg);
+    const e = polar(startDeg);
+    const large = endDeg - startDeg > 180 ? 1 : 0;
+    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`;
+  }
+
+  let angle = 0;
   return (
     <svg viewBox="0 0 120 120" width={120} height={120} style={{ display: "block" }}>
-      <circle cx="60" cy="60" r={r} fill="none" stroke="var(--border)" strokeWidth="16" />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--border)" strokeWidth={sw} />
       {segments.map((seg, i) => {
-        const pct = seg.value / total;
-        const dashLen = pct * C;
-        const dashOffset = C * (1 - cumulative);
-        cumulative += pct;
+        const span = (seg.value / total) * 360;
+        const start = angle;
+        angle += span;
+        if (span >= 359.99) {
+          return <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={seg.color} strokeWidth={sw} />;
+        }
         return (
-          <circle
-            key={i}
-            cx="60" cy="60" r={r}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth="16"
-            strokeDasharray={`${dashLen} ${C}`}
-            strokeDashoffset={dashOffset}
-            style={{ transform: "rotate(-90deg)", transformOrigin: "60px 60px" }}
-          />
+          <path key={i} d={arc(start, angle)} fill="none" stroke={seg.color} strokeWidth={sw} strokeLinecap="butt" />
         );
       })}
-      <text x="60" y="64" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--fg)">
+      <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--fg)">
         {fmt(total)}
       </text>
     </svg>
@@ -93,42 +98,42 @@ function HBarChart({ data, color }: { data: { label: string; value: number }[]; 
 
 // ─── Line chart (SVG) ─────────────────────────────────────────────────────────
 
-function LineChart({ data }: { data: { label: string; value: number }[] }) {
-  if (data.length === 0) return null;
-  const W = 320, H = 120, PX = 24, PY = 16;
-  const iW = W - PX * 2;
-  const iH = H - PY * 2;
+function MonthlyBarChart({ data }: { data: { label: string; value: number }[] }) {
+  const [selected, setSelected] = useState<number | null>(null);
   const max = Math.max(...data.map((d) => d.value), 1);
-  const pts = data.map((d, i) => ({
-    x: PX + (i / Math.max(data.length - 1, 1)) * iW,
-    y: PY + iH - (d.value / max) * iH,
-    label: d.label,
-    value: d.value,
-  }));
-  const polyline = pts.map((p) => `${p.x},${p.y}`).join(" ");
-  const area = [
-    `${pts[0].x},${PY + iH}`,
-    ...pts.map((p) => `${p.x},${p.y}`),
-    `${pts[pts.length - 1].x},${PY + iH}`,
-  ].join(" ");
-
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block", overflow: "visible" }}>
-      <defs>
-        <linearGradient id="linefill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--split-accent)" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="var(--split-accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={area} fill="url(#linefill)" />
-      <polyline points={polyline} fill="none" stroke="var(--split-accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      {pts.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r={3} fill="var(--split-accent)" />
-          <text x={p.x} y={H - 2} textAnchor="middle" fontSize="9" fill="var(--fg-muted)">{p.label}</text>
-        </g>
-      ))}
-    </svg>
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100 }}>
+        {data.map((d, i) => (
+          <div
+            key={i}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", cursor: "pointer" }}
+            onClick={() => setSelected(selected === i ? null : i)}
+          >
+            <div style={{
+              width: "100%",
+              height: d.value > 0 ? `${(d.value / max) * 100}%` : "2px",
+              background: selected === i ? "#059669" : "#05966955",
+              borderRadius: "3px 3px 0 0",
+              transition: "background 0.15s",
+              minHeight: d.value > 0 ? 4 : 2,
+            }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 3 }}>
+        {data.map((d, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8, color: "var(--fg-muted)", paddingTop: 3 }}>
+            {d.label}
+          </div>
+        ))}
+      </div>
+      {selected !== null && data[selected] && (
+        <div style={{ marginTop: 10, textAlign: "center", padding: "8px 12px", background: "var(--bg-subtle)", borderRadius: 10, fontSize: 13 }}>
+          <strong>{data[selected].label}</strong> — {fmt(data[selected].value)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -206,11 +211,11 @@ export default function AuswertungPage() {
   const monthlyTotals = report?.monthly_totals ?? [];
   const byPersonMonthly = report?.by_person_monthly ?? [];
   const persons = [...new Set(byPersonMonthly.map((d) => d.person))].sort();
+  const byPersonTotal = report?.by_person_total ?? [];
 
-  // Totals per person (all time, from by_person_monthly might be incomplete — better from expenses, but approximation is fine here)
-  const totalsByPerson = persons.map((p) => ({
-    label: p,
-    value: byPersonMonthly.filter((d) => d.person === p).reduce((s, d) => s + d.total, 0),
+  const totalsByPerson = byPersonTotal.map((p) => ({
+    label: p.person,
+    value: p.total,
   }));
 
   const donutSegments = byCategory.map((c) => ({
@@ -284,7 +289,7 @@ export default function AuswertungPage() {
           {monthlyTotals.length > 0 && (
             <div style={styles.card}>
               <div style={{ fontWeight: 700, marginBottom: 14 }}>Ausgaben pro Monat</div>
-              <LineChart
+              <MonthlyBarChart
                 data={monthlyTotals.map((m) => ({ label: shortMonth(m.month), value: m.total }))}
               />
             </div>
@@ -293,7 +298,7 @@ export default function AuswertungPage() {
           {/* ── Wer hat wie viel gezahlt ── */}
           {totalsByPerson.length > 0 && (
             <div style={styles.card}>
-              <div style={{ fontWeight: 700, marginBottom: 14 }}>Gezahlt pro Person (letzte 6 Monate)</div>
+              <div style={{ fontWeight: 700, marginBottom: 14 }}>Gezahlt pro Person (Gesamt)</div>
               <div style={{ display: "grid", gap: 10 }}>
                 {totalsByPerson.map((p, i) => (
                   <div key={p.label}>
