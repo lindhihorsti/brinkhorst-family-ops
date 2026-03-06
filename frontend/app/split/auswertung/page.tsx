@@ -98,27 +98,31 @@ function HBarChart({ data, color }: { data: { label: string; value: number }[]; 
 
 // ─── Line chart (SVG) ─────────────────────────────────────────────────────────
 
+const CHART_H = 100;
+
 function MonthlyBarChart({ data }: { data: { label: string; value: number }[] }) {
   const [selected, setSelected] = useState<number | null>(null);
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100 }}>
-        {data.map((d, i) => (
-          <div
-            key={i}
-            onClick={() => setSelected(selected === i ? null : i)}
-            style={{
-              flex: 1,
-              height: d.value > 0 ? `${(d.value / max) * 100}%` : 2,
-              minHeight: d.value > 0 ? 4 : 2,
-              background: selected === i ? "#059669" : "#05966966",
-              borderRadius: "3px 3px 0 0",
-              transition: "background 0.15s",
-              cursor: "pointer",
-            }}
-          />
-        ))}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: CHART_H }}>
+        {data.map((d, i) => {
+          const barPx = d.value > 0 ? Math.max(4, Math.round((d.value / max) * CHART_H)) : 2;
+          return (
+            <div
+              key={i}
+              onClick={() => setSelected(selected === i ? null : i)}
+              style={{
+                flex: 1,
+                height: barPx,
+                background: selected === i ? "#059669" : "#05966966",
+                borderRadius: "3px 3px 0 0",
+                transition: "background 0.15s",
+                cursor: "pointer",
+              }}
+            />
+          );
+        })}
       </div>
       <div style={{ display: "flex", gap: 3 }}>
         {data.map((d, i) => (
