@@ -152,9 +152,9 @@ class Expense(SQLModel, table=True):
         sa_column=Column(ARRAY(String), nullable=False, server_default="{}")
     )
     category: str = "Sonstiges"
-    date: date = Field(
+    expense_date: date = Field(
         default_factory=date.today,
-        sa_column=Column(Date, nullable=False, server_default=text("CURRENT_DATE"))
+        sa_column=Column("date", Date, nullable=False, server_default=text("CURRENT_DATE"))
     )
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

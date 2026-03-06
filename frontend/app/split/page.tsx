@@ -232,7 +232,7 @@ function SplitContent() {
         message="Diese Ausgabe wird unwiderruflich gelöscht und die Salden werden neu berechnet."
         confirmLabel={deleting ? "Lösche…" : "Löschen"}
         onConfirm={onDelete}
-        onCancel={() => setDeleteTarget(null)}
+        onClose={() => setDeleteTarget(null)}
       />
     </Page>
   );

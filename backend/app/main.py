@@ -3259,7 +3259,7 @@ def api_create_expense(payload: ExpenseCreate):
         paid_by=payload.paid_by.strip(),
         split_among=payload.split_among,
         category=category,
-        date=expense_date,
+        expense_date=expense_date,
         notes=payload.notes,
     )
     with Session(engine) as session:
@@ -3275,7 +3275,7 @@ def api_create_expense(payload: ExpenseCreate):
             "paid_by": entry.paid_by,
             "split_among": entry.split_among,
             "category": entry.category,
-            "date": entry.date.isoformat() if entry.date else None,
+            "date": entry.expense_date.isoformat() if entry.expense_date else None,
             "notes": entry.notes,
             "created_at": entry.created_at.isoformat() if entry.created_at else None,
         },
