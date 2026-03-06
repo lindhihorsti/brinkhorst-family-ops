@@ -223,7 +223,9 @@ export default function AuswertungPage() {
     <Page
       title="Auswertung"
       subtitle="Ausgaben-Analyse & Charts"
-      right={<BtnLink href="/split">Split</BtnLink>}
+      icon="📊"
+      iconAccent="var(--split-accent)"
+      right={<BtnLink href="/split">Zurück</BtnLink>}
       navCurrent="/split"
     >
       {loading && (
