@@ -39,7 +39,7 @@ const SECTIONS = [
     href: "/einstellungen/aktivitaeten",
     icon: "💡",
     title: "Aktivitäten",
-    sub: "Standard-Ort · Budget · Transport",
+    sub: "Ausflüge · Zuhause",
   },
   {
     href: "/einstellungen/pinnwand",
