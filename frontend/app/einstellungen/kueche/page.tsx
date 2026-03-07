@@ -10,7 +10,6 @@ type SettingsData = {
   ok: boolean;
   pantry: { items: PantryItem[] };
   preferences: { tags: string[] };
-  shop?: { shop_output_mode?: "ai_consolidated" | "per_recipe" };
 };
 
 const DEFAULT_PANTRY: PantryItem[] = [
@@ -53,10 +52,6 @@ export default function KuecheSettingsPage() {
   const [prefSaving, setPrefSaving] = useState(false);
   const [prefMsg, setPrefMsg] = useState<string | null>(null);
 
-  const [shopMode, setShopMode] = useState<"ai_consolidated" | "per_recipe">("ai_consolidated");
-  const [shopSaving, setShopSaving] = useState(false);
-  const [shopMsg, setShopMsg] = useState<string | null>(null);
-
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -71,7 +66,6 @@ export default function KuecheSettingsPage() {
         const o = await optionsRes.json();
         setPantryItems(d.pantry?.items ?? []);
         setSelectedTags(d.preferences?.tags ?? []);
-        setShopMode(d.shop?.shop_output_mode ?? "ai_consolidated");
         setPreferenceOptions(o.tags ?? []);
       } catch (e) {
         setError(getErrorMessage(e, "Fehler beim Laden"));
@@ -108,24 +102,12 @@ export default function KuecheSettingsPage() {
     } catch (e) { setPrefMsg(getErrorMessage(e, "Fehler")); } finally { setPrefSaving(false); }
   };
 
-  const handleShopSave = async () => {
-    setShopSaving(true); setShopMsg(null);
-    try {
-      const res = await fetch("/api/settings/shop", {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop_output_mode: shopMode }),
-      });
-      if (!res.ok) throw new Error(`${res.status}`);
-      setShopMsg("Gespeichert.");
-    } catch (e) { setShopMsg(getErrorMessage(e, "Fehler")); } finally { setShopSaving(false); }
-  };
-
   const small: React.CSSProperties = { fontSize: 12, color: "var(--fg-muted)", marginTop: 6 };
 
   return (
     <Page
-      title="Küche & Einkaufen"
-      subtitle="Basisvorrat, Präferenzen, Einkaufsliste"
+      title="Küche"
+      subtitle="Basisvorrat und Präferenzen"
       right={<BtnLink href="/einstellungen">Zurück</BtnLink>}
       navCurrent="/einstellungen"
     >
@@ -192,24 +174,6 @@ export default function KuecheSettingsPage() {
         {prefMsg && <p style={small}>{prefMsg}</p>}
       </div>
 
-      {/* Einkaufsliste */}
-      <div style={styles.card}>
-        <p style={{ fontWeight: 800, margin: "0 0 12px" }}>Einkaufsliste</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, color: "var(--fg-muted)", flexShrink: 0 }}>Format</span>
-          <select style={{ ...styles.input, flex: 1 }} value={shopMode}
-            onChange={(e) => setShopMode(e.target.value as "ai_consolidated" | "per_recipe")}>
-            <option value="ai_consolidated">Konsolidiert (AI)</option>
-            <option value="per_recipe">Pro Rezept</option>
-          </select>
-        </div>
-        <div style={{ marginTop: 12 }}>
-          <button style={styles.buttonPrimary} onClick={handleShopSave} disabled={shopSaving}>
-            {shopSaving ? "Speichere…" : "Speichern"}
-          </button>
-        </div>
-        {shopMsg && <p style={small}>{shopMsg}</p>}
-      </div>
     </Page>
   );
 }

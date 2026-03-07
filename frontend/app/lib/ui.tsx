@@ -521,6 +521,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: "🏠" },
   { href: "/kueche", label: "Küche", icon: "🍳" },
+  { href: "/einkauf", label: "Eink.", icon: "🛒" },
   { href: "/ideen", label: "Ideen", icon: "💡" },
   { href: "/aufgaben", label: "Aufgaben", icon: "✅" },
   { href: "/pinnwand", label: "Pinnwand", icon: "📌" },

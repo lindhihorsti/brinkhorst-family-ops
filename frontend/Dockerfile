@@ -16,6 +16,7 @@ RUN npm run build
 FROM node:20-bullseye AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
 
 # copy standalone output
 COPY --from=builder /app/.next/standalone ./

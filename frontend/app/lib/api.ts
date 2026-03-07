@@ -156,6 +156,45 @@ export type ExpenseReport = {
   };
 };
 
+export type ShoppingListItem = {
+  id: string;
+  content: string;
+  source: "manual" | "recipe";
+  recipe_title?: string | null;
+  checked: boolean;
+  item_order: number;
+};
+
+export type ShoppingList = {
+  id: string;
+  title: string;
+  notes?: string | null;
+  view_mode: "checklist" | "text";
+  import_mode: "ai_consolidated" | "per_recipe";
+  estimate_currency: "chf" | "eur";
+  includes_weekly_items: boolean;
+  estimated_total_text?: string | null;
+  estimated_total_amount?: number | null;
+  estimated_total_note?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  manual_count: number;
+  recipe_count: number;
+  total_count: number;
+  checked_count: number;
+  items?: ShoppingListItem[];
+};
+
+export type ShoppingListCreate = {
+  title: string;
+  notes?: string | null;
+  view_mode: "checklist" | "text";
+  manual_items?: string[];
+  include_weekly_items: boolean;
+  import_mode: "ai_consolidated" | "per_recipe";
+  estimate_currency?: "chf" | "eur";
+};
+
 export const api = {
   listRecipes: (q?: string) =>
     http<Recipe[]>(`/api/recipes${q ? `?q=${encodeURIComponent(q)}` : ""}`),
@@ -234,4 +273,62 @@ export const api = {
 
   getExpenseReport: () =>
     http<{ ok: boolean } & ExpenseReport>(`/api/expenses/report`),
+
+  listShoppingLists: () =>
+    http<{ ok: boolean; items: ShoppingList[] }>(`/api/shopping-lists`).then((r) => r.items ?? []),
+
+  createShoppingList: (payload: ShoppingListCreate) =>
+    http<{ ok: boolean; item: ShoppingList; warning?: string | null }>(`/api/shopping-lists`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getShoppingList: (id: string) =>
+    http<{ ok: boolean; item: ShoppingList }>(`/api/shopping-lists/${id}`).then((r) => r.item),
+
+  updateShoppingList: (id: string, payload: Partial<ShoppingListCreate>) =>
+    http<{ ok: boolean; item: ShoppingList }>(`/api/shopping-lists/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteShoppingList: (id: string) =>
+    http<{ ok: boolean }>(`/api/shopping-lists/${id}`, { method: "DELETE" }),
+
+  addShoppingListItem: (id: string, content: string) =>
+    http<{ ok: boolean; item: ShoppingList }>(`/api/shopping-lists/${id}/items`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+
+  updateShoppingListItem: (id: string, itemId: string, payload: { checked?: boolean }) =>
+    http<{ ok: boolean; item: ShoppingList }>(`/api/shopping-lists/${id}/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  deleteShoppingListItem: (id: string, itemId: string) =>
+    http<{ ok: boolean; item: ShoppingList }>(`/api/shopping-lists/${id}/items/${itemId}`, {
+      method: "DELETE",
+    }),
+
+  snapshotShoppingListWeekly: (id: string, importMode: "ai_consolidated" | "per_recipe") =>
+    http<{ ok: boolean; item: ShoppingList; warning?: string | null }>(`/api/shopping-lists/${id}/snapshot-weekly`, {
+      method: "POST",
+      body: JSON.stringify({ import_mode: importMode }),
+    }),
+
+  estimateShoppingList: (id: string) =>
+    http<{
+      ok: boolean;
+      estimate: {
+        estimated_total_text?: string | null;
+        estimated_total_amount?: number | null;
+        estimated_total_note?: string | null;
+        model?: string;
+      };
+      item: ShoppingList;
+    }>(`/api/shopping-lists/${id}/estimate`, {
+      method: "POST",
+    }),
 };

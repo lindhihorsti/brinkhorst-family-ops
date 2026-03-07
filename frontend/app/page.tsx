@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { BottomNav } from "./lib/ui";
 
@@ -15,6 +14,12 @@ const USE_CASES: UseCase[] = [
     icon: "🍳",
     title: "Küchen- & Wochenplan",
     accent: "var(--kueche-accent)",
+  },
+  {
+    href: "/einkauf",
+    icon: "🛒",
+    title: "Einkaufsliste",
+    accent: "var(--einkauf-accent)",
   },
   {
     href: "/ideen",
@@ -209,21 +214,15 @@ export default function LandingPage() {
     }}>
       <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
         <div className="logo-stage">
-          <Image
+          <img
             src="/logo.PNG"
             alt="Family Ops"
-            width={600}
-            height={380}
-            priority
             className="logo-img logo-img-light"
             style={{ width: 292, maxWidth: "82vw", height: "auto" }}
           />
-          <Image
+          <img
             src="/logo-dark.png"
             alt="Family Ops Dark"
-            width={1152}
-            height={768}
-            priority
             className="logo-img logo-img-dark"
             style={{ width: 392, maxWidth: "92vw", height: "auto" }}
           />

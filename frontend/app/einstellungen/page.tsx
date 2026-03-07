@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { SystemStatus } from "../lib/system-status";
 import { BottomNav } from "../lib/ui";
@@ -21,8 +20,14 @@ const SECTIONS = [
   {
     href: "/einstellungen/kueche",
     icon: "🍳",
-    title: "Küche & Einkaufen",
-    sub: "Basisvorrat · Präferenzen · Einkaufsliste",
+    title: "Küche",
+    sub: "Basisvorrat · Präferenzen",
+  },
+  {
+    href: "/einstellungen/einkauf",
+    icon: "🛒",
+    title: "Einkaufsliste",
+    sub: "Standardansicht · Wochenplan-Snapshot · Shop-Format",
   },
   {
     href: "/einstellungen/benachrichtigungen",
@@ -58,9 +63,9 @@ export default function EinstellungenPage() {
     }}>
       <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 4 }}>
         <div className="logo-stage">
-          <Image src="/logo.PNG" alt="Family Ops" width={600} height={380} priority
+          <img src="/logo.PNG" alt="Family Ops"
             className="logo-img logo-img-light" style={{ width: 200, height: "auto" }} />
-          <Image src="/logo-dark.png" alt="Family Ops Dark" width={1152} height={768} priority
+          <img src="/logo-dark.png" alt="Family Ops Dark"
             className="logo-img logo-img-dark" style={{ width: 268, height: "auto" }} />
         </div>
       </div>
