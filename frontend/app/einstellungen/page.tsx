@@ -42,6 +42,12 @@ const SECTIONS = [
     sub: "Ausflüge · Zuhause",
   },
   {
+    href: "/einstellungen/geburtstage",
+    icon: "🎁",
+    title: "Geburtstage & Geschenke",
+    sub: "Default-Relation · Vorschaufenster · Geschenkideen-Defaults",
+  },
+  {
     href: "/einstellungen/pinnwand",
     icon: "📌",
     title: "Pinnwand",

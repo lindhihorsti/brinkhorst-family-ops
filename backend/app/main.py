@@ -189,6 +189,14 @@ DEFAULT_ACTIVITIES_SETTINGS = {
     "home_materials": ["Bücher", "Bausteine", "Kissen", "Klebeband", "Papier"],
     "home_types": ["Bewegung", "Rollenspiel", "Bauen"],
 }
+DEFAULT_BIRTHDAY_SETTINGS = {
+    "birthday_default_relation": "Familie",
+    "birthday_upcoming_window_days": 7,
+    "gift_default_occasion": "Geburtstag",
+    "gift_budget_range": "25-50 CHF",
+    "gift_preferred_types": ["Erlebnis", "Kreativ", "Spielzeug"],
+    "gift_no_goes": ["zu laut", "zu groß"],
+}
 
 ACTIVITIES_MAX_TRAVEL_OPTIONS = [15, 30, 45, 60, 90, 120]
 ACTIVITIES_TIME_BUCKETS = ["1–2 Stunden", "2–4 Stunden", "Halber Tag", "Ganzer Tag"]
@@ -205,6 +213,7 @@ APP_STATE_SETTINGS_PREFERENCES = "settings_preferences"
 APP_STATE_SETTINGS_TELEGRAM = "settings_telegram"
 APP_STATE_SETTINGS_SHOP = "settings_shop"
 APP_STATE_SETTINGS_ACTIVITIES = "settings_activities"
+APP_STATE_SETTINGS_BIRTHDAYS = "settings_birthdays"
 APP_STATE_TELEGRAM_LAST_CHAT_ID = "telegram_last_chat_id"
 APP_STATE_PINBOARD_CATEGORIES = "pinboard_categories"
 APP_STATE_CHORE_SETTINGS = "chore_settings"
@@ -1275,6 +1284,170 @@ def _openai_estimate_shopping_list_total(lines: List[str], currency: str = "chf"
     }
 
 
+def _openai_generate_gift_ideas(
+    payload: "GiftIdeasGeneratePayload",
+    settings: Dict[str, Any],
+    birthday_context: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, str]]:
+    from openai import OpenAI
+
+    model = (os.getenv("OPENAI_MODEL_ACTIVITIES", "gpt-5.2") or "gpt-5.2").strip()
+    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 30.0
+    client = OpenAI(timeout=timeout).with_options(max_retries=0)
+
+    today = date.today()
+    resolved_name = (payload.recipient_name or (birthday_context or {}).get("name") or "").strip()
+    resolved_relation = (payload.relation or (birthday_context or {}).get("relation") or "").strip()
+    age_years = payload.age_years
+    if age_years is None and birthday_context and birthday_context.get("birth_date"):
+        try:
+            age_years = age_on_next_birthday(date.fromisoformat(birthday_context["birth_date"]), today)
+        except Exception:
+            age_years = None
+    occasion = (payload.occasion or settings.get("gift_default_occasion") or "Geburtstag").strip()
+    budget_range = (payload.budget_range or settings.get("gift_budget_range") or "25-50 CHF").strip()
+    interests = _clean_tags(payload.interests or [])
+    gift_types = _clean_tags(payload.gift_types or settings.get("gift_preferred_types") or [])
+    constraints = _clean_tags(payload.constraints or settings.get("gift_no_goes") or [])
+    free_text = (payload.free_text or "").strip()
+    existing_gifts = []
+    notes = ""
+    if birthday_context:
+        existing_gifts = _clean_tags(birthday_context.get("gift_ideas") or [])
+        notes = str(birthday_context.get("notes") or "").strip()
+
+    system_text = (
+        "Du bist ein kreativer Geschenkideen-Coach für Familien. "
+        "Liefere genau drei konkrete, plausible Geschenkideen auf Deutsch. "
+        "Die Ideen sollen altersgerecht, unterschiedlich und realistisch kaufbar oder umsetzbar sein. "
+        "Vermeide generische Platzhalter. Gib ausschließlich JSON im verlangten Schema aus. "
+        "Halte why_fit und buy_tip jeweils kurz und konkret."
+    )
+
+    user_payload = {
+        "date_today": today.isoformat(),
+        "recipient_name": resolved_name,
+        "age_years": age_years,
+        "relation": resolved_relation,
+        "occasion": occasion,
+        "budget_range": budget_range,
+        "interests": interests[:10],
+        "gift_types": gift_types[:8],
+        "constraints": constraints[:10],
+        "existing_gift_ideas": existing_gifts[:10],
+        "birthday_notes": notes[:400],
+        "free_text": free_text[:500],
+        "rules": {
+            "language": "de",
+            "ideas": 3,
+            "avoid_duplicates": True,
+            "mix_of_physical_and_experience_when_fit": True,
+        },
+    }
+
+    schema = {
+        "type": "json_schema",
+        "name": "gift_ideas",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "ideas": {
+                    "type": "array",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "title": {"type": "string"},
+                            "category": {"type": "string"},
+                            "price_hint": {"type": "string"},
+                            "why_fit": {"type": "string"},
+                            "buy_tip": {"type": "string"},
+                        },
+                        "required": ["title", "category", "price_hint", "why_fit", "buy_tip"],
+                    },
+                }
+            },
+            "required": ["ideas"],
+        },
+        "strict": True,
+    }
+
+    def _coerce_gift_ideas(data: Any) -> List[Dict[str, str]]:
+        if isinstance(data, dict):
+            ideas_raw = data.get("ideas") or data.get("alternatives") or data.get("items") or []
+        elif isinstance(data, list):
+            ideas_raw = data
+        else:
+            ideas_raw = []
+        if not isinstance(ideas_raw, list):
+            return []
+
+        cleaned: List[Dict[str, str]] = []
+        for idea in ideas_raw[:5]:
+            if not isinstance(idea, dict):
+                continue
+            title = str(idea.get("title") or idea.get("name") or "").strip()
+            category = str(idea.get("category") or idea.get("type") or "").strip()
+            price_hint = str(idea.get("price_hint") or idea.get("price") or "").strip()
+            why_fit = str(idea.get("why_fit") or idea.get("why") or "").strip()
+            buy_tip = str(idea.get("buy_tip") or idea.get("tip") or "").strip()
+            if not title or not category or not price_hint or not why_fit or not buy_tip:
+                continue
+            cleaned.append(
+                {
+                    "title": title,
+                    "category": category,
+                    "price_hint": price_hint,
+                    "why_fit": why_fit,
+                    "buy_tip": buy_tip,
+                }
+            )
+        return cleaned[:3]
+
+    response = client.responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+        ],
+        text={"format": schema},
+        max_output_tokens=900,
+        truncation="auto",
+    )
+
+    data = _parse_response_json_any(response)
+    cleaned = _coerce_gift_ideas(data)
+    if len(cleaned) == 3:
+        return cleaned
+
+    fallback_response = client.responses.create(
+        model=model,
+        input=[
+            {
+                "role": "system",
+                "content": [{
+                    "type": "input_text",
+                    "text": (
+                        system_text
+                        + ' Antworte als reines JSON ohne Markdown im Format {"ideas":[{"title":"...","category":"...","price_hint":"...","why_fit":"...","buy_tip":"..."}]}.'
+                    ),
+                }],
+            },
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+        ],
+        max_output_tokens=900,
+        truncation="auto",
+    )
+    cleaned = _coerce_gift_ideas(_parse_response_json_any(fallback_response))
+    if len(cleaned) < 3:
+        raise ValueError("AI-Antwort ungültig.")
+    return cleaned
+
+
 def _extract_output_text(response) -> Optional[str]:
     output_text = getattr(response, "output_text", None)
     if output_text:
@@ -1713,6 +1886,52 @@ def _get_settings_activities() -> Dict[str, Any]:
     return _normalize_activities_settings(data)
 
 
+def _normalize_birthday_settings(raw: Any, fallback: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    base = dict(DEFAULT_BIRTHDAY_SETTINGS)
+    if fallback:
+        base.update(fallback)
+    if not isinstance(raw, dict):
+        return base
+
+    relation = str(raw.get("birthday_default_relation") or base["birthday_default_relation"]).strip() or base["birthday_default_relation"]
+
+    upcoming_raw = raw.get("birthday_upcoming_window_days", base["birthday_upcoming_window_days"])
+    upcoming = base["birthday_upcoming_window_days"]
+    if isinstance(upcoming_raw, int):
+        upcoming = upcoming_raw
+    elif isinstance(upcoming_raw, str) and upcoming_raw.isdigit():
+        upcoming = int(upcoming_raw)
+    if upcoming < 1 or upcoming > 30:
+        upcoming = base["birthday_upcoming_window_days"]
+
+    occasion = str(raw.get("gift_default_occasion") or base["gift_default_occasion"]).strip() or base["gift_default_occasion"]
+    budget = str(raw.get("gift_budget_range") or base["gift_budget_range"]).strip() or base["gift_budget_range"]
+
+    preferred_types_raw = raw.get("gift_preferred_types", base["gift_preferred_types"])
+    preferred_types = _clean_tags(preferred_types_raw if isinstance(preferred_types_raw, list) else [])
+    if not preferred_types:
+        preferred_types = list(base["gift_preferred_types"])
+
+    no_goes_raw = raw.get("gift_no_goes", base["gift_no_goes"])
+    no_goes = _clean_tags(no_goes_raw if isinstance(no_goes_raw, list) else [])
+    if not no_goes:
+        no_goes = list(base["gift_no_goes"])
+
+    return {
+        "birthday_default_relation": relation,
+        "birthday_upcoming_window_days": upcoming,
+        "gift_default_occasion": occasion,
+        "gift_budget_range": budget,
+        "gift_preferred_types": preferred_types,
+        "gift_no_goes": no_goes,
+    }
+
+
+def _get_settings_birthdays() -> Dict[str, Any]:
+    data = _db_get_app_state_json(APP_STATE_SETTINGS_BIRTHDAYS, DEFAULT_BIRTHDAY_SETTINGS)
+    return _normalize_birthday_settings(data)
+
+
 
 
 def _send_telegram_sync(chat_id: int, text_msg: str, parse_mode: Optional[str] = None) -> None:
@@ -1948,6 +2167,15 @@ class ActivitiesSettingsPayload(BaseModel):
     home_types: Optional[List[str]] = None
 
 
+class BirthdaySettingsPayload(BaseModel):
+    birthday_default_relation: Optional[str] = None
+    birthday_upcoming_window_days: Optional[int] = None
+    gift_default_occasion: Optional[str] = None
+    gift_budget_range: Optional[str] = None
+    gift_preferred_types: Optional[List[str]] = None
+    gift_no_goes: Optional[List[str]] = None
+
+
 class ActivitiesMoodPayload(BaseModel):
     energy: Optional[str] = None
     vibe: Optional[str] = None
@@ -1974,6 +2202,20 @@ class HomeActivitiesGeneratePayload(BaseModel):
     goal: Optional[str] = None
     materials: List[str] = []
     themes: List[str] = []
+    free_text: Optional[str] = None
+    settings_snapshot: Optional[Dict[str, Any]] = None
+
+
+class GiftIdeasGeneratePayload(BaseModel):
+    birthday_id: Optional[str] = None
+    recipient_name: Optional[str] = None
+    age_years: Optional[int] = None
+    relation: Optional[str] = None
+    occasion: Optional[str] = None
+    budget_range: Optional[str] = None
+    interests: List[str] = []
+    gift_types: List[str] = []
+    constraints: List[str] = []
     free_text: Optional[str] = None
     settings_snapshot: Optional[Dict[str, Any]] = None
 
@@ -2085,6 +2327,7 @@ def api_get_settings():
     preferences = _get_settings_preferences()
     telegram = _get_settings_telegram()
     shop = _get_settings_shop()
+    birthdays = _get_settings_birthdays()
     last_chat_id = _db_get_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID)
     return {
         "ok": True,
@@ -2092,6 +2335,7 @@ def api_get_settings():
         "preferences": preferences,
         "telegram": telegram,
         "shop": shop,
+        "birthdays": birthdays,
         "telegram_last_chat_id": last_chat_id,
     }
 
@@ -2168,6 +2412,23 @@ def api_put_activities_settings(payload: ActivitiesSettingsPayload):
     current = _get_settings_activities()
     normalized = _normalize_activities_settings(payload.model_dump(), current)
     _db_set_app_state_value(APP_STATE_SETTINGS_ACTIVITIES, json.dumps(normalized, ensure_ascii=False))
+    return {"ok": True, "settings": normalized}
+
+
+@app.get("/api/birthdays/settings")
+def api_get_birthdays_settings():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    return {"ok": True, "settings": _get_settings_birthdays()}
+
+
+@app.put("/api/birthdays/settings")
+def api_put_birthdays_settings(payload: BirthdaySettingsPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    current = _get_settings_birthdays()
+    normalized = _normalize_birthday_settings(payload.model_dump(), current)
+    _db_set_app_state_value(APP_STATE_SETTINGS_BIRTHDAYS, json.dumps(normalized, ensure_ascii=False))
     return {"ok": True, "settings": normalized}
 
 
@@ -3029,7 +3290,7 @@ def _tg_pinboard_rows() -> List[List[Tuple[str, str]]]:
 
 def _tg_birthdays_rows() -> List[List[Tuple[str, str]]]:
     return [
-        [("🎂 Kommende", "birthdays:list")],
+        [("🎂 Kommende", "birthdays:list"), ("🎁 Geschenkideen", "birthdays:gifts")],
         [("Zurück", "menu:main")],
     ]
 
@@ -3660,6 +3921,80 @@ async def _tg_send_birthdays(chat_id: int) -> None:
     await _tg_send(chat_id, "\n".join(lines))
 
 
+def _tg_birthday_picker_rows() -> List[List[Tuple[str, str]]]:
+    result = api_list_birthdays()
+    birthdays = result.get("birthdays") or []
+    rows: List[List[Tuple[str, str]]] = []
+    for birthday in birthdays[:6]:
+        days_until = int(birthday.get("days_until") or 0)
+        suffix = "heute" if days_until == 0 else f"{days_until}T"
+        rows.append([(f"{birthday['name']} · {suffix}", f"birthdays:gift-for:{birthday['id']}")])
+    rows.append([("Zurück", "menu:birthdays")])
+    return rows
+
+
+async def _tg_send_gift_picker(chat_id: int) -> None:
+    result = api_list_birthdays()
+    birthdays = result.get("birthdays") or []
+    if not birthdays:
+        await _tg_send_menu(chat_id, "Keine Geburtstage gespeichert.", [[("Zurück", "menu:birthdays")]])
+        return
+    await _tg_send_menu(
+        chat_id,
+        "🎁 Für wen suchst du gerade ein Geschenk?",
+        _tg_birthday_picker_rows(),
+    )
+
+
+async def _tg_send_gift_budget_picker(chat_id: int, birthday_id: str) -> None:
+    rows = [
+        [("Klein", f"birthdays:gift-budget:{birthday_id}:klein"), ("Mittel", f"birthdays:gift-budget:{birthday_id}:mittel")],
+        [("Besonders", f"birthdays:gift-budget:{birthday_id}:besonders"), ("Zurück", "birthdays:gifts")],
+    ]
+    await _tg_send_menu(chat_id, "Welcher Budget-Rahmen passt?", rows)
+
+
+def _tg_budget_label_to_range(label: str, defaults: Dict[str, Any]) -> str:
+    mapping = {
+        "klein": "10-25 CHF",
+        "mittel": defaults.get("gift_budget_range") or "25-50 CHF",
+        "besonders": "50-120 CHF",
+    }
+    return mapping.get(label, defaults.get("gift_budget_range") or "25-50 CHF")
+
+
+def _tg_format_gift_ideas(name: str, ideas: List[Dict[str, str]]) -> str:
+    lines = [f"🎁 Geschenkideen für {name}"]
+    for index, idea in enumerate(ideas[:3], start=1):
+        lines.append("")
+        lines.append(f"{index}. {idea['title']} ({idea['price_hint']})")
+        lines.append(f"• {idea['category']}")
+        lines.append(f"• {idea['why_fit']}")
+        lines.append(f"• Tipp: {idea['buy_tip']}")
+    return "\n".join(lines)
+
+
+async def _tg_send_gift_ideas(chat_id: int, birthday_id: str, budget_label: str) -> None:
+    defaults = _get_settings_birthdays()
+    payload = GiftIdeasGeneratePayload(
+        birthday_id=birthday_id,
+        occasion=defaults.get("gift_default_occasion") or "Geburtstag",
+        budget_range=_tg_budget_label_to_range(budget_label, defaults),
+        gift_types=defaults.get("gift_preferred_types") or [],
+        constraints=defaults.get("gift_no_goes") or [],
+    )
+    result = api_generate_gift_ideas(payload)
+    if not result.get("ok"):
+        await _tg_send_menu(chat_id, result.get("error") or "Geschenkideen konnten nicht generiert werden.", [[("Zurück", "birthdays:gifts")]])
+        return
+    birthday = result.get("birthday") or {}
+    rows = [
+        [("Weitere", f"birthdays:gift-budget:{birthday_id}:{budget_label}"), ("Zurück", "birthdays:gifts")],
+        [("Menü", "menu:birthdays")],
+    ]
+    await _tg_send_menu(chat_id, _tg_format_gift_ideas(birthday.get("name") or "jemanden", result.get("ideas") or []), rows)
+
+
 async def _tg_send_family(chat_id: int) -> None:
     members = api_list_family().get("members") or []
     if not members:
@@ -3986,6 +4321,16 @@ async def _tg_handle_callback(chat_id: int, callback_id: str, data: str, today: 
 
     if data == "birthdays:list":
         await _tg_send_birthdays(chat_id)
+        return
+    if data == "birthdays:gifts":
+        await _tg_send_gift_picker(chat_id)
+        return
+    if data.startswith("birthdays:gift-for:"):
+        await _tg_send_gift_budget_picker(chat_id, data.split(":")[-1])
+        return
+    if data.startswith("birthdays:gift-budget:"):
+        _, _, birthday_id, budget_label = data.split(":", 3)
+        await _tg_send_gift_ideas(chat_id, birthday_id, budget_label)
         return
     if data == "family:list":
         await _tg_send_family(chat_id)
@@ -4675,6 +5020,53 @@ class BirthdayUpdate(BaseModel):
     relation: Optional[str] = None
     gift_ideas: Optional[List[str]] = None
     notes: Optional[str] = None
+
+
+@app.post("/api/birthdays/gift-ideas/generate")
+def api_generate_gift_ideas(payload: GiftIdeasGeneratePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if not os.getenv("OPENAI_API_KEY"):
+        return {"ok": False, "error": "AI nicht konfiguriert."}
+
+    settings = _get_settings_birthdays()
+    if payload.settings_snapshot:
+        settings = _normalize_birthday_settings(payload.settings_snapshot, settings)
+
+    birthday_context: Optional[Dict[str, Any]] = None
+    if payload.birthday_id:
+        try:
+            birthday_id = UUID(payload.birthday_id)
+        except ValueError:
+            return {"ok": False, "error": "Ungültiger Geburtstag."}
+        with Session(engine) as session:
+            birthday = session.get(Birthday, birthday_id)
+            if not birthday:
+                return {"ok": False, "error": "Geburtstag nicht gefunden."}
+            birthday_context = {
+                "id": str(birthday.id),
+                "name": birthday.name,
+                "birth_date": birthday.birth_date.isoformat(),
+                "relation": birthday.relation,
+                "gift_ideas": birthday.gift_ideas or [],
+                "notes": birthday.notes,
+            }
+
+    resolved_name = (payload.recipient_name or (birthday_context or {}).get("name") or "").strip()
+    if not resolved_name:
+        return {"ok": False, "error": "Bitte gib an, für wen das Geschenk ist."}
+
+    try:
+        ideas = _openai_generate_gift_ideas(payload, settings, birthday_context)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+    return {
+        "ok": True,
+        "ideas": ideas,
+        "birthday": birthday_context,
+        "settings_used": settings,
+    }
 
 
 @app.get("/api/birthdays")
