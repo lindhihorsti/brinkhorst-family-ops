@@ -2140,22 +2140,29 @@ def _parse_swap_days(cmd: str) -> List[int]:
 
 
 def _resolve_day_title(rid: Optional[str]) -> str:
+    return _resolve_day_meta(rid)["title"]
+
+
+def _resolve_day_meta(rid: Optional[str]) -> Dict[str, Optional[str]]:
     if not rid:
-        return "—"
+        return {"title": "—", "source_url": None}
     if rid.startswith("KI:"):
-        return rid
+        return {"title": rid, "source_url": None}
     title = rid
+    source_url = None
     with Session(engine) as session:
         r = session.get(Recipe, rid)
         if r:
             title = r.title
-    return title
+            source_url = r.source_url
+    return {"title": title, "source_url": source_url}
 
 
 def _build_day_entries(days: Dict[str, str]) -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
     for i in range(1, 8):
         rid = days.get(str(i))
+        meta = _resolve_day_meta(rid)
         if not rid:
             kind = "empty"
             recipe_id = None
@@ -2171,7 +2178,8 @@ def _build_day_entries(days: Dict[str, str]) -> List[Dict[str, Any]]:
                 "label": DAY_LABELS[i],
                 "kind": kind,
                 "recipe_id": recipe_id,
-                "title": _resolve_day_title(rid),
+                "title": meta["title"],
+                "source_url": meta["source_url"],
             }
         )
     return entries
