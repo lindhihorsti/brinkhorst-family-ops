@@ -208,6 +208,7 @@ APP_STATE_SETTINGS_ACTIVITIES = "settings_activities"
 APP_STATE_TELEGRAM_LAST_CHAT_ID = "telegram_last_chat_id"
 APP_STATE_PINBOARD_CATEGORIES = "pinboard_categories"
 APP_STATE_CHORE_SETTINGS = "chore_settings"
+APP_STATE_TG_STATE_PREFIX = "tg_state:"
 
 DEFAULT_PINBOARD_CATEGORIES = [
     {"id": "allgemein", "label": "Allgemein", "color": "#6b7280"},
@@ -2917,6 +2918,218 @@ async def _tg_send(chat_id: int, text_msg: str, parse_mode: Optional[str] = None
         print(f"Telegram send exception: {e}", flush=True)
 
 
+async def _tg_api(method: str, payload: Dict[str, Any]) -> None:
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token:
+        print("TELEGRAM_BOT_TOKEN missing", flush=True)
+        return
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(url, json=payload)
+            if r.status_code != 200:
+                print(f"Telegram {method} failed: {r.status_code} {r.text}", flush=True)
+    except Exception as e:
+        print(f"Telegram {method} exception: {e}", flush=True)
+
+
+def _tg_inline_keyboard(rows: List[List[Tuple[str, str]]]) -> Dict[str, Any]:
+    return {
+        "inline_keyboard": [
+            [{"text": label, "callback_data": data} for label, data in row]
+            for row in rows
+        ]
+    }
+
+
+async def _tg_send_menu(
+    chat_id: int,
+    text_msg: str,
+    rows: List[List[Tuple[str, str]]],
+    parse_mode: Optional[str] = None,
+) -> None:
+    payload: Dict[str, Any] = {
+        "chat_id": chat_id,
+        "text": text_msg,
+        "reply_markup": _tg_inline_keyboard(rows),
+    }
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    await _tg_api("sendMessage", payload)
+
+
+async def _tg_answer_callback(callback_id: str, text: Optional[str] = None) -> None:
+    payload: Dict[str, Any] = {"callback_query_id": callback_id}
+    if text:
+        payload["text"] = text
+    await _tg_api("answerCallbackQuery", payload)
+
+
+def _tg_state_key(chat_id: int) -> str:
+    return f"{APP_STATE_TG_STATE_PREFIX}{chat_id}"
+
+
+def _tg_get_state(chat_id: int) -> Dict[str, Any]:
+    return _db_get_app_state_json(_tg_state_key(chat_id), {})
+
+
+def _tg_set_state(chat_id: int, state: Dict[str, Any]) -> None:
+    _db_set_app_state_value(_tg_state_key(chat_id), json.dumps(state, ensure_ascii=False))
+
+
+def _tg_clear_state(chat_id: int) -> None:
+    _db_set_app_state_value(_tg_state_key(chat_id), json.dumps({}))
+
+
+def _tg_main_menu_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("🗓️ Wochenplan", "menu:weekly"), ("🛒 Einkauf", "menu:shopping")],
+        [("💸 Split", "menu:split"), ("✅ Aufgaben", "menu:chores")],
+        [("📌 Pinnwand", "menu:pinboard"), ("🎂 Geburtstage", "menu:birthdays")],
+        [("👥 Familie", "menu:family"), ("📚 Rezepte", "menu:recipes")],
+    ]
+
+
+def _tg_weekly_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("Heute", "weekly:today"), ("Aktueller Plan", "weekly:show")],
+        [("Neu generieren", "weekly:plan"), ("Einkauf aus Plan", "weekly:shop")],
+        [("Zurück", "menu:main")],
+    ]
+
+
+def _tg_split_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("➕ Ausgabe", "split:add"), ("🧾 Letzte", "split:list")],
+        [("⚖️ Salden", "split:balance"), ("📊 Report", "split:report")],
+        [("Zurück", "menu:main")],
+    ]
+
+
+def _tg_shopping_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("📋 Listen", "shopping:list"), ("➕ Neue Liste", "shopping:add")],
+        [("🧺 Wochenplan-Shop", "weekly:shop"), ("Zurück", "menu:main")],
+    ]
+
+
+def _tg_chores_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("📋 Offene Aufgaben", "chores:list"), ("➕ Neue Aufgabe", "chores:add")],
+        [("🏅 Punkte", "chores:stats"), ("Zurück", "menu:main")],
+    ]
+
+
+def _tg_pinboard_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("📌 Letzte Notizen", "pinboard:list"), ("➕ Neue Notiz", "pinboard:add")],
+        [("Zurück", "menu:main")],
+    ]
+
+
+def _tg_birthdays_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("🎂 Kommende", "birthdays:list")],
+        [("Zurück", "menu:main")],
+    ]
+
+
+def _tg_family_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("👥 Familie anzeigen", "family:list")],
+        [("Zurück", "menu:main")],
+    ]
+
+
+def _tg_recipes_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("📚 Letzte Rezepte", "recipes:list")],
+        [("Zurück", "menu:main")],
+    ]
+
+
+def _tg_cancel_rows() -> List[List[Tuple[str, str]]]:
+    return [[("Abbrechen", "flow:cancel"), ("Hauptmenü", "menu:main")]]
+
+
+def _tg_shopping_detail_rows(list_id: str) -> List[List[Tuple[str, str]]]:
+    return [
+        [("➕ Eintrag", f"shopping:add-item:{list_id}"), ("🤖 Schätzung", f"shopping:estimate:{list_id}")],
+        [("🧺 Wochenplan import", f"shopping:snapshot:{list_id}"), ("📋 Öffnen", f"shopping:view:{list_id}")],
+        [("Zurück", "shopping:list")],
+    ]
+
+
+def _tg_format_expense_balance_report(balance: Dict[str, Any]) -> str:
+    lines = ["💸 Offene Salden"]
+    debts = balance.get("debts") or []
+    if debts:
+        for debt in debts[:8]:
+            lines.append(f"• {debt['from']} → {debt['to']}: CHF {float(debt['amount']):.2f}")
+    else:
+        lines.append("Alles ausgeglichen.")
+    return "\n".join(lines)
+
+
+def _tg_format_expense_report(report: Dict[str, Any]) -> str:
+    summary = report.get("summary") or {}
+    by_category = report.get("by_category") or []
+    lines = [
+        "📊 Split-Auswertung",
+        f"Monat: CHF {float(summary.get('total_month') or 0):.2f}",
+        f"Gesamt: CHF {float(summary.get('total_all') or 0):.2f}",
+        f"Offener Saldo: CHF {float(summary.get('open_balance') or 0):.2f}",
+    ]
+    if by_category:
+        lines.append("")
+        lines.append("Top Kategorien:")
+        for row in by_category[:4]:
+            lines.append(f"• {row['category']}: CHF {float(row['total']):.2f}")
+    return "\n".join(lines)
+
+
+def _tg_find_family_members() -> List[FamilyMember]:
+    if engine is None:
+        return []
+    with Session(engine) as session:
+        return list(
+            session.exec(
+                select(FamilyMember).where(FamilyMember.is_active == True).order_by(FamilyMember.created_at)  # noqa: E712
+            ).all()
+        )
+
+
+def _tg_find_member_by_name(name: str) -> Optional[FamilyMember]:
+    target = _normalize_ascii_key(name)
+    for member in _tg_find_family_members():
+        if _normalize_ascii_key(member.name) == target:
+            return member
+    return None
+
+
+def _tg_parse_member_names(text_value: str) -> Tuple[List[str], List[str]]:
+    members = _tg_find_family_members()
+    lookup = {_normalize_ascii_key(member.name): member for member in members}
+    requested = [part.strip() for part in re.split(r"[,;/\n]+", text_value) if part.strip()]
+    names: List[str] = []
+    ids: List[str] = []
+    for raw in requested:
+        key = _normalize_ascii_key(raw)
+        member = lookup.get(key)
+        if member and member.id:
+            names.append(member.name)
+            ids.append(str(member.id))
+    return names, ids
+
+
+async def _tg_show_main_menu(chat_id: int) -> None:
+    await _tg_send_menu(
+        chat_id,
+        "Family Ops Bot\n\nWähle einen Bereich:",
+        _tg_main_menu_rows(),
+    )
+
+
 # -----------------------------
 # Date helpers
 # -----------------------------
@@ -3264,6 +3477,531 @@ def _build_draft_payload(proposed_days: Dict[str, str], requested_swaps: List[in
     }
 
 
+async def _tg_show_weekly_menu(chat_id: int) -> None:
+    await _tg_send_menu(chat_id, "🗓️ Wochenplan", _tg_weekly_rows())
+
+
+async def _tg_show_split_menu(chat_id: int) -> None:
+    await _tg_send_menu(chat_id, "💸 Split & Ausgaben", _tg_split_rows())
+
+
+async def _tg_show_shopping_menu(chat_id: int) -> None:
+    await _tg_send_menu(chat_id, "🛒 Einkauf", _tg_shopping_rows())
+
+
+async def _tg_show_chores_menu(chat_id: int) -> None:
+    await _tg_send_menu(chat_id, "✅ Aufgaben", _tg_chores_rows())
+
+
+async def _tg_show_pinboard_menu(chat_id: int) -> None:
+    await _tg_send_menu(chat_id, "📌 Pinnwand", _tg_pinboard_rows())
+
+
+async def _tg_show_birthdays_menu(chat_id: int) -> None:
+    await _tg_send_menu(chat_id, "🎂 Geburtstage", _tg_birthdays_rows())
+
+
+async def _tg_show_family_menu(chat_id: int) -> None:
+    await _tg_send_menu(chat_id, "👥 Familie", _tg_family_rows())
+
+
+async def _tg_show_recipes_menu(chat_id: int) -> None:
+    await _tg_send_menu(
+        chat_id,
+        "📚 Rezepte\n\nIm Bot nur ansehen, nicht anlegen.",
+        _tg_recipes_rows(),
+    )
+
+
+async def _tg_send_current_plan(chat_id: int, week_start: date, today: date) -> None:
+    base = _db_get_weekly_plan(week_start)
+    if not base:
+        await _tg_send(chat_id, "Kein Plan vorhanden. Erst neuen Plan erzeugen.")
+        return
+    await _tg_send(chat_id, _format_plan(base["days"]))
+
+
+async def _tg_send_today_summary(chat_id: int, week_start: date, today: date) -> None:
+    base = _db_get_weekly_plan(week_start)
+    if not base:
+        await _tg_send(chat_id, "Kein Plan vorhanden. Erst neuen Plan erzeugen.")
+        return
+    day_num = today.isoweekday()
+    rid = base["days"].get(str(day_num))
+    title = _resolve_day_title(rid)
+    tomorrow_num = (day_num % 7) + 1
+    rid_tomorrow = base["days"].get(str(tomorrow_num))
+    title_tomorrow = _resolve_day_title(rid_tomorrow)
+    await _tg_send(chat_id, f"🍳 {DAY_LABELS.get(day_num)}: {title}\n🗓️ {DAY_LABELS.get(tomorrow_num)}: {title_tomorrow}")
+
+
+async def _tg_send_weekly_shop(chat_id: int, week_start: date) -> None:
+    base = _db_get_weekly_plan(week_start)
+    if not base:
+        await _tg_send(chat_id, "Kein Plan vorhanden. Erst neuen Plan erzeugen.")
+        return
+    shop_settings = _get_settings_shop()
+    shop_payload = build_shop_payload(
+        shop_settings.get("shop_output_mode"),
+        base["days"],
+        engine,
+        _get_settings_pantry(),
+    )
+    await _tg_send(
+        chat_id,
+        shop_payload.get("telegram_message") or shop_payload["message"],
+        shop_payload.get("telegram_parse_mode"),
+    )
+
+
+async def _tg_send_latest_expenses(chat_id: int) -> None:
+    result = api_list_expenses(limit=8)
+    expenses = result.get("expenses") or []
+    if not expenses:
+        await _tg_send(chat_id, "Noch keine Ausgaben gespeichert.")
+        return
+    lines = ["🧾 Letzte Ausgaben"]
+    for expense in expenses[:8]:
+        lines.append(
+            f"• {expense['title']} · CHF {float(expense['amount']):.2f} · {expense['paid_by']} · {expense['category']}"
+        )
+    await _tg_send(chat_id, "\n".join(lines))
+
+
+async def _tg_send_expense_balance(chat_id: int) -> None:
+    await _tg_send(chat_id, _tg_format_expense_balance_report(api_expenses_balance()))
+
+
+async def _tg_send_expense_report(chat_id: int) -> None:
+    await _tg_send(chat_id, _tg_format_expense_report(api_expenses_report()))
+
+
+async def _tg_send_shopping_lists(chat_id: int) -> None:
+    result = api_list_shopping_lists()
+    items = result.get("items") or []
+    if not items:
+        await _tg_send_menu(chat_id, "Noch keine Einkaufslisten vorhanden.", [[("➕ Neue Liste", "shopping:add")], [("Zurück", "menu:shopping")]])
+        return
+    lines = ["🛒 Einkaufslisten"]
+    rows: List[List[Tuple[str, str]]] = []
+    for item in items[:6]:
+        lines.append(
+            f"• {item['title']} · {item['manual_count']} manuell · {item['recipe_count']} Rezept-Zutaten"
+        )
+        rows.append([(item["title"][:24], f"shopping:view:{item['id']}")])
+    rows.append([("➕ Neue Liste", "shopping:add"), ("Zurück", "menu:shopping")])
+    await _tg_send_menu(chat_id, "\n".join(lines), rows)
+
+
+async def _tg_send_shopping_list_detail(chat_id: int, list_id: str) -> None:
+    item = api_get_shopping_list(UUID(list_id)).get("item")
+    if not item:
+        await _tg_send(chat_id, "Liste nicht gefunden.")
+        return
+    lines = [
+        f"🛒 {item['title']}",
+        f"{item['manual_count']} manuell · {item['recipe_count']} aus Rezepten · {item['checked_count']}/{item['total_count']} erledigt",
+    ]
+    for shopping_item in (item.get("items") or [])[:10]:
+        prefix = "☑️" if shopping_item.get("checked") else "•"
+        lines.append(f"{prefix} {shopping_item['content']}")
+    await _tg_send_menu(chat_id, "\n".join(lines), _tg_shopping_detail_rows(list_id))
+
+
+async def _tg_send_chores(chat_id: int) -> None:
+    result = api_list_chores()
+    chores = result.get("chores") or []
+    if not chores:
+        await _tg_send(chat_id, "Keine offenen Aufgaben.")
+        return
+    lines = ["✅ Aufgaben"]
+    for chore in chores[:10]:
+        status = "erledigt heute" if chore.get("completed_today") else "offen"
+        lines.append(f"• {chore['title']} · {status} · {chore.get('points', 1)} Punkte")
+    await _tg_send(chat_id, "\n".join(lines))
+
+
+async def _tg_send_chore_stats(chat_id: int) -> None:
+    result = api_chore_stats()
+    scores = result.get("scores") or []
+    if not scores:
+        await _tg_send(chat_id, "Noch keine Punkte im aktuellen Monat.")
+        return
+    lines = ["🏅 Aufgaben-Punkte"]
+    for row in scores[:8]:
+        lines.append(f"• {row['name']}: {row['points']}")
+    await _tg_send(chat_id, "\n".join(lines))
+
+
+async def _tg_send_pinboard(chat_id: int) -> None:
+    result = api_list_pinboard()
+    notes = result.get("notes") or []
+    if not notes:
+        await _tg_send(chat_id, "Keine Pinnwand-Einträge vorhanden.")
+        return
+    lines = ["📌 Pinnwand"]
+    for note in notes[:8]:
+        tag = note.get("tag") or "allgemein"
+        lines.append(f"• [{tag}] {note['content']}")
+    await _tg_send(chat_id, "\n".join(lines))
+
+
+async def _tg_send_birthdays(chat_id: int) -> None:
+    result = api_list_birthdays()
+    birthdays = result.get("birthdays") or []
+    if not birthdays:
+        await _tg_send(chat_id, "Keine Geburtstage gespeichert.")
+        return
+    lines = ["🎂 Nächste Geburtstage"]
+    for birthday in birthdays[:8]:
+        days_until = int(birthday.get("days_until") or 0)
+        label = "heute" if days_until == 0 else f"in {days_until} Tagen"
+        lines.append(f"• {birthday['name']} · {label}")
+    await _tg_send(chat_id, "\n".join(lines))
+
+
+async def _tg_send_family(chat_id: int) -> None:
+    members = api_list_family().get("members") or []
+    if not members:
+        await _tg_send(chat_id, "Keine Familienmitglieder gespeichert.")
+        return
+    lines = ["👥 Familie"]
+    for member in members:
+        lines.append(f"• {member.name}")
+    await _tg_send(chat_id, "\n".join(lines))
+
+
+async def _tg_send_recipes(chat_id: int) -> None:
+    items = _db_list_recipes(limit=10)
+    if not items:
+        await _tg_send(chat_id, "Noch keine Rezepte gespeichert.")
+        return
+    lines = ["📚 Letzte Rezepte"]
+    for recipe in items:
+        meta = []
+        if recipe.time_minutes:
+            meta.append(f"{recipe.time_minutes} Min")
+        if recipe.collection_name:
+            meta.append(recipe.collection_name)
+        suffix = f" ({' · '.join(meta)})" if meta else ""
+        lines.append(f"• {recipe.title}{suffix}")
+    await _tg_send(chat_id, "\n".join(lines))
+
+
+def _tg_start_flow(chat_id: int, flow: str, data: Optional[Dict[str, Any]] = None) -> None:
+    state = {"flow": flow}
+    if data:
+        state.update(data)
+    _tg_set_state(chat_id, state)
+
+
+async def _tg_handle_flow_message(chat_id: int, text_value: str) -> bool:
+    state = _tg_get_state(chat_id)
+    flow = state.get("flow")
+    if not flow:
+        return False
+
+    text_value = (text_value or "").strip()
+    if not text_value:
+        await _tg_send(chat_id, "Bitte etwas eingeben oder Abbrechen wählen.")
+        return True
+
+    if flow == "expense_title":
+        state["title"] = text_value
+        state["flow"] = "expense_amount"
+        _tg_set_state(chat_id, state)
+        await _tg_send_menu(chat_id, "Betrag? Beispiel: `24.90`", _tg_cancel_rows(), "Markdown")
+        return True
+
+    if flow == "expense_amount":
+        try:
+            amount = round(float(text_value.replace(",", ".")), 2)
+        except Exception:
+            await _tg_send(chat_id, "Bitte einen gültigen Betrag eingeben, z. B. 24.90")
+            return True
+        state["amount"] = amount
+        state["flow"] = "expense_paid_by"
+        _tg_set_state(chat_id, state)
+        rows = [[(member.name, f"flow:expense:paid:{member.id}")] for member in _tg_find_family_members()[:8]]
+        rows.append([("Abbrechen", "flow:cancel")])
+        await _tg_send_menu(chat_id, "Wer hat bezahlt?", rows)
+        return True
+
+    if flow == "expense_split":
+        members = _tg_find_family_members()
+        if text_value.lower() == "alle":
+            state["split_names"] = [member.name for member in members]
+            state["split_ids"] = [str(member.id) for member in members if member.id]
+        else:
+            names, ids = _tg_parse_member_names(text_value)
+            if not names:
+                await _tg_send(chat_id, "Bitte `alle` oder Namen kommasepariert eingeben, z. B. `Dennis, Leni`.")
+                return True
+            state["split_names"] = names
+            state["split_ids"] = ids
+        state["flow"] = "expense_notes"
+        _tg_set_state(chat_id, state)
+        await _tg_send_menu(chat_id, "Optional Notiz eingeben oder `skip` schreiben.", _tg_cancel_rows())
+        return True
+
+    if flow == "expense_notes":
+        note = None if text_value.lower() in {"skip", "-", "nein"} else text_value
+        payload = ExpenseCreate(
+            title=state["title"],
+            amount=float(state["amount"]),
+            paid_by=state["paid_by_name"],
+            paid_by_member_id=state.get("paid_by_id"),
+            split_among=state["split_names"],
+            split_among_member_ids=state.get("split_ids") or [],
+            category=state.get("category") or "Sonstiges",
+            notes=note,
+        )
+        result = api_create_expense(payload)
+        _tg_clear_state(chat_id)
+        expense = result["expense"]
+        await _tg_send_menu(
+            chat_id,
+            f"✅ Ausgabe gespeichert: {expense['title']} · CHF {float(expense['amount']):.2f}",
+            _tg_split_rows(),
+        )
+        return True
+
+    if flow == "shopping_title":
+        state["title"] = text_value
+        state["flow"] = "shopping_manual"
+        _tg_set_state(chat_id, state)
+        await _tg_send_menu(chat_id, "Optional erster manueller Eintrag oder `skip`.", _tg_cancel_rows())
+        return True
+
+    if flow == "shopping_manual":
+        manual_items = [] if text_value.lower() in {"skip", "-", "nein"} else [text_value]
+        payload = ShoppingListCreatePayload(
+            title=state["title"],
+            manual_items=manual_items,
+            include_weekly_items=bool(state.get("include_weekly_items")),
+            import_mode=state.get("import_mode") or SHOP_OUTPUT_AI,
+            view_mode=state.get("view_mode") or "checklist",
+        )
+        result = api_create_shopping_list(payload)
+        _tg_clear_state(chat_id)
+        await _tg_send_shopping_list_detail(chat_id, result["item"]["id"])
+        return True
+
+    if flow == "shopping_add_item":
+        list_id = state.get("list_id")
+        if not list_id:
+            _tg_clear_state(chat_id)
+            return True
+        result = api_add_shopping_list_item(UUID(list_id), ShoppingListItemPayload(content=text_value))
+        _tg_clear_state(chat_id)
+        await _tg_send_shopping_list_detail(chat_id, result["item"]["id"])
+        return True
+
+    if flow == "chore_title":
+        result = api_create_chore(ChoreCreate(title=text_value))
+        _tg_clear_state(chat_id)
+        await _tg_send_menu(chat_id, f"✅ Aufgabe erstellt: {result.title}", _tg_chores_rows())
+        return True
+
+    if flow == "pinboard_content":
+        state["content"] = text_value
+        state["flow"] = "pinboard_tag"
+        _tg_set_state(chat_id, state)
+        rows = [
+            [("Allgemein", "flow:pinboard:tag:allgemein"), ("Schule", "flow:pinboard:tag:schule")],
+            [("Einkauf", "flow:pinboard:tag:einkauf"), ("Wichtig", "flow:pinboard:tag:wichtig")],
+            [("Event", "flow:pinboard:tag:event"), ("Abbrechen", "flow:cancel")],
+        ]
+        await _tg_send_menu(chat_id, "Welche Kategorie?", rows)
+        return True
+
+    return False
+
+
+async def _tg_handle_callback(chat_id: int, callback_id: str, data: str, today: date, week_start: date) -> None:
+    await _tg_answer_callback(callback_id)
+
+    if data == "menu:main":
+        _tg_clear_state(chat_id)
+        await _tg_show_main_menu(chat_id)
+        return
+    if data == "menu:weekly":
+        await _tg_show_weekly_menu(chat_id)
+        return
+    if data == "menu:split":
+        await _tg_show_split_menu(chat_id)
+        return
+    if data == "menu:shopping":
+        await _tg_show_shopping_menu(chat_id)
+        return
+    if data == "menu:chores":
+        await _tg_show_chores_menu(chat_id)
+        return
+    if data == "menu:pinboard":
+        await _tg_show_pinboard_menu(chat_id)
+        return
+    if data == "menu:birthdays":
+        await _tg_show_birthdays_menu(chat_id)
+        return
+    if data == "menu:family":
+        await _tg_show_family_menu(chat_id)
+        return
+    if data == "menu:recipes":
+        await _tg_show_recipes_menu(chat_id)
+        return
+
+    if data == "weekly:today":
+        await _tg_send_today_summary(chat_id, week_start, today)
+        return
+    if data == "weekly:show":
+        await _tg_send_current_plan(chat_id, week_start, today)
+        return
+    if data == "weekly:plan":
+        response = api_weekly_plan()
+        await _tg_send(chat_id, response["message"])
+        return
+    if data == "weekly:shop":
+        await _tg_send_weekly_shop(chat_id, week_start)
+        return
+
+    if data == "split:list":
+        await _tg_send_latest_expenses(chat_id)
+        return
+    if data == "split:balance":
+        await _tg_send_expense_balance(chat_id)
+        return
+    if data == "split:report":
+        await _tg_send_expense_report(chat_id)
+        return
+    if data == "split:add":
+        _tg_start_flow(chat_id, "expense_title")
+        await _tg_send_menu(chat_id, "Neue Ausgabe\n\nWofür war die Ausgabe?", _tg_cancel_rows())
+        return
+
+    if data.startswith("flow:expense:paid:"):
+        member_id = data.split(":")[-1]
+        members = {str(member.id): member for member in _tg_find_family_members() if member.id}
+        member = members.get(member_id)
+        if not member:
+            await _tg_send(chat_id, "Mitglied nicht gefunden.")
+            return
+        state = _tg_get_state(chat_id)
+        state["paid_by_id"] = member_id
+        state["paid_by_name"] = member.name
+        state["flow"] = "expense_category"
+        _tg_set_state(chat_id, state)
+        rows = [[(category, f"flow:expense:category:{category}")] for category in EXPENSE_CATEGORIES]
+        rows.append([("Abbrechen", "flow:cancel")])
+        await _tg_send_menu(chat_id, "Welche Kategorie?", rows)
+        return
+
+    if data.startswith("flow:expense:category:"):
+        category = data.split(":", 3)[-1]
+        state = _tg_get_state(chat_id)
+        state["category"] = category
+        state["flow"] = "expense_split"
+        _tg_set_state(chat_id, state)
+        members = _tg_find_family_members()
+        hint = ", ".join(member.name for member in members[:6])
+        await _tg_send_menu(
+            chat_id,
+            f"Mit wem teilen?\n\nSchreibe `alle` oder Namen kommasepariert.\nVerfügbare Namen: {hint}",
+            _tg_cancel_rows(),
+            "Markdown",
+        )
+        return
+
+    if data == "shopping:list":
+        await _tg_send_shopping_lists(chat_id)
+        return
+    if data == "shopping:add":
+        defaults = _get_settings_shop()
+        _tg_start_flow(
+            chat_id,
+            "shopping_title",
+            {
+                "include_weekly_items": bool(defaults.get("shopping_list_include_weekly_by_default", True)),
+                "import_mode": defaults.get("shop_output_mode", SHOP_OUTPUT_AI),
+                "view_mode": defaults.get("shopping_list_view_mode", "checklist"),
+            },
+        )
+        await _tg_send_menu(chat_id, "Neue Einkaufsliste\n\nWie soll die Liste heißen?", _tg_cancel_rows())
+        return
+    if data.startswith("shopping:view:"):
+        await _tg_send_shopping_list_detail(chat_id, data.split(":")[-1])
+        return
+    if data.startswith("shopping:add-item:"):
+        list_id = data.split(":")[-1]
+        _tg_start_flow(chat_id, "shopping_add_item", {"list_id": list_id})
+        await _tg_send_menu(chat_id, "Welchen Eintrag möchtest du hinzufügen?", _tg_cancel_rows())
+        return
+    if data.startswith("shopping:estimate:"):
+        list_id = data.split(":")[-1]
+        result = api_estimate_shopping_list_total(UUID(list_id))
+        if not result.get("ok"):
+            await _tg_send(chat_id, result.get("error") or "Schätzung fehlgeschlagen.")
+            return
+        estimate = result.get("estimate") or {}
+        await _tg_send_shopping_list_detail(chat_id, list_id)
+        await _tg_send(chat_id, f"🤖 Schätzung: {estimate.get('estimated_total_text') or 'aktualisiert'}")
+        return
+    if data.startswith("shopping:snapshot:"):
+        list_id = data.split(":")[-1]
+        result = api_snapshot_weekly_into_shopping_list(UUID(list_id), ShoppingListSnapshotPayload(import_mode=None))
+        if result.get("warning"):
+            await _tg_send(chat_id, result["warning"])
+        await _tg_send_shopping_list_detail(chat_id, list_id)
+        return
+
+    if data == "chores:list":
+        await _tg_send_chores(chat_id)
+        return
+    if data == "chores:stats":
+        await _tg_send_chore_stats(chat_id)
+        return
+    if data == "chores:add":
+        _tg_start_flow(chat_id, "chore_title")
+        await _tg_send_menu(chat_id, "Neue Aufgabe\n\nWie lautet der Titel?", _tg_cancel_rows())
+        return
+
+    if data == "pinboard:list":
+        await _tg_send_pinboard(chat_id)
+        return
+    if data == "pinboard:add":
+        _tg_start_flow(chat_id, "pinboard_content")
+        await _tg_send_menu(chat_id, "Neue Pinnwand-Notiz\n\nWas soll gespeichert werden?", _tg_cancel_rows())
+        return
+    if data.startswith("flow:pinboard:tag:"):
+        tag = data.split(":")[-1]
+        state = _tg_get_state(chat_id)
+        content = state.get("content")
+        if not content:
+            _tg_clear_state(chat_id)
+            await _tg_send(chat_id, "Notiz-Inhalt fehlt. Bitte neu starten.")
+            return
+        result = api_create_pinboard_note(PinboardNoteCreate(content=content, author_name="Telegram", tag=tag))
+        _tg_clear_state(chat_id)
+        await _tg_send_menu(chat_id, f"📌 Notiz gespeichert ({tag}).", _tg_pinboard_rows())
+        return
+
+    if data == "birthdays:list":
+        await _tg_send_birthdays(chat_id)
+        return
+    if data == "family:list":
+        await _tg_send_family(chat_id)
+        return
+    if data == "recipes:list":
+        await _tg_send_recipes(chat_id)
+        return
+
+    if data == "flow:cancel":
+        _tg_clear_state(chat_id)
+        await _tg_show_main_menu(chat_id)
+        return
+
+    await _tg_show_main_menu(chat_id)
+
+
 # -----------------------------
 # Telegram webhook
 # -----------------------------
@@ -3273,13 +4011,17 @@ async def telegram_webhook(request: Request):
         raise HTTPException(status_code=500, detail="DATABASE_URL missing")
 
     payload = await request.json()
-    msg = payload.get("message") or payload.get("edited_message")
-    if not msg:
+    callback = payload.get("callback_query")
+    msg = payload.get("message") or payload.get("edited_message") or (callback or {}).get("message")
+    if not msg and not callback:
         return {"ok": True}
 
-    from_id = (msg.get("from") or {}).get("id")
+    from_obj = (callback.get("from") if callback else None) or (msg.get("from") or {})
+    from_id = from_obj.get("id")
     chat_id = (msg.get("chat") or {}).get("id")
-    message_text = msg.get("text", "") or ""
+    message_text = (payload.get("message") or payload.get("edited_message") or {}).get("text", "") or ""
+    callback_data = (callback or {}).get("data", "") or ""
+    callback_id = (callback or {}).get("id")
 
     print("TELEGRAM UPDATE:\n" + json.dumps(payload, ensure_ascii=False, indent=2), flush=True)
 
@@ -3297,6 +4039,17 @@ async def telegram_webhook(request: Request):
     cmd = message_text.strip()
     today = date.today()
     week_start = _week_start_monday(today)
+
+    if callback and callback_id:
+        await _tg_handle_callback(chat_id, callback_id, callback_data, today, week_start)
+        return {"ok": True}
+
+    if await _tg_handle_flow_message(chat_id, cmd):
+        return {"ok": True}
+
+    if cmd.lower() in {"/start", "/menu", "menu", "hilfe", "/hilfe"}:
+        await _tg_show_main_menu(chat_id)
+        return {"ok": True}
 
     # --- add ---
     if cmd.lower().startswith("add "):
@@ -3523,14 +4276,14 @@ async def telegram_webhook(request: Request):
     print(f"ALLOWED USER {from_id} SENT: {message_text}", flush=True)
     help_text = (
         "Befehle:\n"
-        "add | list | plan | swap | confirm | cancel | shop\n"
-        "was — heutiges Rezept\n"
-        "notiz [text] — Pinnwand\n"
-        "aufgabe [text] — neue Aufgabe\n"
-        "status — Überblick\n"
+        "menu — mobiles Hauptmenü\n"
+        "plan | shop | was | status\n"
+        "swap | confirm | cancel\n"
+        "list — Rezepte lesen\n"
+        "notiz [text] | aufgabe [text]\n"
         "geburtstag — Geburtstage"
     )
-    await _tg_send(chat_id, help_text)
+    await _tg_send_menu(chat_id, help_text, [[("Menü öffnen", "menu:main")]])
     return {"ok": True}
 
 
