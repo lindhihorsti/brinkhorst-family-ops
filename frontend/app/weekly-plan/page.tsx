@@ -45,19 +45,6 @@ type WeeklySwapResponse = {
   message?: string;
 };
 
-type WeeklyShopResponse = {
-  ok: boolean;
-  week_start: string;
-  items: { name: string; count: number }[];
-  buy?: { name: string; count: number }[];
-  pantry_used?: { name: string; count: number }[];
-  pantry_uncertain_used?: { name: string; count: number }[];
-  message: string;
-  warning?: string;
-  mode?: "ai_consolidated" | "per_recipe";
-  per_recipe?: { title: string; ingredients: string[] }[];
-};
-
 const daysList = [
   { day: 1, label: "Mo" },
   { day: 2, label: "Di" },
@@ -141,18 +128,12 @@ export default function WeeklyPlanPage() {
   const [swapLoading, setSwapLoading] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
-  const [shopLoading, setShopLoading] = useState(false);
 
   const [swapStep, setSwapStep] = useState<"closed" | "select" | "preview">("closed");
   const [swapError, setSwapError] = useState<string | null>(null);
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [swapDraft, setSwapDraft] = useState<DraftPayload | null>(null);
 
-  const [shopError, setShopError] = useState<string | null>(null);
-  const [shopWarning, setShopWarning] = useState<string | null>(null);
-  const [shopData, setShopData] = useState<WeeklyShopResponse | null>(null);
-  const [shopView, setShopView] = useState<"text" | "checklist">("text");
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [planWarning, setPlanWarning] = useState<string | null>(null);
 
   const weekStart = current?.week_start ?? "—";
@@ -279,26 +260,6 @@ export default function WeeklyPlanPage() {
     }
   };
 
-  const handleShop = async () => {
-    setShopLoading(true);
-    setShopError(null);
-    setShopWarning(null);
-    try {
-      const res = await fetch("/api/weekly/shop?notify=1", { cache: "no-store" });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data = (await res.json()) as WeeklyShopResponse;
-      setShopData(data);
-      setChecked({});
-      if (data.warning) {
-        setShopWarning(data.warning);
-      }
-    } catch (e) {
-      setShopError(getErrorMessage(e, "Fehler beim Laden der Einkaufsliste"));
-    } finally {
-      setShopLoading(false);
-    }
-  };
-
   const swapDayLabel = useMemo(() => {
     if (!selectedDays.length) return "Keine Tage gewählt";
     return selectedDays
@@ -307,13 +268,6 @@ export default function WeeklyPlanPage() {
       .map((d) => daysList.find((x) => x.day === d)?.label ?? String(d))
       .join(", ");
   }, [selectedDays]);
-
-  const shopMessage = shopData?.message ?? "";
-  const shopItems = shopData?.buy ?? shopData?.items ?? [];
-  const pantryUsed = shopData?.pantry_used ?? [];
-  const pantryUncertain = shopData?.pantry_uncertain_used ?? [];
-  const shopMode = shopData?.mode ?? "ai_consolidated";
-  const perRecipe = shopData?.per_recipe ?? [];
 
   return (
     <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Küche</BtnLink>} navCurrent="/kueche" icon="📅" iconAccent="#e8673a">
@@ -331,9 +285,6 @@ export default function WeeklyPlanPage() {
             disabled={!canSwap}
           >
             Tauschen
-          </button>
-          <button style={styles.button} onClick={handleShop} disabled={shopLoading}>
-            {shopLoading ? "Lade…" : "Shop"}
           </button>
         </div>
         {loadingCurrent ? (
@@ -464,200 +415,6 @@ export default function WeeklyPlanPage() {
         {swapError ? (
           <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{swapError}</div>
         ) : null}
-      </div>
-
-      <div style={cardStyles.section}>
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Shop</div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          <button style={styles.button} onClick={handleShop} disabled={shopLoading}>
-            {shopLoading ? "Lade…" : "Shop laden"}
-          </button>
-          <div style={cardStyles.toggleRow}>
-            <button
-              style={styles.button}
-              onClick={() => setShopView("text")}
-              disabled={shopView === "text"}
-            >
-              Text
-            </button>
-            <button
-              style={styles.button}
-              onClick={() => setShopView("checklist")}
-              disabled={shopView === "checklist"}
-            >
-              Checklist
-            </button>
-          </div>
-        </div>
-
-        {shopError ? (
-          <div style={{ marginBottom: 10, fontSize: 12, color: "var(--danger)" }}>{shopError}</div>
-        ) : null}
-        {shopWarning ? (
-          <div style={{ marginBottom: 10, fontSize: 12 }}>{shopWarning}</div>
-        ) : null}
-
-        {shopData ? (
-          shopView === "text" ? (
-            <div>
-              {shopMode === "per_recipe" ? (
-                perRecipe.length === 0 ? (
-                  <div style={cardStyles.messageBox}>{shopMessage}</div>
-                ) : (
-                  <div style={{ ...cardStyles.messageBox, display: "grid", gap: 12 }}>
-                    {perRecipe.map((recipe, recipeIdx) => (
-                      <div key={`${recipe.title}-text-${recipeIdx}`}>
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>{recipe.title}</div>
-                        {recipe.ingredients.length === 0 ? (
-                          <div style={{ fontSize: 13, opacity: 0.7 }}>Keine Zutaten (nur Pantry).</div>
-                        ) : (
-                          <ul style={{ margin: 0, paddingLeft: 18 }}>
-                            {recipe.ingredients.map((ing, idx) => (
-                              <li key={`${recipe.title}-text-${idx}`}>{ing}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : (
-                <div style={cardStyles.messageBox}>{shopMessage}</div>
-              )}
-              <button
-                style={{ ...styles.button, marginTop: 10 }}
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(shopMessage);
-                  } catch {
-                    setShopError("Kopieren nicht möglich");
-                  }
-                }}
-              >
-                Copy to Clipboard
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {shopMode === "per_recipe" ? (
-                perRecipe.length === 0 ? (
-                  <div style={{ fontSize: 13 }}>{shopMessage}</div>
-                ) : (
-                  <div style={{ display: "grid", gap: 12 }}>
-                    {perRecipe.map((recipe, recipeIdx) => (
-                      <div key={`${recipe.title}-${recipeIdx}`}>
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>{recipe.title}</div>
-                        {recipe.ingredients.length === 0 ? (
-                          <div style={{ fontSize: 13, opacity: 0.7 }}>Keine Zutaten (nur Pantry).</div>
-                        ) : (
-                          <div style={{ display: "grid", gap: 6 }}>
-                            {recipe.ingredients.map((ing, idx) => {
-                              const key = `per-${recipe.title}-${recipeIdx}-${idx}`;
-                              return (
-                                <label key={key} style={cardStyles.checkboxRow}>
-                                  <input
-                                    type="checkbox"
-                                    checked={!!checked[key]}
-                                    onChange={(e) =>
-                                      setChecked((prev) => ({
-                                        ...prev,
-                                        [key]: e.target.checked,
-                                      }))
-                                    }
-                                  />
-                                  <span>{ing}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : shopItems.length === 0 && pantryUsed.length === 0 && pantryUncertain.length === 0 ? (
-                <div style={{ fontSize: 13 }}>{shopMessage}</div>
-              ) : (
-                <>
-                  <div>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>To Buy</div>
-                    {shopItems.length === 0 ? (
-                      <div style={{ fontSize: 13 }}>Keine Items.</div>
-                    ) : (
-                      shopItems.map((item) => (
-                        <label key={`buy-${item.name}`} style={cardStyles.checkboxRow}>
-                          <input
-                            type="checkbox"
-                            checked={!!checked[`buy-${item.name}`]}
-                            onChange={(e) =>
-                              setChecked((prev) => ({
-                                ...prev,
-                                [`buy-${item.name}`]: e.target.checked,
-                              }))
-                            }
-                          />
-                          <span>
-                            {item.name} {item.count > 1 ? `x${item.count}` : ""}
-                          </span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Pantry Used</div>
-                    {pantryUsed.length === 0 ? (
-                      <div style={{ fontSize: 13 }}>Keine Pantry-Items.</div>
-                    ) : (
-                      pantryUsed.map((item) => (
-                        <label key={`pantry-${item.name}`} style={cardStyles.checkboxRow}>
-                          <input
-                            type="checkbox"
-                            checked={!!checked[`pantry-${item.name}`]}
-                            onChange={(e) =>
-                              setChecked((prev) => ({
-                                ...prev,
-                                [`pantry-${item.name}`]: e.target.checked,
-                              }))
-                            }
-                          />
-                          <span>
-                            {item.name} {item.count > 1 ? `x${item.count}` : ""}
-                          </span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>Pantry Uncertain</div>
-                    {pantryUncertain.length === 0 ? (
-                      <div style={{ fontSize: 13 }}>Keine unsicheren Pantry-Items.</div>
-                    ) : (
-                      pantryUncertain.map((item) => (
-                        <label key={`uncertain-${item.name}`} style={cardStyles.checkboxRow}>
-                          <input
-                            type="checkbox"
-                            checked={!!checked[`uncertain-${item.name}`]}
-                            onChange={(e) =>
-                              setChecked((prev) => ({
-                                ...prev,
-                                [`uncertain-${item.name}`]: e.target.checked,
-                              }))
-                            }
-                          />
-                          <span>
-                            {item.name} {item.count > 1 ? `x${item.count}` : ""}
-                          </span>
-                        </label>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )
-        ) : (
-          <div style={cardStyles.muted}>Noch keine Einkaufsliste geladen.</div>
-        )}
       </div>
     </Page>
   );

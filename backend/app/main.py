@@ -21,7 +21,20 @@ from app.domain_utils import (
     days_until_birthday,
     expense_party_label,
 )
-from app.models import Recipe, AppState, FamilyMember, ChoreTask, ChoreCompletion, PinboardNote, Birthday, MealHistory, Expense
+from app.models import (
+    Recipe,
+    AppState,
+    FamilyMember,
+    ChoreTask,
+    ChoreCompletion,
+    PinboardNote,
+    Birthday,
+    MealHistory,
+    Expense,
+    ShoppingList,
+    ShoppingListItem,
+)
+from app.shopping_utils import shopping_estimate_context, shopping_estimate_lines, shopping_snapshot_items
 from app.services import swap_service
 from app.services.shop_output import (
     build_shop_payload,
@@ -75,6 +88,14 @@ if engine and AUTO_MIGRATE:
                 """
             )
         )
+        conn.execute(
+            sql_text(
+                """
+                ALTER TABLE IF EXISTS public.shopping_lists
+                    ADD COLUMN IF NOT EXISTS estimate_currency TEXT NOT NULL DEFAULT 'chf'
+                """
+            )
+        )
         conn.commit()
 
 GIT_SHA = os.getenv("GIT_SHA", "local").strip() or "local"
@@ -124,7 +145,13 @@ DEFAULT_PANTRY_ITEMS = [
 ]
 DEFAULT_PREFERENCES = {"tags": []}
 DEFAULT_TELEGRAM = {"auto_send_plan": False, "auto_send_shop": False}
-DEFAULT_SHOP_SETTINGS = {"shop_output_mode": SHOP_OUTPUT_AI}
+DEFAULT_SHOP_SETTINGS = {
+    "shop_output_mode": SHOP_OUTPUT_AI,
+    "shopping_list_view_mode": "checklist",
+    "shopping_list_include_weekly_by_default": True,
+    "shopping_list_open_after_create": True,
+    "shopping_list_estimate_currency": "chf",
+}
 DEFAULT_ACTIVITIES_SETTINGS = {
     "default_location": "",
     "max_travel_min": 30,
@@ -892,6 +919,82 @@ def _openai_generate_activities(
     return alternatives
 
 
+def _openai_estimate_shopping_list_total(lines: List[str], currency: str = "chf") -> Dict[str, Any]:
+    from openai import OpenAI
+
+    model = (os.getenv("OPENAI_MODEL_ACTIVITIES", "gpt-5.2") or "gpt-5.2").strip()
+    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 30.0
+    client = OpenAI(timeout=timeout).with_options(max_retries=0)
+
+    estimate_context = shopping_estimate_context(currency)
+    currency_code = estimate_context["currency_code"]
+    country_hint = estimate_context["country_hint"]
+
+    system_text = (
+        f"Du schätzt realistische Einkaufskosten für Familien-Einkaufslisten in {country_hint}. "
+        "Nutze web_search, wenn sinnvoll, um grobe aktuelle Preisniveaus zu prüfen. "
+        "Schätze konservativ und liefere ausschließlich JSON im verlangten Schema. "
+        f"Die Antwort ist eine grobe Schätzung in {currency_code}, keine exakte Zusage."
+    )
+
+    user_payload = {
+        "currency": currency_code,
+        "country_hint": country_hint,
+        "shopping_list_lines": lines[:120],
+        "rules": {
+            "language": "de",
+            "keep_it_brief": True,
+            "round_reasonably": True,
+        },
+    }
+
+    schema = {
+        "type": "json_schema",
+        "name": "shopping_list_estimate",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "estimated_total_amount": {"type": "number", "minimum": 0},
+                "estimate_text": {"type": "string"},
+                "note": {"type": "string"},
+            },
+            "required": ["estimated_total_amount", "estimate_text", "note"],
+        },
+        "strict": True,
+    }
+
+    response = client.responses.create(
+        model=model,
+        tools=[{"type": "web_search"}],
+        input=[
+            {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+        ],
+        text={"format": schema},
+        max_output_tokens=400,
+        truncation="auto",
+    )
+
+    data = _parse_response_json(response)
+    if not isinstance(data, dict):
+        raise ValueError("AI-Antwort ungültig.")
+
+    amount_raw = data.get("estimated_total_amount")
+    try:
+        amount = round(float(amount_raw), 2)
+    except Exception as exc:
+        raise ValueError("AI-Antwort ungültig.") from exc
+
+    return {
+        "estimated_total_amount": amount,
+        "estimate_text": str(data.get("estimate_text") or estimate_context["fallback_text"].format(amount=amount)).strip(),
+        "note": str(data.get("note") or "").strip(),
+        "model": model,
+    }
+
+
 def _extract_output_text(response) -> Optional[str]:
     output_text = getattr(response, "output_text", None)
     if output_text:
@@ -1118,7 +1221,19 @@ def _get_settings_shop() -> Dict[str, Any]:
     mode = data.get("shop_output_mode", SHOP_OUTPUT_AI)
     if mode not in SHOP_OUTPUT_MODES:
         mode = SHOP_OUTPUT_AI
-    return {"shop_output_mode": mode}
+    view_mode = str(data.get("shopping_list_view_mode") or "checklist").strip()
+    if view_mode not in {"checklist", "text"}:
+        view_mode = "checklist"
+    estimate_currency = str(data.get("shopping_list_estimate_currency") or "chf").strip().lower()
+    if estimate_currency not in {"chf", "eur"}:
+        estimate_currency = "chf"
+    return {
+        "shop_output_mode": mode,
+        "shopping_list_view_mode": view_mode,
+        "shopping_list_include_weekly_by_default": bool(data.get("shopping_list_include_weekly_by_default", True)),
+        "shopping_list_open_after_create": bool(data.get("shopping_list_open_after_create", True)),
+        "shopping_list_estimate_currency": estimate_currency,
+    }
 
 
 def _normalize_ascii_key(value: str) -> str:
@@ -1351,6 +1466,40 @@ class TelegramSettingsPayload(BaseModel):
 
 class ShopSettingsPayload(BaseModel):
     shop_output_mode: Literal["ai_consolidated", "per_recipe"] = SHOP_OUTPUT_AI
+    shopping_list_view_mode: Literal["checklist", "text"] = "checklist"
+    shopping_list_include_weekly_by_default: bool = True
+    shopping_list_open_after_create: bool = True
+    shopping_list_estimate_currency: Literal["chf", "eur"] = "chf"
+
+
+class ShoppingListCreatePayload(BaseModel):
+    title: str
+    notes: Optional[str] = None
+    view_mode: Literal["checklist", "text"] = "checklist"
+    manual_items: List[str] = []
+    include_weekly_items: bool = False
+    import_mode: Literal["ai_consolidated", "per_recipe"] = SHOP_OUTPUT_AI
+
+
+class ShoppingListUpdatePayload(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    view_mode: Optional[Literal["checklist", "text"]] = None
+    include_weekly_items: Optional[bool] = None
+    import_mode: Optional[Literal["ai_consolidated", "per_recipe"]] = None
+    estimate_currency: Optional[Literal["chf", "eur"]] = None
+
+
+class ShoppingListItemPayload(BaseModel):
+    content: str
+
+
+class ShoppingListItemUpdatePayload(BaseModel):
+    checked: Optional[bool] = None
+
+
+class ShoppingListSnapshotPayload(BaseModel):
+    import_mode: Optional[Literal["ai_consolidated", "per_recipe"]] = None
 
 
 class ActivitiesSettingsPayload(BaseModel):
@@ -1531,7 +1680,13 @@ def api_put_settings_shop(payload: ShopSettingsPayload):
     mode = payload.shop_output_mode
     if mode not in SHOP_OUTPUT_MODES:
         mode = SHOP_OUTPUT_AI
-    data = {"shop_output_mode": mode}
+    data = {
+        "shop_output_mode": mode,
+        "shopping_list_view_mode": payload.shopping_list_view_mode,
+        "shopping_list_include_weekly_by_default": bool(payload.shopping_list_include_weekly_by_default),
+        "shopping_list_open_after_create": bool(payload.shopping_list_open_after_create),
+        "shopping_list_estimate_currency": payload.shopping_list_estimate_currency,
+    }
     _db_set_app_state_value(APP_STATE_SETTINGS_SHOP, json.dumps(data))
     return {"ok": True, "shop": data}
 
@@ -1822,6 +1977,394 @@ def api_weekly_shop(notify: int = 0):
             else:
                 response["warning"] = "Send any message to the bot once to register the chat."
     return response
+
+
+def _sorted_shopping_items(items: List[ShoppingListItem]) -> List[ShoppingListItem]:
+    return sorted(
+        items,
+        key=lambda item: (
+            0 if item.source == "manual" else 1,
+            item.item_order,
+            item.created_at.isoformat() if item.created_at else "",
+        ),
+    )
+
+
+def _shopping_list_items(session: Session, list_id: UUID) -> List[ShoppingListItem]:
+    rows = session.exec(
+        select(ShoppingListItem).where(ShoppingListItem.list_id == list_id)
+    ).all()
+    return _sorted_shopping_items(list(rows))
+
+
+def _serialize_shopping_item(item: ShoppingListItem) -> Dict[str, Any]:
+    return {
+        "id": str(item.id),
+        "content": item.content,
+        "source": item.source,
+        "recipe_title": item.recipe_title,
+        "checked": bool(item.checked),
+        "item_order": item.item_order,
+    }
+
+
+def _serialize_shopping_list(session: Session, shopping_list: ShoppingList, include_items: bool = False) -> Dict[str, Any]:
+    items = _shopping_list_items(session, shopping_list.id) if include_items else []
+    manual_count = 0
+    recipe_count = 0
+    checked_count = 0
+    total_count = 0
+
+    if include_items:
+        total_count = len(items)
+        manual_count = sum(1 for item in items if item.source == "manual")
+        recipe_count = total_count - manual_count
+        checked_count = sum(1 for item in items if item.checked)
+    else:
+        rows = session.exec(
+            select(ShoppingListItem).where(ShoppingListItem.list_id == shopping_list.id)
+        ).all()
+        total_count = len(rows)
+        manual_count = sum(1 for item in rows if item.source == "manual")
+        recipe_count = total_count - manual_count
+        checked_count = sum(1 for item in rows if item.checked)
+
+    payload = {
+        "id": str(shopping_list.id),
+        "title": shopping_list.title,
+        "notes": shopping_list.notes,
+        "view_mode": shopping_list.view_mode,
+        "import_mode": shopping_list.import_mode,
+        "estimate_currency": shopping_list.estimate_currency,
+        "includes_weekly_items": bool(shopping_list.includes_weekly_items),
+        "estimated_total_text": shopping_list.estimated_total_text,
+        "estimated_total_amount": float(shopping_list.estimated_total_amount) if shopping_list.estimated_total_amount is not None else None,
+        "estimated_total_note": shopping_list.estimated_total_note,
+        "created_at": shopping_list.created_at.isoformat() if shopping_list.created_at else None,
+        "updated_at": shopping_list.updated_at.isoformat() if shopping_list.updated_at else None,
+        "manual_count": manual_count,
+        "recipe_count": recipe_count,
+        "total_count": total_count,
+        "checked_count": checked_count,
+    }
+    if include_items:
+        payload["items"] = [_serialize_shopping_item(item) for item in items]
+    return payload
+
+
+def _current_week_shop_payload(mode: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    week_start = _current_week_start()
+    base = _db_get_weekly_plan(week_start)
+    if not base:
+        return None, f"Kein Wochenplan vorhanden für Woche ab {week_start.isoformat()}."
+    shop_payload = build_shop_payload(
+        mode,
+        base["days"],
+        engine,
+        _get_settings_pantry(),
+    )
+    return shop_payload, shop_payload.get("warning")
+
+
+def _append_shopping_items(session: Session, list_id: UUID, items: List[Dict[str, Any]]) -> None:
+    manual_idx = 0
+    recipe_idx = 0
+    for item in items:
+        source = item.get("source") or "manual"
+        if source == "manual":
+            item_order = manual_idx
+            manual_idx += 1
+        else:
+            item_order = recipe_idx
+            recipe_idx += 1
+        session.add(
+            ShoppingListItem(
+                list_id=list_id,
+                content=item["content"],
+                item_order=item_order,
+                source=source,
+                recipe_title=item.get("recipe_title"),
+                checked=False,
+            )
+        )
+
+
+def _replace_weekly_snapshot(session: Session, shopping_list: ShoppingList, import_mode: str) -> Optional[str]:
+    shop_payload, warning = _current_week_shop_payload(import_mode)
+    existing_items = session.exec(
+        select(ShoppingListItem).where(ShoppingListItem.list_id == shopping_list.id)
+    ).all()
+    for item in existing_items:
+        if item.source == "recipe":
+            session.delete(item)
+
+    if shop_payload:
+        recipe_items = shopping_snapshot_items([], True, import_mode, shop_payload)
+        manual_items = [item for item in existing_items if item.source == "manual"]
+        manual_count = len(manual_items)
+        for idx, item in enumerate(recipe_items):
+            session.add(
+                ShoppingListItem(
+                    list_id=shopping_list.id,
+                    content=item["content"],
+                    item_order=idx,
+                    source="recipe",
+                    recipe_title=item.get("recipe_title"),
+                    checked=False,
+                )
+            )
+        shopping_list.includes_weekly_items = True
+        shopping_list.import_mode = import_mode
+        shopping_list.updated_at = datetime.utcnow()
+        return warning
+
+    shopping_list.includes_weekly_items = False
+    shopping_list.updated_at = datetime.utcnow()
+    return warning
+
+
+@app.get("/api/shopping-lists")
+def api_list_shopping_lists():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        rows = session.exec(select(ShoppingList)).all()
+        rows = sorted(list(rows), key=lambda row: row.updated_at or row.created_at, reverse=True)
+        return {"ok": True, "items": [_serialize_shopping_list(session, row) for row in rows]}
+
+
+@app.post("/api/shopping-lists")
+def api_create_shopping_list(payload: ShoppingListCreatePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(400, "Titel fehlt")
+
+    warning = None
+    shop_settings = _get_settings_shop()
+    with Session(engine) as session:
+        shopping_list = ShoppingList(
+            title=title,
+            notes=(payload.notes or "").strip() or None,
+            view_mode=payload.view_mode,
+            import_mode=payload.import_mode,
+            estimate_currency=shop_settings.get("shopping_list_estimate_currency", "chf"),
+            includes_weekly_items=bool(payload.include_weekly_items),
+            updated_at=datetime.utcnow(),
+        )
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+
+        manual_items = shopping_snapshot_items(payload.manual_items, False, payload.import_mode, None)
+        _append_shopping_items(session, shopping_list.id, manual_items)
+
+        if payload.include_weekly_items:
+            warning = _replace_weekly_snapshot(session, shopping_list, payload.import_mode)
+
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True), "warning": warning}
+
+
+@app.get("/api/shopping-lists/{list_id}")
+def api_get_shopping_list(list_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True)}
+
+
+@app.patch("/api/shopping-lists/{list_id}")
+def api_update_shopping_list(list_id: UUID, payload: ShoppingListUpdatePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+
+        data = payload.model_dump(exclude_unset=True)
+        if "title" in data:
+            title = (data["title"] or "").strip()
+            if not title:
+                raise HTTPException(400, "Titel fehlt")
+            shopping_list.title = title
+        if "notes" in data:
+            shopping_list.notes = (data["notes"] or "").strip() or None
+        if "view_mode" in data:
+            shopping_list.view_mode = data["view_mode"]
+        if "estimate_currency" in data:
+            next_currency = data["estimate_currency"]
+            if shopping_list.estimate_currency != next_currency:
+                shopping_list.estimate_currency = next_currency
+                shopping_list.estimated_total_text = None
+                shopping_list.estimated_total_amount = None
+                shopping_list.estimated_total_note = None
+        if "include_weekly_items" in data:
+            shopping_list.includes_weekly_items = bool(data["include_weekly_items"])
+        if "import_mode" in data:
+            shopping_list.import_mode = data["import_mode"]
+        shopping_list.updated_at = datetime.utcnow()
+
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True)}
+
+
+@app.delete("/api/shopping-lists/{list_id}")
+def api_delete_shopping_list(list_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+        items = session.exec(select(ShoppingListItem).where(ShoppingListItem.list_id == list_id)).all()
+        for item in items:
+            session.delete(item)
+        session.delete(shopping_list)
+        session.commit()
+        return {"ok": True}
+
+
+@app.post("/api/shopping-lists/{list_id}/items")
+def api_add_shopping_list_item(list_id: UUID, payload: ShoppingListItemPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(400, "Inhalt fehlt")
+
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+        current_manual = [
+            item for item in session.exec(
+                select(ShoppingListItem).where(ShoppingListItem.list_id == list_id)
+            ).all()
+            if item.source == "manual"
+        ]
+        next_order = max([item.item_order for item in current_manual], default=-1) + 1
+        item = ShoppingListItem(
+            list_id=list_id,
+            content=content,
+            item_order=next_order,
+            source="manual",
+            checked=False,
+        )
+        session.add(item)
+        shopping_list.updated_at = datetime.utcnow()
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True)}
+
+
+@app.patch("/api/shopping-lists/{list_id}/items/{item_id}")
+def api_update_shopping_list_item(list_id: UUID, item_id: UUID, payload: ShoppingListItemUpdatePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+        item = session.get(ShoppingListItem, item_id)
+        if not item or item.list_id != list_id:
+            raise HTTPException(404, "Eintrag nicht gefunden")
+        data = payload.model_dump(exclude_unset=True)
+        if "checked" in data:
+            item.checked = bool(data["checked"])
+        shopping_list.updated_at = datetime.utcnow()
+        session.add(item)
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True)}
+
+
+@app.delete("/api/shopping-lists/{list_id}/items/{item_id}")
+def api_delete_shopping_list_item(list_id: UUID, item_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+        item = session.get(ShoppingListItem, item_id)
+        if not item or item.list_id != list_id:
+            raise HTTPException(404, "Eintrag nicht gefunden")
+        session.delete(item)
+        shopping_list.updated_at = datetime.utcnow()
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True)}
+
+
+@app.post("/api/shopping-lists/{list_id}/snapshot-weekly")
+def api_snapshot_weekly_into_shopping_list(list_id: UUID, payload: ShoppingListSnapshotPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+        import_mode = payload.import_mode or shopping_list.import_mode or SHOP_OUTPUT_AI
+        warning = _replace_weekly_snapshot(session, shopping_list, import_mode)
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True), "warning": warning}
+
+
+@app.post("/api/shopping-lists/{list_id}/estimate")
+def api_estimate_shopping_list_total(list_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if not os.getenv("OPENAI_API_KEY"):
+        return {"ok": False, "error": "AI nicht konfiguriert."}
+
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+        items = _shopping_list_items(session, list_id)
+        lines = shopping_estimate_lines([_serialize_shopping_item(item) for item in items])
+        if not lines:
+            return {"ok": False, "error": "Liste ist leer."}
+        try:
+            estimate = _openai_estimate_shopping_list_total(lines, shopping_list.estimate_currency)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        shopping_list.estimated_total_text = estimate["estimate_text"]
+        shopping_list.estimated_total_amount = estimate["estimated_total_amount"]
+        shopping_list.estimated_total_note = estimate["note"]
+        shopping_list.updated_at = datetime.utcnow()
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {
+            "ok": True,
+            "estimate": {
+                "estimated_total_text": shopping_list.estimated_total_text,
+                "estimated_total_amount": float(shopping_list.estimated_total_amount) if shopping_list.estimated_total_amount is not None else None,
+                "estimated_total_note": shopping_list.estimated_total_note,
+                "model": estimate["model"],
+            },
+            "item": _serialize_shopping_list(session, shopping_list, include_items=True),
+        }
 
 
 

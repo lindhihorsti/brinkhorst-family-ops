@@ -165,6 +165,42 @@ class Expense(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class ShoppingList(SQLModel, table=True):
+    __tablename__ = "shopping_lists"
+
+    id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    )
+    title: str
+    notes: Optional[str] = None
+    view_mode: str = Field(default="checklist", sa_column=Column(String, nullable=False, server_default="checklist"))
+    import_mode: str = Field(default="ai_consolidated", sa_column=Column(String, nullable=False, server_default="ai_consolidated"))
+    estimate_currency: str = Field(default="chf", sa_column=Column(String, nullable=False, server_default="chf"))
+    includes_weekly_items: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, server_default=text("false")))
+    estimated_total_text: Optional[str] = None
+    estimated_total_amount: Optional[float] = Field(default=None, sa_column=Column(Numeric(10, 2), nullable=True))
+    estimated_total_note: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ShoppingListItem(SQLModel, table=True):
+    __tablename__ = "shopping_list_items"
+
+    id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    )
+    list_id: UUID = Field(sa_column=Column(PG_UUID(as_uuid=True), nullable=False))
+    content: str
+    item_order: int = Field(default=0, sa_column=Column(Integer, nullable=False, server_default=text("0")))
+    source: str = Field(default="manual", sa_column=Column(String, nullable=False, server_default="manual"))
+    recipe_title: Optional[str] = None
+    checked: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, server_default=text("false")))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Birthday(SQLModel, table=True):
     __tablename__ = "birthdays"
 

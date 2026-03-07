@@ -5,7 +5,8 @@ export const metadata = { title: "Küchen & Wochenplan — Family Ops" };
 
 const TILES = [
   { href: "/recipes",     icon: "📖", title: "Rezepte",    sub: "Verwalten, importieren, bewerten"  },
-  { href: "/weekly-plan", icon: "📅", title: "Wochenplan", sub: "Planen · Tauschen · Einkaufsliste" },
+  { href: "/weekly-plan", icon: "📅", title: "Wochenplan", sub: "Planen · Tauschen" },
+  { href: "/einkauf", icon: "🛒", title: "Einkaufsliste", sub: "Mehrere Listen · Snapshot · AI Schätzung" },
 ];
 
 export default function KuechePage() {
