@@ -35,6 +35,16 @@ from app.models import (
     ShoppingListItem,
 )
 from app.shopping_utils import shopping_estimate_context, shopping_estimate_lines, shopping_snapshot_items
+from app.telegram_events import (
+    telegram_birthday_created_text,
+    telegram_chore_created_text,
+    telegram_expense_created_text,
+    telegram_family_member_created_text,
+    telegram_pinboard_note_created_text,
+    telegram_recipe_created_text,
+    telegram_shopping_list_created_text,
+    telegram_weekly_plan_created_text,
+)
 from app.services import swap_service
 from app.services.shop_output import (
     build_shop_payload,
@@ -144,7 +154,18 @@ DEFAULT_PANTRY_ITEMS = [
     {"name": "Zwiebeln", "uncertain": True, "aliases": []},
 ]
 DEFAULT_PREFERENCES = {"tags": []}
-DEFAULT_TELEGRAM = {"auto_send_plan": False, "auto_send_shop": False}
+DEFAULT_TELEGRAM = {
+    "auto_send_plan": False,
+    "auto_send_shop": False,
+    "notify_new_recipe": False,
+    "notify_new_weekly_plan": False,
+    "notify_new_chore": False,
+    "notify_new_shopping_list": False,
+    "notify_new_expense": False,
+    "notify_new_pinboard_note": False,
+    "notify_new_birthday": False,
+    "notify_new_family_member": False,
+}
 DEFAULT_SHOP_SETTINGS = {
     "shop_output_mode": SHOP_OUTPUT_AI,
     "shopping_list_view_mode": "checklist",
@@ -1211,6 +1232,14 @@ def _get_settings_telegram() -> Dict[str, Any]:
     return {
         "auto_send_plan": bool(data.get("auto_send_plan", False)),
         "auto_send_shop": bool(data.get("auto_send_shop", False)),
+        "notify_new_recipe": bool(data.get("notify_new_recipe", False)),
+        "notify_new_weekly_plan": bool(data.get("notify_new_weekly_plan", False)),
+        "notify_new_chore": bool(data.get("notify_new_chore", False)),
+        "notify_new_shopping_list": bool(data.get("notify_new_shopping_list", False)),
+        "notify_new_expense": bool(data.get("notify_new_expense", False)),
+        "notify_new_pinboard_note": bool(data.get("notify_new_pinboard_note", False)),
+        "notify_new_birthday": bool(data.get("notify_new_birthday", False)),
+        "notify_new_family_member": bool(data.get("notify_new_family_member", False)),
     }
 
 
@@ -1325,6 +1354,31 @@ def _send_telegram_sync(chat_id: int, text_msg: str, parse_mode: Optional[str] =
     except RuntimeError:
         loop = asyncio.get_event_loop()
         loop.create_task(_tg_send(chat_id, text_msg, parse_mode))
+
+
+def _telegram_registered_chat_id() -> Optional[int]:
+    raw = _db_get_app_state_value(APP_STATE_TELEGRAM_LAST_CHAT_ID)
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except Exception:
+        return None
+
+
+def _maybe_send_telegram_event(setting_key: str, text_msg: str, parse_mode: Optional[str] = None) -> None:
+    if not os.getenv("TELEGRAM_BOT_TOKEN"):
+        return
+    telegram_settings = _get_settings_telegram()
+    if not telegram_settings.get(setting_key):
+        return
+    chat_id = _telegram_registered_chat_id()
+    if chat_id is None:
+        return
+    try:
+        _send_telegram_sync(chat_id, text_msg, parse_mode)
+    except Exception:
+        pass
 
 @app.get("/api/recipes")
 def api_list_recipes(limit: int = 50, q: Optional[str] = None):
@@ -1462,6 +1516,14 @@ class PreferencesSettingsPayload(BaseModel):
 class TelegramSettingsPayload(BaseModel):
     auto_send_plan: bool = False
     auto_send_shop: bool = False
+    notify_new_recipe: bool = False
+    notify_new_weekly_plan: bool = False
+    notify_new_chore: bool = False
+    notify_new_shopping_list: bool = False
+    notify_new_expense: bool = False
+    notify_new_pinboard_note: bool = False
+    notify_new_birthday: bool = False
+    notify_new_family_member: bool = False
 
 
 class ShopSettingsPayload(BaseModel):
@@ -1572,6 +1634,10 @@ def api_create_recipe(payload: RecipeCreate):
         session.add(r)
         session.commit()
         session.refresh(r)
+        _maybe_send_telegram_event(
+            "notify_new_recipe",
+            telegram_recipe_created_text(r.title, r.time_minutes, r.collection_name),
+        )
         return r
 
 
@@ -1668,6 +1734,14 @@ def api_put_settings_telegram(payload: TelegramSettingsPayload):
     data = {
         "auto_send_plan": bool(payload.auto_send_plan),
         "auto_send_shop": bool(payload.auto_send_shop),
+        "notify_new_recipe": bool(payload.notify_new_recipe),
+        "notify_new_weekly_plan": bool(payload.notify_new_weekly_plan),
+        "notify_new_chore": bool(payload.notify_new_chore),
+        "notify_new_shopping_list": bool(payload.notify_new_shopping_list),
+        "notify_new_expense": bool(payload.notify_new_expense),
+        "notify_new_pinboard_note": bool(payload.notify_new_pinboard_note),
+        "notify_new_birthday": bool(payload.notify_new_birthday),
+        "notify_new_family_member": bool(payload.notify_new_family_member),
     }
     _db_set_app_state_value(APP_STATE_SETTINGS_TELEGRAM, json.dumps(data))
     return {"ok": True, "telegram": data}
@@ -1837,6 +1911,16 @@ def api_weekly_plan(notify: int = 0):
                 _send_telegram_sync(int(last_chat_id), response["message"])
             else:
                 response["warning"] = "Send any message to the bot once to register the chat."
+        elif telegram_settings.get("notify_new_weekly_plan"):
+            _maybe_send_telegram_event(
+                "notify_new_weekly_plan",
+                telegram_weekly_plan_created_text((plan_payload or {}).get("days") or []),
+            )
+    else:
+        _maybe_send_telegram_event(
+            "notify_new_weekly_plan",
+            telegram_weekly_plan_created_text((plan_payload or {}).get("days") or []),
+        )
     return response
 
 
@@ -2169,7 +2253,9 @@ def api_create_shopping_list(payload: ShoppingListCreatePayload):
         session.add(shopping_list)
         session.commit()
         session.refresh(shopping_list)
-        return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True), "warning": warning}
+        result_item = _serialize_shopping_list(session, shopping_list, include_items=True)
+        _maybe_send_telegram_event("notify_new_shopping_list", telegram_shopping_list_created_text(result_item))
+        return {"ok": True, "item": result_item, "warning": warning}
 
 
 @app.get("/api/shopping-lists/{list_id}")
@@ -3063,6 +3149,10 @@ def api_create_family_member(payload: FamilyMemberCreate):
         session.add(member)
         session.commit()
         session.refresh(member)
+    _maybe_send_telegram_event(
+        "notify_new_family_member",
+        telegram_family_member_created_text(member.name, len(member.dietary_restrictions or [])),
+    )
     return member
 
 
@@ -3159,6 +3249,10 @@ def api_create_chore(payload: ChoreCreate):
         session.add(chore)
         session.commit()
         session.refresh(chore)
+    _maybe_send_telegram_event(
+        "notify_new_chore",
+        telegram_chore_created_text(chore.title, len(chore.assigned_to or [])),
+    )
     return chore
 
 
@@ -3360,6 +3454,7 @@ def api_create_pinboard_note(payload: PinboardNoteCreate):
         session.add(note)
         session.commit()
         session.refresh(note)
+    _maybe_send_telegram_event("notify_new_pinboard_note", telegram_pinboard_note_created_text(content, tag))
     return {"ok": True, "id": str(note.id)}
 
 
@@ -3449,6 +3544,7 @@ def api_create_birthday(payload: BirthdayCreate):
         session.add(b)
         session.commit()
         session.refresh(b)
+    _maybe_send_telegram_event("notify_new_birthday", telegram_birthday_created_text(b.name, b.birth_date))
     return {"ok": True, "id": str(b.id)}
 
 
@@ -3889,7 +3985,7 @@ def api_create_expense(payload: ExpenseCreate):
         session.commit()
         session.refresh(entry)
     member_lookup = _family_member_lookup()
-    return {
+    result = {
         "ok": True,
         "expense": _serialize_expense_row(
             {
@@ -3908,6 +4004,8 @@ def api_create_expense(payload: ExpenseCreate):
             member_lookup,
         ),
     }
+    _maybe_send_telegram_event("notify_new_expense", telegram_expense_created_text(result["expense"]))
+    return result
 
 
 @app.delete("/api/expenses/{expense_id}")
