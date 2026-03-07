@@ -323,10 +323,13 @@ export default function IdeenGeneratorPage() {
         </div>
         <div style={styles.headerRow}>
           <div>
-            <h1 style={styles.title}>Ideen-Generator</h1>
+            <h1 style={styles.title}>Ausflüge</h1>
+            <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "8px 0 0" }}>
+              Draußen passende Vorschläge für heute finden.
+            </p>
           </div>
-          <Link href="/" style={styles.button}>
-            Home
+          <Link href="/ideen" style={styles.button}>
+            Übersicht
           </Link>
         </div>
 

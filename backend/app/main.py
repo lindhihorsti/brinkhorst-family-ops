@@ -181,12 +181,24 @@ DEFAULT_ACTIVITIES_SETTINGS = {
     "types": [],
     "use_weather": True,
     "prefer_mountains": False,
+    "home_duration_min": 30,
+    "home_energy": "mittel",
+    "home_mess_level": "egal",
+    "home_space": "wohnzimmer",
+    "home_parent_energy": "mittel",
+    "home_materials": ["Bücher", "Bausteine", "Kissen", "Klebeband", "Papier"],
+    "home_types": ["Bewegung", "Rollenspiel", "Bauen"],
 }
 
 ACTIVITIES_MAX_TRAVEL_OPTIONS = [15, 30, 45, 60, 90, 120]
 ACTIVITIES_TIME_BUCKETS = ["1–2 Stunden", "2–4 Stunden", "Halber Tag", "Ganzer Tag"]
 ACTIVITIES_BUDGET_OPTIONS = {"niedrig", "mittel", "egal"}
 ACTIVITIES_TRANSPORT_OPTIONS = {"auto", "oev", "zu_fuss", "egal"}
+HOME_ACTIVITY_DURATION_OPTIONS = [15, 20, 30, 45, 60, 90]
+HOME_ACTIVITY_ENERGY_OPTIONS = {"ruhig", "mittel", "wild"}
+HOME_ACTIVITY_MESS_OPTIONS = {"sauber", "egal", "chaos_ok"}
+HOME_ACTIVITY_SPACE_OPTIONS = {"wohnzimmer", "kinderzimmer", "klein", "egal"}
+HOME_ACTIVITY_PARENT_ENERGY_OPTIONS = {"niedrig", "mittel", "hoch"}
 
 APP_STATE_SETTINGS_PANTRY = "settings_pantry"
 APP_STATE_SETTINGS_PREFERENCES = "settings_preferences"
@@ -888,8 +900,8 @@ def _openai_generate_activities(
             "properties": {
                 "alternatives": {
                     "type": "array",
-                    "minItems": 3,
-                    "maxItems": 3,
+                    "minItems": 1,
+                    "maxItems": 5,
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
@@ -933,11 +945,257 @@ def _openai_generate_activities(
         truncation="auto",
     )
 
-    data = _parse_response_json(response)
+    data = _parse_response_json_any(response)
     alternatives = _validate_activity_alternatives(data)
     if not alternatives:
         raise ValueError("AI-Antwort ungültig.")
     return alternatives
+
+
+def _openai_generate_home_activities(
+    payload: "HomeActivitiesGeneratePayload",
+    settings: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    from openai import OpenAI
+
+    model = (os.getenv("OPENAI_MODEL_ACTIVITIES", "gpt-5.2") or "gpt-5.2").strip()
+    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 30.0
+    client = OpenAI(timeout=timeout).with_options(max_retries=0)
+
+    today = date.today()
+    child_age = _leni_age_text(today)
+    materials = payload.materials or settings.get("home_materials", [])
+    themes = payload.themes or settings.get("home_types", [])
+
+    system_text = (
+        "Du bist ein kreativer Familiencoach für Indoor-Aktivitäten in der Wohnung. "
+        "Erfinde altersgerechte, sichere, originelle Ideen für ein Kleinkind/Familienkind. "
+        "Liefere ausschließlich JSON im verlangten Schema. "
+        "Die Vorschläge sollen in einer normalen Wohnung umsetzbar sein, ohne Spezialmaterial. "
+        "Bevorzuge Ideen, die konkret erklärt sind und sofort gestartet werden können. "
+        "Sei knapp: kurze Titel, kurze why_fit-Texte, parent_tip in 1 Satz, Schritte sehr kompakt."
+    )
+
+    user_payload = {
+        "date_today": today.isoformat(),
+        "child_context": f"Child age: {child_age}",
+        "duration_min": payload.duration_min,
+        "child_energy": payload.child_energy,
+        "mess_level": payload.mess_level,
+        "space": payload.space,
+        "parent_energy": payload.parent_energy,
+        "mood": payload.mood,
+        "goal": payload.goal,
+        "themes": themes[:10],
+        "materials": materials[:20],
+        "free_text": payload.free_text,
+        "rules": {
+            "language": "de",
+            "alternatives": 3,
+            "indoor_only": True,
+            "safe_for_home": True,
+            "keep_setup_simple": True,
+        },
+    }
+
+    schema = {
+        "type": "json_schema",
+        "name": "home_activities_ideas",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "alternatives": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "title": {"type": "string"},
+                            "setup_minutes": {"type": "integer", "minimum": 0},
+                            "duration_hint": {"type": "string"},
+                            "mess_level": {"type": "string"},
+                            "energy_level": {"type": "string"},
+                            "materials": {"type": "array", "items": {"type": "string"}},
+                            "steps": {"type": "array", "minItems": 2, "maxItems": 5, "items": {"type": "string"}},
+                            "why_fit": {"type": "string"},
+                            "parent_tip": {"type": "string"},
+                        },
+                        "required": [
+                            "title",
+                            "setup_minutes",
+                            "duration_hint",
+                            "mess_level",
+                            "energy_level",
+                            "materials",
+                            "steps",
+                            "why_fit",
+                            "parent_tip",
+                        ],
+                    },
+                }
+            },
+            "required": ["alternatives"],
+        },
+        "strict": True,
+    }
+    def _coerce_home_alternatives(data: Any) -> List[Dict[str, Any]]:
+        if isinstance(data, list):
+            alternatives = data
+        elif isinstance(data, dict):
+            alternatives = data.get("alternatives") or data.get("ideas") or data.get("items") or []
+        else:
+            alternatives = []
+
+        if not isinstance(alternatives, list):
+            return []
+
+        cleaned: List[Dict[str, Any]] = []
+        for alt in alternatives[:5]:
+            if not isinstance(alt, dict):
+                continue
+            title = str(alt.get("title") or alt.get("name") or "").strip()
+            duration_hint = str(alt.get("duration_hint") or alt.get("duration") or "").strip()
+            mess_level = str(
+                alt.get("mess_level")
+                or alt.get("mess")
+                or payload.mess_level
+                or settings.get("home_mess_level")
+                or "egal"
+            ).strip()
+            energy_level = str(
+                alt.get("energy_level")
+                or alt.get("energy")
+                or payload.child_energy
+                or settings.get("home_energy")
+                or "mittel"
+            ).strip()
+            why_fit = str(alt.get("why_fit") or alt.get("why") or alt.get("fit") or "").strip()
+            parent_tip = str(alt.get("parent_tip") or alt.get("tip") or alt.get("parent_note") or "").strip()
+
+            setup_raw = alt.get("setup_minutes")
+            if setup_raw is None:
+                setup_raw = alt.get("setup_time_min")
+            if setup_raw is None:
+                setup_raw = alt.get("setup")
+            try:
+                setup_minutes = max(0, int(float(setup_raw or 0)))
+            except Exception:
+                setup_minutes = 0
+
+            materials_raw = alt.get("materials")
+            if materials_raw is None:
+                materials_raw = alt.get("materials_needed")
+            if materials_raw is None:
+                materials_raw = []
+
+            steps_raw = alt.get("steps")
+            if steps_raw is None:
+                steps_raw = alt.get("instructions")
+            if steps_raw is None:
+                steps_raw = alt.get("how_to")
+            if steps_raw is None:
+                steps_raw = []
+
+            materials_clean = []
+            if isinstance(materials_raw, list):
+                materials_clean = [str(item).strip() for item in materials_raw if str(item).strip()]
+            elif isinstance(materials_raw, str) and materials_raw.strip():
+                materials_clean = [part.strip() for part in re.split(r"[,\n;]", materials_raw) if part.strip()]
+
+            steps_clean = []
+            if isinstance(steps_raw, list):
+                steps_clean = [str(item).strip() for item in steps_raw if str(item).strip()]
+            elif isinstance(steps_raw, str) and steps_raw.strip():
+                steps_clean = [part.strip(" -•\t") for part in re.split(r"\n+|(?<=\.)\s+", steps_raw) if part.strip(" -•\t")]
+
+            if not title or not duration_hint or not why_fit or len(steps_clean) < 2:
+                continue
+
+            cleaned.append(
+                {
+                    "title": title,
+                    "setup_minutes": setup_minutes,
+                    "duration_hint": duration_hint,
+                    "mess_level": mess_level,
+                    "energy_level": energy_level,
+                    "materials": materials_clean,
+                    "steps": steps_clean[:8],
+                    "why_fit": why_fit,
+                    "parent_tip": parent_tip or "Halte es locker und stoppe, sobald es gerade gut ist.",
+                }
+            )
+        return cleaned[:3]
+
+    response = client.responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+        ],
+        text={"format": schema},
+        max_output_tokens=2200,
+        truncation="auto",
+    )
+
+    data = _parse_response_json_any(response)
+    cleaned = _coerce_home_alternatives(data)
+    if cleaned:
+        return cleaned
+
+    print(
+        "HOME_AI_PRIMARY_INVALID",
+        json.dumps(
+            {
+                "parsed_type": type(data).__name__ if data is not None else None,
+                "output_text": (_extract_output_text(response) or "")[:2000],
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+    fallback_response = client.responses.create(
+        model=model,
+        input=[
+            {
+                "role": "system",
+                "content": [{
+                    "type": "input_text",
+                    "text": (
+                        system_text
+                        + " Antworte als reines JSON ohne Markdown. "
+                        + 'Nutze dieses Format: {"alternatives":[{"title":"...","setup_minutes":5,"duration_hint":"...","mess_level":"...","energy_level":"...","materials":["..."],"steps":["...","..."],"why_fit":"...","parent_tip":"..."}]}. Halte alles sehr kurz.'
+                    ),
+                }],
+            },
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+        ],
+        max_output_tokens=2200,
+        truncation="auto",
+    )
+
+    fallback_data = _parse_response_json_any(fallback_response)
+    cleaned = _coerce_home_alternatives(fallback_data)
+    if cleaned:
+        return cleaned
+
+    print(
+        "HOME_AI_FALLBACK_INVALID",
+        json.dumps(
+            {
+                "parsed_type": type(fallback_data).__name__ if fallback_data is not None else None,
+                "output_text": (_extract_output_text(fallback_response) or "")[:2000],
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+    raise ValueError("AI-Antwort ungültig.")
 
 
 def _openai_estimate_shopping_list_total(lines: List[str], currency: str = "chf") -> Dict[str, Any]:
@@ -1041,9 +1299,9 @@ def _extract_output_text(response) -> Optional[str]:
     return None
 
 
-def _extract_output_json(response) -> Optional[dict]:
+def _extract_output_json(response) -> Optional[Any]:
     parsed = getattr(response, "output_parsed", None)
-    if isinstance(parsed, dict):
+    if isinstance(parsed, (dict, list)):
         return parsed
 
     output = getattr(response, "output", None) or []
@@ -1062,14 +1320,14 @@ def _extract_output_json(response) -> Optional[dict]:
             candidate = getattr(chunk, "json", None)
             if candidate is None and isinstance(chunk, dict):
                 candidate = chunk.get("json")
-            if isinstance(candidate, dict):
+            if isinstance(candidate, (dict, list)):
                 return candidate
     return None
 
 
-def _parse_response_json(response) -> Optional[dict]:
+def _parse_response_json_any(response) -> Optional[Any]:
     data = _extract_output_json(response)
-    if isinstance(data, dict):
+    if isinstance(data, (dict, list)):
         return data
 
     output_text = _extract_output_text(response)
@@ -1080,9 +1338,25 @@ def _parse_response_json(response) -> Optional[dict]:
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
     try:
-        parsed = json.loads(cleaned)
+        return json.loads(cleaned)
     except Exception:
-        return None
+        pass
+
+    for start_char, end_char in (("{", "}"), ("[", "]")):
+        start_idx = cleaned.find(start_char)
+        end_idx = cleaned.rfind(end_char)
+        if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+            continue
+        candidate = cleaned[start_idx : end_idx + 1]
+        try:
+            return json.loads(candidate)
+        except Exception:
+            continue
+    return None
+
+
+def _parse_response_json(response) -> Optional[dict]:
+    parsed = _parse_response_json_any(response)
     return parsed if isinstance(parsed, dict) else None
 
 
@@ -1294,6 +1568,55 @@ def _normalize_activities_transport(value: Optional[str], fallback: str) -> str:
     return fallback
 
 
+def _normalize_home_energy(value: Optional[str], fallback: str) -> str:
+    cleaned = _normalize_ascii_key(value or "")
+    mapping = {
+        "ruhig": "ruhig",
+        "low": "ruhig",
+        "mittel": "mittel",
+        "medium": "mittel",
+        "wild": "wild",
+        "hoch": "wild",
+        "high": "wild",
+    }
+    return mapping.get(cleaned, fallback)
+
+
+def _normalize_home_mess_level(value: Optional[str], fallback: str) -> str:
+    cleaned = _normalize_ascii_key(value or "")
+    mapping = {
+        "sauber": "sauber",
+        "egal": "egal",
+        "chaosok": "chaos_ok",
+        "chaos": "chaos_ok",
+    }
+    return mapping.get(cleaned, fallback)
+
+
+def _normalize_home_space(value: Optional[str], fallback: str) -> str:
+    cleaned = _normalize_ascii_key(value or "")
+    mapping = {
+        "wohnzimmer": "wohnzimmer",
+        "kinderzimmer": "kinderzimmer",
+        "klein": "klein",
+        "egal": "egal",
+    }
+    return mapping.get(cleaned, fallback)
+
+
+def _normalize_home_parent_energy(value: Optional[str], fallback: str) -> str:
+    cleaned = _normalize_ascii_key(value or "")
+    mapping = {
+        "niedrig": "niedrig",
+        "low": "niedrig",
+        "mittel": "mittel",
+        "medium": "mittel",
+        "hoch": "hoch",
+        "high": "hoch",
+    }
+    return mapping.get(cleaned, fallback)
+
+
 def _normalize_activities_settings(
     raw: Any, fallback: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
@@ -1330,6 +1653,42 @@ def _normalize_activities_settings(
     use_weather = bool(raw.get("use_weather", base["use_weather"]))
     prefer_mountains = bool(raw.get("prefer_mountains", base["prefer_mountains"]))
 
+    home_duration_raw = raw.get("home_duration_min", base["home_duration_min"])
+    home_duration_min = base["home_duration_min"]
+    if isinstance(home_duration_raw, int):
+        home_duration_min = home_duration_raw
+    elif isinstance(home_duration_raw, str) and home_duration_raw.isdigit():
+        home_duration_min = int(home_duration_raw)
+    if home_duration_min not in HOME_ACTIVITY_DURATION_OPTIONS:
+        home_duration_min = base["home_duration_min"]
+
+    home_energy = _normalize_home_energy(raw.get("home_energy"), base["home_energy"])
+    home_mess_level = _normalize_home_mess_level(raw.get("home_mess_level"), base["home_mess_level"])
+    home_space = _normalize_home_space(raw.get("home_space"), base["home_space"])
+    home_parent_energy = _normalize_home_parent_energy(raw.get("home_parent_energy"), base["home_parent_energy"])
+
+    home_materials_raw = raw.get("home_materials", base["home_materials"])
+    home_materials: List[str] = []
+    if isinstance(home_materials_raw, list):
+        seen_materials = set()
+        for item in home_materials_raw:
+            label = str(item or "").strip()
+            if not label or label in seen_materials:
+                continue
+            seen_materials.add(label)
+            home_materials.append(label)
+
+    home_types_raw = raw.get("home_types", base["home_types"])
+    home_types: List[str] = []
+    if isinstance(home_types_raw, list):
+        seen_home_types = set()
+        for item in home_types_raw:
+            label = str(item or "").strip()
+            if not label or label in seen_home_types:
+                continue
+            seen_home_types.add(label)
+            home_types.append(label)
+
     return {
         "default_location": default_location,
         "max_travel_min": max_travel,
@@ -1338,6 +1697,13 @@ def _normalize_activities_settings(
         "types": types,
         "use_weather": use_weather,
         "prefer_mountains": prefer_mountains,
+        "home_duration_min": home_duration_min,
+        "home_energy": home_energy,
+        "home_mess_level": home_mess_level,
+        "home_space": home_space,
+        "home_parent_energy": home_parent_energy,
+        "home_materials": home_materials,
+        "home_types": home_types,
     }
 
 
@@ -1572,6 +1938,13 @@ class ActivitiesSettingsPayload(BaseModel):
     types: Optional[List[str]] = None
     use_weather: Optional[bool] = None
     prefer_mountains: Optional[bool] = None
+    home_duration_min: Optional[int] = None
+    home_energy: Optional[str] = None
+    home_mess_level: Optional[str] = None
+    home_space: Optional[str] = None
+    home_parent_energy: Optional[str] = None
+    home_materials: Optional[List[str]] = None
+    home_types: Optional[List[str]] = None
 
 
 class ActivitiesMoodPayload(BaseModel):
@@ -1587,6 +1960,20 @@ class ActivitiesGeneratePayload(BaseModel):
     max_travel_min: int
     mountains: bool = False
     mood: ActivitiesMoodPayload
+    settings_snapshot: Optional[Dict[str, Any]] = None
+
+
+class HomeActivitiesGeneratePayload(BaseModel):
+    duration_min: int
+    child_energy: str
+    mess_level: str
+    space: str
+    parent_energy: str
+    mood: Optional[str] = None
+    goal: Optional[str] = None
+    materials: List[str] = []
+    themes: List[str] = []
+    free_text: Optional[str] = None
     settings_snapshot: Optional[Dict[str, Any]] = None
 
 
@@ -1814,6 +2201,51 @@ def api_generate_activities(payload: ActivitiesGeneratePayload):
     try:
         alternatives = _openai_generate_activities(payload, settings=settings)
     except Exception:
+        return {"ok": False, "error": "AI-Antwort ungültig."}
+
+    return {"ok": True, "alternatives": alternatives}
+
+
+@app.post("/api/activities/home/generate")
+def api_generate_home_activities(payload: HomeActivitiesGeneratePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if not os.getenv("OPENAI_API_KEY"):
+        return {"ok": False, "error": "AI nicht konfiguriert."}
+
+    settings = _get_settings_activities()
+    if payload.settings_snapshot:
+        settings = _normalize_activities_settings(payload.settings_snapshot, settings)
+
+    if payload.duration_min not in HOME_ACTIVITY_DURATION_OPTIONS:
+        return {"ok": False, "error": "Ungültige Dauer."}
+
+    child_energy = _normalize_home_energy(payload.child_energy, settings.get("home_energy", "mittel"))
+    mess_level = _normalize_home_mess_level(payload.mess_level, settings.get("home_mess_level", "egal"))
+    space = _normalize_home_space(payload.space, settings.get("home_space", "wohnzimmer"))
+    parent_energy = _normalize_home_parent_energy(payload.parent_energy, settings.get("home_parent_energy", "mittel"))
+
+    clean_materials = [str(item).strip() for item in (payload.materials or []) if str(item).strip()]
+    clean_themes = [str(item).strip() for item in (payload.themes or []) if str(item).strip()]
+
+    normalized_payload = HomeActivitiesGeneratePayload(
+        duration_min=payload.duration_min,
+        child_energy=child_energy,
+        mess_level=mess_level,
+        space=space,
+        parent_energy=parent_energy,
+        mood=(payload.mood or "").strip() or None,
+        goal=(payload.goal or "").strip() or None,
+        materials=clean_materials,
+        themes=clean_themes,
+        free_text=(payload.free_text or "").strip() or None,
+        settings_snapshot=settings,
+    )
+
+    try:
+        alternatives = _openai_generate_home_activities(normalized_payload, settings=settings)
+    except Exception as exc:
+        print(f"HOME_AI_ERROR {type(exc).__name__}: {exc}", flush=True)
         return {"ok": False, "error": "AI-Antwort ungültig."}
 
     return {"ok": True, "alternatives": alternatives}

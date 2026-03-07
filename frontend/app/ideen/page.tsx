@@ -1,5 +1,118 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
+import { BottomNav } from "../lib/ui";
+
+const options = [
+  {
+    href: "/ideen/ausfluege",
+    icon: "🗺️",
+    title: "Ausflüge",
+    subtitle: "Rausgehen, Umgebung prüfen und passende Familienideen finden",
+    accent: "#2b7fff",
+  },
+  {
+    href: "/ideen/zuhause",
+    icon: "🧸",
+    title: "Zuhause",
+    subtitle: "Spiel-, Bau- und Fantasieideen für drinnen bei schlechtem Wetter",
+    accent: "#ef7d43",
+  },
+];
 
 export default function IdeenPage() {
-  redirect("/ideen/generator");
+  return (
+    <main style={{
+      minHeight: "100dvh",
+      background: "var(--bg)",
+      color: "var(--fg)",
+      fontFamily: "var(--font)",
+      paddingBottom: "var(--nav-height)",
+    }}>
+      <div style={{ maxWidth: 430, margin: "0 auto", padding: "20px 22px 44px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, gap: 12 }}>
+          <div>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--aktivitaet-accent)" }}>
+              Was unternehmen wir?
+            </p>
+            <h1 style={{ margin: "6px 0 0", fontSize: 28, lineHeight: 1.1 }}>Wählt euren Modus</h1>
+            <p style={{ margin: "10px 0 0", fontSize: 14, color: "var(--fg-muted)", maxWidth: 320 }}>
+              Draußen Ideen für unterwegs finden oder drinnen kreative Spiele für Zuhause starten.
+            </p>
+          </div>
+          <Link href="/" style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            borderRadius: 999, border: "1px solid var(--border)", padding: "8px 12px",
+            fontSize: 13, fontWeight: 700, color: "var(--fg)", textDecoration: "none",
+          }}>
+            Home
+          </Link>
+        </div>
+
+        <div style={{ display: "grid", gap: 14 }}>
+          {options.map((option) => (
+            <Link key={option.href} href={option.href} style={{ textDecoration: "none", color: "inherit" }}>
+              <article className="nav-tile" style={{
+                position: "relative",
+                overflow: "hidden",
+                borderRadius: 26,
+                border: `1px solid color-mix(in srgb, ${option.accent} 28%, var(--border))`,
+                background: `linear-gradient(180deg, color-mix(in srgb, ${option.accent} 12%, var(--bg)) 0%, color-mix(in srgb, ${option.accent} 18%, var(--bg-subtle)) 100%)`,
+                boxShadow: "var(--shadow-md)",
+                padding: 20,
+                minHeight: 168,
+                display: "grid",
+                alignItems: "space-between",
+              }}>
+                <div style={{
+                  position: "absolute",
+                  right: -24,
+                  top: -22,
+                  width: 118,
+                  height: 118,
+                  borderRadius: 999,
+                  background: `color-mix(in srgb, ${option.accent} 18%, transparent)`,
+                }} />
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, position: "relative" }}>
+                  <div style={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: 24,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 40,
+                    background: `color-mix(in srgb, ${option.accent} 18%, var(--bg))`,
+                    border: `1px solid color-mix(in srgb, ${option.accent} 38%, transparent)`,
+                  }}>
+                    {option.icon}
+                  </div>
+                  <div style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 999,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: `color-mix(in srgb, ${option.accent} 14%, var(--bg))`,
+                    color: option.accent,
+                    fontSize: 22,
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}>
+                    →
+                  </div>
+                </div>
+                <div style={{ position: "relative", marginTop: 18 }}>
+                  <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.1 }}>{option.title}</h2>
+                  <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.45, color: "var(--fg-muted)" }}>
+                    {option.subtitle}
+                  </p>
+                </div>
+              </article>
+            </Link>
+          ))}
+        </div>
+      </div>
+      <BottomNav current="/ideen" />
+    </main>
+  );
 }
