@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../lib/errors";
+import { getWeeklyPlanHref } from "../lib/weekly-plan-links.mjs";
 import { BtnLink, Page, styles } from "../lib/ui";
 
 type DayEntry = {
@@ -10,6 +11,7 @@ type DayEntry = {
   kind: "recipe" | "dummy" | "empty";
   recipe_id: string | null;
   title: string;
+  source_url?: string | null;
 };
 
 type PlanPayload = {
@@ -95,12 +97,37 @@ const cardStyles: Record<string, React.CSSProperties> = {
 function DayGrid({ days }: { days: DayEntry[] }) {
   return (
     <div style={cardStyles.grid}>
-      {days.map((d) => (
-        <div key={d.day} style={cardStyles.dayCard}>
-          <div style={cardStyles.dayLabel}>{d.label}</div>
-          <div style={cardStyles.dayTitle}>{d.title}</div>
-        </div>
-      ))}
+      {days.map((d) => {
+        const href = getWeeklyPlanHref(d);
+        const content = (
+          <>
+            <div style={cardStyles.dayLabel}>{d.label}</div>
+            <div style={{ ...cardStyles.dayTitle, textDecoration: href ? "underline" : "none", textUnderlineOffset: href ? 3 : undefined }}>
+              {d.title}
+            </div>
+          </>
+        );
+
+        if (!href) {
+          return (
+            <div key={d.day} style={cardStyles.dayCard}>
+              {content}
+            </div>
+          );
+        }
+
+        return (
+          <a
+            key={d.day}
+            href={href}
+            style={{ ...cardStyles.dayCard, textDecoration: "none", color: "inherit", display: "block" }}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            {content}
+          </a>
+        );
+      })}
     </div>
   );
 }

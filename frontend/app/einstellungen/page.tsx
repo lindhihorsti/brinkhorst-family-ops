@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { SystemStatus } from "../lib/system-status";
 import { BottomNav } from "../lib/ui";
 
 export const metadata = { title: "Einstellungen — Family Ops" };
@@ -100,6 +101,8 @@ export default function EinstellungenPage() {
             </Link>
           ))}
         </div>
+
+        <SystemStatus marginTop={24} />
       </div>
 
       <BottomNav current="/" />
