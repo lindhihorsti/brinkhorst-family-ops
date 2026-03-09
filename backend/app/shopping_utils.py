@@ -1,5 +1,21 @@
 from typing import Any, Dict, List, Optional
 
+SHOPPING_CATEGORY_ORDER = [
+    "Gemüse & Kräuter",
+    "Obst",
+    "Fleisch & Fisch",
+    "Milchprodukte & Eier",
+    "Teigwaren, Reis & Getreide",
+    "Brot & Backwaren",
+    "Konserven & Gläser",
+    "Gewürze, Öle & Saucen",
+    "Tiefkühlprodukte",
+    "Snacks & Süßes",
+    "Getränke",
+    "Haushalt & Sonstiges",
+]
+SHOPPING_CATEGORY_SET = set(SHOPPING_CATEGORY_ORDER)
+
 
 def apply_ai_categories_to_recipe_items(
     response_items: List[Dict[str, Any]],
@@ -21,6 +37,8 @@ def apply_ai_categories_to_recipe_items(
         category = str(row.get("category") or "").strip()
         if not item_id or not category:
             raise ValueError("AI-Antwort ungültig.")
+        if category not in SHOPPING_CATEGORY_SET:
+            raise ValueError("AI-Antwort enthält ungültige Kategorien.")
         if item_id in seen_ids:
             raise ValueError("AI-Antwort enthält Duplikate.")
         item = by_id.get(item_id)
@@ -38,6 +56,7 @@ def apply_ai_categories_to_recipe_items(
     if seen_ids != set(by_id.keys()):
         raise ValueError("AI-Antwort deckt nicht alle Zutaten ab.")
 
+    category_order = [category for category in SHOPPING_CATEGORY_ORDER if category in category_map]
     order_counter = 0
     for category in category_order:
         for item in category_map[category]:
