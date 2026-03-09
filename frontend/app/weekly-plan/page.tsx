@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../lib/errors";
 import { getWeeklyPlanHref } from "../lib/weekly-plan-links.mjs";
-import { BtnLink, Page, styles } from "../lib/ui";
+import { BtnLink, ConfirmModal, Page, styles } from "../lib/ui";
 
 type DayEntry = {
   day: number;
@@ -81,6 +81,27 @@ const cardStyles: Record<string, React.CSSProperties> = {
   toggleRow: { display: "flex", gap: 8, marginTop: 10 },
 };
 
+function addDays(isoDate: string, days: number): string {
+  const base = new Date(`${isoDate}T00:00:00`);
+  base.setDate(base.getDate() + days);
+  return base.toISOString().slice(0, 10);
+}
+
+function formatDateRangeLabel(isoDate: string): string {
+  const dt = new Date(`${isoDate}T00:00:00`);
+  return dt.toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function isoWeekNumber(isoDate: string): number | null {
+  const date = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  return Math.ceil((((utc.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
 function DayGrid({ days }: { days: DayEntry[] }) {
   return (
     <div style={cardStyles.grid}>
@@ -135,8 +156,11 @@ export default function WeeklyPlanPage() {
   const [swapDraft, setSwapDraft] = useState<DraftPayload | null>(null);
 
   const [planWarning, setPlanWarning] = useState<string | null>(null);
+  const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false);
 
   const weekStart = current?.week_start ?? "—";
+  const weekEnd = current?.week_start ? addDays(current.week_start, 6) : null;
+  const calendarWeek = current?.week_start ? isoWeekNumber(current.week_start) : null;
 
   const planDays = current?.plan?.days ?? [];
   const draftDays = swapDraft?.proposed_days ?? [];
@@ -174,7 +198,7 @@ export default function WeeklyPlanPage() {
     }
   }, [current]);
 
-  const handlePlan = async () => {
+  const createPlan = async () => {
     setPlanLoading(true);
     setCurrentError(null);
     setPlanWarning(null);
@@ -191,6 +215,14 @@ export default function WeeklyPlanPage() {
     } finally {
       setPlanLoading(false);
     }
+  };
+
+  const handlePlan = async () => {
+    if (current?.has_plan) {
+      setConfirmReplaceOpen(true);
+      return;
+    }
+    await createPlan();
   };
 
   const handleSwapPreview = async () => {
@@ -270,36 +302,19 @@ export default function WeeklyPlanPage() {
   }, [selectedDays]);
 
   return (
-    <Page title="Wochenplan" subtitle={`Woche ab ${weekStart} (Mo–So)`} right={<BtnLink href="/kueche">Küche</BtnLink>} navCurrent="/kueche" icon="📅" iconAccent="#e8673a">
-      <div style={{ ...cardStyles.section, marginBottom: 18 }}>
-        <div style={cardStyles.buttonRow}>
-          <button style={styles.buttonPrimary} onClick={handlePlan} disabled={planLoading}>
-            {planLoading ? "Plane…" : "Plan"}
-          </button>
-          <button
-            style={styles.button}
-            onClick={() => {
-              setSwapError(null);
-              setSwapStep((s) => (s === "closed" ? "select" : s));
-            }}
-            disabled={!canSwap}
-          >
-            Tauschen
-          </button>
-        </div>
-        {loadingCurrent ? (
-          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>Lade aktuellen Plan…</div>
-        ) : null}
-        {currentError ? (
-          <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{currentError}</div>
-        ) : null}
-        {planWarning ? (
-          <div style={{ marginTop: 10, fontSize: 12 }}>{planWarning}</div>
-        ) : null}
-      </div>
-
+    <Page title="Wochenplan" subtitle="Aktueller Plan serverseitig gespeichert" right={<BtnLink href="/kueche">Küche</BtnLink>} navCurrent="/kueche" icon="📅" iconAccent="#e8673a">
       <div style={cardStyles.section}>
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Aktueller Plan</div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 10, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontWeight: 800 }}>Aktueller Plan</div>
+            {calendarWeek && weekEnd ? (
+              <div style={{ ...cardStyles.muted, marginTop: 4 }}>
+                KW {calendarWeek} · {formatDateRangeLabel(weekStart)} bis {formatDateRangeLabel(weekEnd)}
+              </div>
+            ) : null}
+          </div>
+          {loadingCurrent ? <div style={{ ...cardStyles.muted, opacity: 0.8 }}>Lade aktuellen Plan…</div> : null}
+        </div>
         {current?.has_plan ? (
           <DayGrid days={planDays} />
         ) : (
@@ -312,8 +327,15 @@ export default function WeeklyPlanPage() {
             </button>
           </div>
         )}
+        {currentError ? (
+          <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{currentError}</div>
+        ) : null}
+        {planWarning ? (
+          <div style={{ marginTop: 10, fontSize: 12 }}>{planWarning}</div>
+        ) : null}
       </div>
 
+      {(swapStep !== "closed" || current?.has_draft) && (
       <div style={cardStyles.section}>
         <div style={{ fontWeight: 800, marginBottom: 10 }}>Swap-Assistent</div>
         {!canSwap ? (
@@ -416,6 +438,40 @@ export default function WeeklyPlanPage() {
           <div style={{ marginTop: 10, fontSize: 12, color: "var(--danger)" }}>{swapError}</div>
         ) : null}
       </div>
+      )}
+
+      <div style={{ ...cardStyles.section, marginTop: 14 }}>
+        <div style={{ fontWeight: 800, marginBottom: 10 }}>Aktionen</div>
+        <div style={cardStyles.buttonRow}>
+          <button style={styles.buttonPrimary} onClick={handlePlan} disabled={planLoading}>
+            {planLoading ? "Plane…" : current?.has_plan ? "Plan neu erstellen" : "Plan erstellen"}
+          </button>
+          <BtnLink href="/weekly-plan/history">Historie</BtnLink>
+          <button
+            style={styles.button}
+            onClick={() => {
+              setSwapError(null);
+              setSwapStep((s) => (s === "closed" ? "select" : s));
+            }}
+            disabled={!canSwap}
+          >
+            Tauschen
+          </button>
+        </div>
+        {!canSwap ? <div style={{ ...cardStyles.muted, marginTop: 8 }}>Sobald ein Plan existiert, kannst du einzelne Tage tauschen.</div> : null}
+      </div>
+
+      <ConfirmModal
+        open={confirmReplaceOpen}
+        title="Vorhandenen Plan ersetzen?"
+        message="Für diese Woche existiert bereits ein Plan. Willst du ihn wirklich neu erstellen und damit überschreiben?"
+        confirmLabel={planLoading ? "Plane…" : "Ja, ersetzen"}
+        onConfirm={async () => {
+          setConfirmReplaceOpen(false);
+          await createPlan();
+        }}
+        onClose={() => setConfirmReplaceOpen(false)}
+      />
     </Page>
   );
 }
