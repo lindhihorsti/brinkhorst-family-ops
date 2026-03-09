@@ -46,6 +46,39 @@ def apply_ai_categories_to_recipe_items(
     return category_order
 
 
+def chunk_shopping_category_items(
+    items: List[Dict[str, Any]],
+    max_items: int = 40,
+    max_chars: int = 2800,
+) -> List[List[Dict[str, Any]]]:
+    if max_items < 1:
+        max_items = 1
+    if max_chars < 200:
+        max_chars = 200
+
+    chunks: List[List[Dict[str, Any]]] = []
+    current: List[Dict[str, Any]] = []
+    current_chars = 0
+
+    for item in items:
+        content = str(item.get("content") or "")
+        recipe_title = str(item.get("recipe_title") or "")
+        item_chars = len(content) + len(recipe_title) + 80
+
+        if current and (len(current) >= max_items or current_chars + item_chars > max_chars):
+            chunks.append(current)
+            current = []
+            current_chars = 0
+
+        current.append(item)
+        current_chars += item_chars
+
+    if current:
+        chunks.append(current)
+
+    return chunks
+
+
 def shopping_snapshot_items(
     manual_items: List[str],
     include_weekly_items: bool,

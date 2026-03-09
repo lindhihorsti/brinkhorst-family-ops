@@ -7,6 +7,7 @@ import asyncio
 import ipaddress
 import socket
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional, List, Tuple, Literal, Mapping
 from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit, urljoin
@@ -36,6 +37,7 @@ from app.models import (
 )
 from app.shopping_utils import (
     apply_ai_categories_to_recipe_items,
+    chunk_shopping_category_items,
     shopping_estimate_context,
     shopping_estimate_lines,
     shopping_snapshot_items,
@@ -1465,9 +1467,15 @@ def _openai_categorize_shopping_recipe_items(items: List[Dict[str, Any]]) -> Dic
     from openai import OpenAI
 
     model = (os.getenv("OPENAI_MODEL_ACTIVITIES", "gpt-5.2") or "gpt-5.2").strip()
-    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
-    timeout = float(timeout_raw) if timeout_raw else 30.0
+    timeout_raw = (os.getenv("OPENAI_SHOP_TIMEOUT_SECONDS") or os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 60.0
     client = OpenAI(timeout=timeout).with_options(max_retries=0)
+    max_items_raw = (os.getenv("OPENAI_SHOP_CATEGORIZE_MAX_ITEMS") or "").strip()
+    max_items = int(max_items_raw) if max_items_raw.isdigit() else 40
+    max_chars_raw = (os.getenv("OPENAI_SHOP_CATEGORIZE_MAX_CHARS") or "").strip()
+    max_chars = int(max_chars_raw) if max_chars_raw.isdigit() else 2800
+    parallelism_raw = (os.getenv("OPENAI_SHOP_CATEGORIZE_PARALLELISM") or "").strip()
+    parallelism = int(parallelism_raw) if parallelism_raw.isdigit() else 3
 
     system_text = (
         "Du strukturierst Rezept-Zutaten für Einkaufslisten in sinnvolle Oberkategorien. "
@@ -1476,16 +1484,6 @@ def _openai_categorize_shopping_recipe_items(items: List[Dict[str, Any]]) -> Dic
         "Kategorien sollen dynamisch und lebensmittelbezogen sein, z. B. Gemüse, Obst, Milchprodukte, Fleisch, Gewürze, Teigwaren. "
         "Gib ausschließlich JSON im verlangten Schema aus."
     )
-    user_payload = {
-        "recipe_items": items,
-        "rules": {
-            "language": "de",
-            "preserve_items_exactly": True,
-            "preserve_ids_exactly": True,
-            "no_merging": True,
-            "no_rewriting": True,
-        },
-    }
     schema = {
         "type": "json_schema",
         "name": "shopping_recipe_categories",
@@ -1513,21 +1511,47 @@ def _openai_categorize_shopping_recipe_items(items: List[Dict[str, Any]]) -> Dic
         "strict": True,
     }
 
-    response = client.responses.create(
-        model=model,
-        input=[
-            {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
-            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
-        ],
-        text={"format": schema},
-        max_output_tokens=1200,
-        truncation="auto",
-    )
+    chunks = chunk_shopping_category_items(items, max_items=max_items, max_chars=max_chars)
 
-    data = _parse_response_json_any(response)
-    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
-        raise ValueError("AI-Antwort ungültig.")
-    return {"items": data["items"], "model": model}
+    def _run_chunk(chunk: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        user_payload = {
+            "recipe_items": chunk,
+            "rules": {
+                "language": "de",
+                "preserve_items_exactly": True,
+                "preserve_ids_exactly": True,
+                "no_merging": True,
+                "no_rewriting": True,
+            },
+        }
+
+        response = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
+                {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+            ],
+            text={"format": schema},
+            max_output_tokens=1600,
+            truncation="auto",
+        )
+
+        data = _parse_response_json_any(response)
+        if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+            raise ValueError("AI-Antwort ungültig.")
+        return data["items"]
+
+    all_items: List[Dict[str, Any]] = []
+    worker_count = max(1, min(parallelism, len(chunks)))
+    if worker_count == 1:
+        for chunk in chunks:
+            all_items.extend(_run_chunk(chunk))
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            for chunk_items in executor.map(_run_chunk, chunks):
+                all_items.extend(chunk_items)
+
+    return {"items": all_items, "model": model}
 
 
 def _extract_output_text(response) -> Optional[str]:
