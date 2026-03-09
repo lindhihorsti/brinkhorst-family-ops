@@ -1,6 +1,51 @@
 from typing import Any, Dict, List, Optional
 
 
+def apply_ai_categories_to_recipe_items(
+    response_items: List[Dict[str, Any]],
+    recipe_items: List[Any],
+) -> List[str]:
+    by_id = {str(item.id): item for item in recipe_items if getattr(item, "id", None)}
+    if len(response_items) != len(by_id):
+        raise ValueError("AI-Antwort unvollständig.")
+
+    seen_ids = set()
+    category_order: List[str] = []
+    category_map: Dict[str, List[Any]] = {}
+
+    for row in response_items:
+        if not isinstance(row, dict):
+            raise ValueError("AI-Antwort ungültig.")
+        item_id = str(row.get("id") or "").strip()
+        content = str(row.get("content") or "").strip()
+        category = str(row.get("category") or "").strip()
+        if not item_id or not category:
+            raise ValueError("AI-Antwort ungültig.")
+        if item_id in seen_ids:
+            raise ValueError("AI-Antwort enthält Duplikate.")
+        item = by_id.get(item_id)
+        if not item:
+            raise ValueError("AI-Antwort enthält unbekannte Einträge.")
+        if content != getattr(item, "content", None):
+            raise ValueError("AI hat Zutaten verändert. Speichern abgebrochen.")
+        seen_ids.add(item_id)
+        item.category = category
+        if category not in category_map:
+            category_map[category] = []
+            category_order.append(category)
+        category_map[category].append(item)
+
+    if seen_ids != set(by_id.keys()):
+        raise ValueError("AI-Antwort deckt nicht alle Zutaten ab.")
+
+    order_counter = 0
+    for category in category_order:
+        for item in category_map[category]:
+            item.item_order = order_counter
+            order_counter += 1
+    return category_order
+
+
 def shopping_snapshot_items(
     manual_items: List[str],
     include_weekly_items: bool,

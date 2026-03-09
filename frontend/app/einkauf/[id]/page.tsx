@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type ShoppingList, type ShoppingListItem } from "../../lib/api";
 import { BtnLink, Page, styles, ToastProvider, useToast } from "../../lib/ui";
 import { estimateCurrencyLabel, formatEstimateTotal } from "../currency.mjs";
-import { recipeGroups, shoppingTextOutput, splitShoppingItems } from "../format.mjs";
+import { categoryGroups, recipeGroups, shoppingTextOutput, splitShoppingItems } from "../format.mjs";
 
 type RecipeGroup = {
   title: string | null;
@@ -43,6 +43,14 @@ function EinkaufDetailContent() {
   );
   const recipeSections = useMemo(
     () => recipeGroups(manualAndRecipe.recipe) as RecipeGroup[],
+    [manualAndRecipe.recipe]
+  );
+  const recipeCategorySections = useMemo(
+    () => categoryGroups(manualAndRecipe.recipe) as RecipeGroup[],
+    [manualAndRecipe.recipe]
+  );
+  const hasRecipeCategories = useMemo(
+    () => manualAndRecipe.recipe.some((shoppingItem) => shoppingItem.category),
     [manualAndRecipe.recipe]
   );
 
@@ -147,6 +155,20 @@ function EinkaufDetailContent() {
     }
   };
 
+  const categorize = async () => {
+    if (!item) return;
+    setBusy("categorize");
+    try {
+      const res = await api.categorizeShoppingList(item.id);
+      setItem(res.item);
+      toast("Rezept-Zutaten wurden kategorisiert", "success");
+    } catch {
+      toast("Kategorisierung fehlgeschlagen", "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const removeList = async () => {
     if (!item) return;
     setBusy("delete");
@@ -221,7 +243,7 @@ function EinkaufDetailContent() {
                     Aus Rezepten
                   </div>
                   <div style={{ display: "grid", gap: 12 }}>
-                    {recipeSections.map((group, idx) => (
+                    {(hasRecipeCategories ? recipeCategorySections : recipeSections).map((group, idx) => (
                       <div key={`${group.title ?? "generic"}-${idx}`}>
                         {group.title ? <div style={{ fontWeight: 700, marginBottom: 6 }}>{group.title}</div> : null}
                         <div style={{ display: "grid", gap: 8 }}>
@@ -296,6 +318,9 @@ function EinkaufDetailContent() {
                 </select>
                 <button style={styles.button} disabled={busy === "estimate"} onClick={estimate}>
                   {busy === "estimate" ? "Schätze…" : "AI-Kostenschätzung"}
+                </button>
+                <button style={styles.button} disabled={busy === "categorize"} onClick={categorize}>
+                  {busy === "categorize" ? "Sortiere…" : "AI sortieren"}
                 </button>
                 <button style={styles.buttonDanger} disabled={busy === "delete"} onClick={removeList}>
                   Liste löschen

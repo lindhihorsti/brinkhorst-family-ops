@@ -26,6 +26,21 @@ export function recipeGroups(items = []) {
   return groups;
 }
 
+export function categoryGroups(items = []) {
+  const groups = [];
+  const map = new Map();
+  for (const item of items) {
+    const key = item.category || "";
+    if (!map.has(key)) {
+      const group = { title: key || null, items: [] };
+      map.set(key, group);
+      groups.push(group);
+    }
+    map.get(key).items.push(item);
+  }
+  return groups;
+}
+
 export function shoppingTextOutput(items = []) {
   const { manual, recipe } = splitShoppingItems(items);
   const lines = [];
@@ -40,7 +55,9 @@ export function shoppingTextOutput(items = []) {
   if (recipe.length > 0) {
     if (lines.length > 0) lines.push("");
     lines.push("Aus Rezepten");
-    for (const group of recipeGroups(recipe)) {
+    const hasCategories = recipe.some((item) => item.category);
+    const groups = hasCategories ? categoryGroups(recipe) : recipeGroups(recipe);
+    for (const group of groups) {
       if (group.title) {
         lines.push(`${group.title}`);
       }

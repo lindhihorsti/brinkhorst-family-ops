@@ -161,6 +161,7 @@ export type ShoppingListItem = {
   content: string;
   source: "manual" | "recipe";
   recipe_title?: string | null;
+  category?: string | null;
   checked: boolean;
   item_order: number;
 };
@@ -329,6 +330,16 @@ export const api = {
       };
       item: ShoppingList;
     }>(`/api/shopping-lists/${id}/estimate`, {
+      method: "POST",
+    }),
+
+  categorizeShoppingList: (id: string) =>
+    http<{
+      ok: boolean;
+      item: ShoppingList;
+      categories?: string[];
+      model?: string;
+    }>(`/api/shopping-lists/${id}/categorize`, {
       method: "POST",
     }),
 };
