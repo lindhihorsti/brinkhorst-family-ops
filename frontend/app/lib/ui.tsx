@@ -524,6 +524,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/einkauf", label: "Eink.", icon: "🛒" },
   { href: "/ideen", label: "Ideen", icon: "💡" },
   { href: "/aufgaben", label: "Aufgaben", icon: "✅" },
+  { href: "/geburtstage", label: "Geb.", icon: "🎂" },
   { href: "/pinnwand", label: "Pinnwand", icon: "📌" },
   { href: "/split", label: "Split", icon: "💸" },
   { href: "/einstellungen", label: "Einst.", icon: "⚙️" },
