@@ -336,9 +336,10 @@ export const api = {
   categorizeShoppingList: (id: string) =>
     http<{
       ok: boolean;
-      item: ShoppingList;
+      item?: ShoppingList;
       categories?: string[];
       model?: string;
+      error?: string;
     }>(`/api/shopping-lists/${id}/categorize`, {
       method: "POST",
     }),

@@ -160,10 +160,15 @@ function EinkaufDetailContent() {
     setBusy("categorize");
     try {
       const res = await api.categorizeShoppingList(item.id);
+      if (!res.ok || !res.item) {
+        toast(res.error || "Kategorisierung fehlgeschlagen", "error");
+        return;
+      }
       setItem(res.item);
       toast("Rezept-Zutaten wurden kategorisiert", "success");
-    } catch {
-      toast("Kategorisierung fehlgeschlagen", "error");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Kategorisierung fehlgeschlagen";
+      toast(message, "error");
     } finally {
       setBusy(null);
     }
