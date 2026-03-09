@@ -229,6 +229,7 @@ function EinkaufDetailContent() {
                             <label key={shoppingItem.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                               <input type="checkbox" checked={shoppingItem.checked} onChange={() => toggleChecked(shoppingItem)} />
                               <span style={{ flex: 1, textDecoration: shoppingItem.checked ? "line-through" : "none", opacity: shoppingItem.checked ? 0.65 : 1 }}>{shoppingItem.content}</span>
+                              <button type="button" style={{ ...styles.button, padding: "4px 8px", fontSize: 12 }} onClick={() => deleteItem(shoppingItem)}>✕</button>
                             </label>
                           ))}
                         </div>

@@ -2534,6 +2534,23 @@ def _current_week_start() -> date:
     return _week_start_monday(today)
 
 
+def _week_end_sunday(week_start: date) -> date:
+    return week_start + timedelta(days=6)
+
+
+def _iso_calendar_week(week_start: date) -> int:
+    return week_start.isocalendar().week
+
+
+def _serialize_weekly_history_entry(week_start: date, days: Dict[str, str]) -> Dict[str, Any]:
+    return {
+        "week_start": week_start.isoformat(),
+        "week_end": _week_end_sunday(week_start).isoformat(),
+        "calendar_week": _iso_calendar_week(week_start),
+        "plan": _build_plan_payload(days),
+    }
+
+
 @app.get("/api/weekly/current")
 def api_weekly_current():
     if engine is None:
@@ -2569,6 +2586,41 @@ def api_weekly_current():
         "draft": draft_payload,
         "message": plan_payload["message"],
     }
+
+
+@app.get("/api/weekly/history")
+def api_weekly_history(limit: int = 26):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    safe_limit = max(1, min(limit, 104))
+    with engine.connect() as conn:
+        rows = conn.execute(
+            sql_text(
+                """
+                select week_start_date, days
+                from public.weekly_plans
+                order by week_start_date desc
+                limit :limit
+                """
+            ),
+            {"limit": safe_limit},
+        ).mappings().all()
+    items = [_serialize_weekly_history_entry(row["week_start_date"], row["days"] or {}) for row in rows]
+    return {"ok": True, "items": items}
+
+
+@app.get("/api/weekly/history/{week_start}")
+def api_weekly_history_detail(week_start: str):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    try:
+        week_start_date = date.fromisoformat(week_start)
+    except ValueError:
+        raise HTTPException(400, "Ungültiges Datum")
+    base = _db_get_weekly_plan(week_start_date)
+    if not base:
+        raise HTTPException(404, "Plan nicht gefunden")
+    return {"ok": True, "item": _serialize_weekly_history_entry(week_start_date, base["days"] or {})}
 
 
 @app.post("/api/weekly/plan")
