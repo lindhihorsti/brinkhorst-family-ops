@@ -34,7 +34,12 @@ from app.models import (
     ShoppingList,
     ShoppingListItem,
 )
-from app.shopping_utils import shopping_estimate_context, shopping_estimate_lines, shopping_snapshot_items
+from app.shopping_utils import (
+    apply_ai_categories_to_recipe_items,
+    shopping_estimate_context,
+    shopping_estimate_lines,
+    shopping_snapshot_items,
+)
 from app.telegram_events import (
     telegram_birthday_created_text,
     telegram_chore_created_text,
@@ -103,6 +108,14 @@ if engine and AUTO_MIGRATE:
                 """
                 ALTER TABLE IF EXISTS public.shopping_lists
                     ADD COLUMN IF NOT EXISTS estimate_currency TEXT NOT NULL DEFAULT 'chf'
+                """
+            )
+        )
+        conn.execute(
+            sql_text(
+                """
+                ALTER TABLE IF EXISTS public.shopping_list_items
+                    ADD COLUMN IF NOT EXISTS category TEXT
                 """
             )
         )
@@ -1446,6 +1459,75 @@ def _openai_generate_gift_ideas(
     if len(cleaned) < 3:
         raise ValueError("AI-Antwort ungültig.")
     return cleaned
+
+
+def _openai_categorize_shopping_recipe_items(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    from openai import OpenAI
+
+    model = (os.getenv("OPENAI_MODEL_ACTIVITIES", "gpt-5.2") or "gpt-5.2").strip()
+    timeout_raw = (os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 30.0
+    client = OpenAI(timeout=timeout).with_options(max_retries=0)
+
+    system_text = (
+        "Du strukturierst Rezept-Zutaten für Einkaufslisten in sinnvolle Oberkategorien. "
+        "Du darfst die Zutaten niemals umbenennen, zusammenfassen, korrigieren oder neu erfinden. "
+        "Ordne jede gegebene Zeile exakt einer passenden Kategorie zu. "
+        "Kategorien sollen dynamisch und lebensmittelbezogen sein, z. B. Gemüse, Obst, Milchprodukte, Fleisch, Gewürze, Teigwaren. "
+        "Gib ausschließlich JSON im verlangten Schema aus."
+    )
+    user_payload = {
+        "recipe_items": items,
+        "rules": {
+            "language": "de",
+            "preserve_items_exactly": True,
+            "preserve_ids_exactly": True,
+            "no_merging": True,
+            "no_rewriting": True,
+        },
+    }
+    schema = {
+        "type": "json_schema",
+        "name": "shopping_recipe_categories",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "id": {"type": "string"},
+                            "content": {"type": "string"},
+                            "category": {"type": "string"},
+                        },
+                        "required": ["id", "content", "category"],
+                    },
+                }
+            },
+            "required": ["items"],
+        },
+        "strict": True,
+    }
+
+    response = client.responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+        ],
+        text={"format": schema},
+        max_output_tokens=1200,
+        truncation="auto",
+    )
+
+    data = _parse_response_json_any(response)
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        raise ValueError("AI-Antwort ungültig.")
+    return {"items": data["items"], "model": model}
 
 
 def _extract_output_text(response) -> Optional[str]:
@@ -2833,6 +2915,7 @@ def _serialize_shopping_item(item: ShoppingListItem) -> Dict[str, Any]:
         "content": item.content,
         "source": item.source,
         "recipe_title": item.recipe_title,
+        "category": item.category,
         "checked": bool(item.checked),
         "item_order": item.item_order,
     }
@@ -2916,6 +2999,7 @@ def _append_shopping_items(session: Session, list_id: UUID, items: List[Dict[str
                 item_order=item_order,
                 source=source,
                 recipe_title=item.get("recipe_title"),
+                category=item.get("category"),
                 checked=False,
             )
         )
@@ -2942,6 +3026,7 @@ def _replace_weekly_snapshot(session: Session, shopping_list: ShoppingList, impo
                     item_order=idx,
                     source="recipe",
                     recipe_title=item.get("recipe_title"),
+                    category=item.get("category"),
                     checked=False,
                 )
             )
@@ -3160,6 +3245,58 @@ def api_snapshot_weekly_into_shopping_list(list_id: UUID, payload: ShoppingListS
         return {"ok": True, "item": _serialize_shopping_list(session, shopping_list, include_items=True), "warning": warning}
 
 
+@app.post("/api/shopping-lists/{list_id}/categorize")
+def api_categorize_shopping_list(list_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if not os.getenv("OPENAI_API_KEY"):
+        return {"ok": False, "error": "AI nicht konfiguriert."}
+
+    with Session(engine) as session:
+        shopping_list = session.get(ShoppingList, list_id)
+        if not shopping_list:
+            raise HTTPException(404, "Liste nicht gefunden")
+
+        recipe_items = [
+            item for item in _shopping_list_items(session, list_id)
+            if item.source == "recipe"
+        ]
+        if not recipe_items:
+            return {"ok": False, "error": "Keine Rezept-Zutaten vorhanden."}
+
+        ai_input = [
+            {
+                "id": str(item.id),
+                "content": item.content,
+                "recipe_title": item.recipe_title,
+            }
+            for item in recipe_items
+        ]
+        try:
+            result = _openai_categorize_shopping_recipe_items(ai_input)
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+        try:
+            category_order = apply_ai_categories_to_recipe_items(result.get("items") or [], recipe_items)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        for item in recipe_items:
+            session.add(item)
+
+        shopping_list.updated_at = datetime.utcnow()
+        session.add(shopping_list)
+        session.commit()
+        session.refresh(shopping_list)
+        return {
+            "ok": True,
+            "item": _serialize_shopping_list(session, shopping_list, include_items=True),
+            "categories": category_order,
+            "model": result.get("model"),
+        }
+
+
 @app.post("/api/shopping-lists/{list_id}/estimate")
 def api_estimate_shopping_list_total(list_id: UUID):
     if engine is None:
@@ -3368,7 +3505,8 @@ def _tg_cancel_rows() -> List[List[Tuple[str, str]]]:
 def _tg_shopping_detail_rows(list_id: str) -> List[List[Tuple[str, str]]]:
     return [
         [("➕ Eintrag", f"shopping:add-item:{list_id}"), ("🤖 Schätzung", f"shopping:estimate:{list_id}")],
-        [("🧺 Wochenplan import", f"shopping:snapshot:{list_id}"), ("📋 Öffnen", f"shopping:view:{list_id}")],
+        [("🧺 Wochenplan import", f"shopping:snapshot:{list_id}"), ("🧠 Sortieren", f"shopping:categorize:{list_id}")],
+        [("📋 Öffnen", f"shopping:view:{list_id}")],
         [("Zurück", "shopping:list")],
     ]
 
@@ -3915,7 +4053,12 @@ async def _tg_send_shopping_list_detail(chat_id: int, list_id: str) -> None:
         f"🛒 {item['title']}",
         f"{item['manual_count']} manuell · {item['recipe_count']} aus Rezepten · {item['checked_count']}/{item['total_count']} erledigt",
     ]
-    for shopping_item in (item.get("items") or [])[:10]:
+    last_category = None
+    for shopping_item in (item.get("items") or [])[:12]:
+        category = (shopping_item.get("category") or "").strip() or None
+        if shopping_item.get("source") == "recipe" and category and category != last_category:
+            lines.append(f"— {category}")
+            last_category = category
         prefix = "☑️" if shopping_item.get("checked") else "•"
         lines.append(f"{prefix} {shopping_item['content']}")
     await _tg_send_menu(chat_id, "\n".join(lines), _tg_shopping_detail_rows(list_id))
@@ -4331,6 +4474,17 @@ async def _tg_handle_callback(chat_id: int, callback_id: str, data: str, today: 
         estimate = result.get("estimate") or {}
         await _tg_send_shopping_list_detail(chat_id, list_id)
         await _tg_send(chat_id, f"🤖 Schätzung: {estimate.get('estimated_total_text') or 'aktualisiert'}")
+        return
+    if data.startswith("shopping:categorize:"):
+        list_id = data.split(":")[-1]
+        result = api_categorize_shopping_list(UUID(list_id))
+        if not result.get("ok"):
+            await _tg_send(chat_id, result.get("error") or "Sortierung fehlgeschlagen.")
+            return
+        await _tg_send_shopping_list_detail(chat_id, list_id)
+        categories = result.get("categories") or []
+        summary = ", ".join(categories[:6]) if categories else "aktualisiert"
+        await _tg_send(chat_id, f"🧠 Rezept-Zutaten sortiert: {summary}")
         return
     if data.startswith("shopping:snapshot:"):
         list_id = data.split(":")[-1]

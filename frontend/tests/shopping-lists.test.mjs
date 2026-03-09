@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { estimateCurrencyLabel, formatEstimateTotal } from "../app/einkauf/currency.mjs";
-import { recipeGroups, shoppingTextOutput, splitShoppingItems } from "../app/einkauf/format.mjs";
+import { categoryGroups, recipeGroups, shoppingTextOutput, splitShoppingItems } from "../app/einkauf/format.mjs";
 
 test("splitShoppingItems keeps manual items separate from recipe items", () => {
   const result = splitShoppingItems([
@@ -43,6 +43,38 @@ test("shoppingTextOutput renders manual section first and recipe section after",
   ]);
 
   assert.equal(text, "Manuell\n- Milch\n\nAus Rezepten\nPasta\n- Tomaten");
+});
+
+test("categoryGroups groups recipe items by stored category", () => {
+  const result = categoryGroups([
+    { content: "Tomaten", source: "recipe", category: "Gemüse" },
+    { content: "Basilikum", source: "recipe", category: "Gemüse" },
+    { content: "Penne", source: "recipe", category: "Teigwaren" },
+  ]);
+
+  assert.deepEqual(result, [
+    {
+      title: "Gemüse",
+      items: [
+        { content: "Tomaten", source: "recipe", category: "Gemüse" },
+        { content: "Basilikum", source: "recipe", category: "Gemüse" },
+      ],
+    },
+    {
+      title: "Teigwaren",
+      items: [{ content: "Penne", source: "recipe", category: "Teigwaren" }],
+    },
+  ]);
+});
+
+test("shoppingTextOutput prefers stored categories for recipe items", () => {
+  const text = shoppingTextOutput([
+    { content: "Milch", source: "manual" },
+    { content: "Tomaten", source: "recipe", recipe_title: "Pasta", category: "Gemüse" },
+    { content: "Penne", source: "recipe", recipe_title: "Pasta", category: "Teigwaren" },
+  ]);
+
+  assert.equal(text, "Manuell\n- Milch\n\nAus Rezepten\nGemüse\n- Tomaten\n\nTeigwaren\n- Penne");
 });
 
 test("formatEstimateTotal uses CHF by default", () => {

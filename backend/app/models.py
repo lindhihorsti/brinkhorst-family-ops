@@ -197,6 +197,7 @@ class ShoppingListItem(SQLModel, table=True):
     item_order: int = Field(default=0, sa_column=Column(Integer, nullable=False, server_default=text("0")))
     source: str = Field(default="manual", sa_column=Column(String, nullable=False, server_default="manual"))
     recipe_title: Optional[str] = None
+    category: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
     checked: bool = Field(default=False, sa_column=Column(Boolean, nullable=False, server_default=text("false")))
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
