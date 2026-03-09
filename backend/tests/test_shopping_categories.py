@@ -2,7 +2,11 @@ import unittest
 from dataclasses import dataclass
 from uuid import uuid4
 
-from app.shopping_utils import apply_ai_categories_to_recipe_items, chunk_shopping_category_items
+from app.shopping_utils import (
+    SHOPPING_CATEGORY_ORDER,
+    apply_ai_categories_to_recipe_items,
+    chunk_shopping_category_items,
+)
 
 
 @dataclass
@@ -24,25 +28,68 @@ class ShoppingCategoryValidationTest(unittest.TestCase):
 
         order = apply_ai_categories_to_recipe_items(
             [
-                {"id": str(tomato.id), "content": "Tomaten", "category": "Gemüse"},
-                {"id": str(pasta.id), "content": "Penne", "category": "Teigwaren"},
+                {"id": str(tomato.id), "content": "Tomaten", "category": "Gemüse & Kräuter"},
+                {"id": str(pasta.id), "content": "Penne", "category": "Teigwaren, Reis & Getreide"},
             ],
             [tomato, pasta],
         )
 
-        self.assertEqual(order, ["Gemüse", "Teigwaren"])
-        self.assertEqual(tomato.category, "Gemüse")
-        self.assertEqual(pasta.category, "Teigwaren")
+        self.assertEqual(order, ["Gemüse & Kräuter", "Teigwaren, Reis & Getreide"])
+        self.assertEqual(tomato.category, "Gemüse & Kräuter")
+        self.assertEqual(pasta.category, "Teigwaren, Reis & Getreide")
         self.assertEqual(tomato.item_order, 0)
         self.assertEqual(pasta.item_order, 1)
+
+    def test_apply_categories_uses_stable_super_category_order(self):
+        oil = self._recipe_item("Olivenoel")
+        tomato = self._recipe_item("Tomaten")
+
+        order = apply_ai_categories_to_recipe_items(
+            [
+                {"id": str(oil.id), "content": "Olivenoel", "category": "Gewürze, Öle & Saucen"},
+                {"id": str(tomato.id), "content": "Tomaten", "category": "Gemüse & Kräuter"},
+            ],
+            [oil, tomato],
+        )
+
+        self.assertEqual(order, ["Gemüse & Kräuter", "Gewürze, Öle & Saucen"])
+        self.assertEqual(tomato.item_order, 0)
+        self.assertEqual(oil.item_order, 1)
 
     def test_apply_categories_rejects_modified_content(self):
         tomato = self._recipe_item("Tomaten")
         with self.assertRaisesRegex(ValueError, "verändert"):
             apply_ai_categories_to_recipe_items(
-                [{"id": str(tomato.id), "content": "Cherry-Tomaten", "category": "Gemüse"}],
+                [{"id": str(tomato.id), "content": "Cherry-Tomaten", "category": "Gemüse & Kräuter"}],
                 [tomato],
             )
+
+    def test_apply_categories_rejects_unknown_category(self):
+        tomato = self._recipe_item("Tomaten")
+        with self.assertRaisesRegex(ValueError, "ungültige Kategorien"):
+            apply_ai_categories_to_recipe_items(
+                [{"id": str(tomato.id), "content": "Tomaten", "category": "Pilze"}],
+                [tomato],
+            )
+
+    def test_super_category_list_is_small_and_curated(self):
+        self.assertEqual(
+            SHOPPING_CATEGORY_ORDER,
+            [
+                "Gemüse & Kräuter",
+                "Obst",
+                "Fleisch & Fisch",
+                "Milchprodukte & Eier",
+                "Teigwaren, Reis & Getreide",
+                "Brot & Backwaren",
+                "Konserven & Gläser",
+                "Gewürze, Öle & Saucen",
+                "Tiefkühlprodukte",
+                "Snacks & Süßes",
+                "Getränke",
+                "Haushalt & Sonstiges",
+            ],
+        )
 
     def test_chunk_shopping_category_items_splits_large_payloads(self):
         items = [

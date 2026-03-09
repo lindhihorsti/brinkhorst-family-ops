@@ -36,6 +36,7 @@ from app.models import (
     ShoppingListItem,
 )
 from app.shopping_utils import (
+    SHOPPING_CATEGORY_ORDER,
     apply_ai_categories_to_recipe_items,
     chunk_shopping_category_items,
     shopping_estimate_context,
@@ -1478,10 +1479,10 @@ def _openai_categorize_shopping_recipe_items(items: List[Dict[str, Any]]) -> Dic
     parallelism = int(parallelism_raw) if parallelism_raw.isdigit() else 3
 
     system_text = (
-        "Du strukturierst Rezept-Zutaten für Einkaufslisten in sinnvolle Oberkategorien. "
+        "Du strukturierst Rezept-Zutaten für Einkaufslisten in feste, sinnvolle Oberkategorien. "
         "Du darfst die Zutaten niemals umbenennen, zusammenfassen, korrigieren oder neu erfinden. "
         "Ordne jede gegebene Zeile exakt einer passenden Kategorie zu. "
-        "Kategorien sollen dynamisch und lebensmittelbezogen sein, z. B. Gemüse, Obst, Milchprodukte, Fleisch, Gewürze, Teigwaren. "
+        "Du darfst nur aus der vorgegebenen Kategorienliste wählen und keine neuen Kategorien erfinden. "
         "Gib ausschließlich JSON im verlangten Schema aus."
     )
     schema = {
@@ -1516,6 +1517,7 @@ def _openai_categorize_shopping_recipe_items(items: List[Dict[str, Any]]) -> Dic
     def _run_chunk(chunk: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         user_payload = {
             "recipe_items": chunk,
+            "allowed_categories": SHOPPING_CATEGORY_ORDER,
             "rules": {
                 "language": "de",
                 "preserve_items_exactly": True,
