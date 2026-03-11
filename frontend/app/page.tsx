@@ -22,6 +22,12 @@ const USE_CASES: UseCase[] = [
     accent: "var(--einkauf-accent)",
   },
   {
+    href: "/finanzen",
+    icon: "🏦",
+    title: "Finanzen",
+    accent: "#b88900",
+  },
+  {
     href: "/ideen",
     icon: "💡",
     title: "Was unternehmen wir?",

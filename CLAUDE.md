@@ -113,48 +113,190 @@ For every task, create/update a doc in `docs/agent-tasks/` with:
 
 ---
 
-## Agent Orchestration
+## Agent Orchestration (Preferred Default)
 
-For complex tasks (>5 min / multiple files / architectural decisions): decompose into parallel sub-agents.
+For Family Ops, prefer working as an orchestrator coordinating focused sub-agents whenever the task is not trivial.
 
-### Sub-Agent Spawn Protocol
-```
-SUB-AGENTS DEPLOYED:
-├── 🕵️ RESEARCH_AGENT:        Codebase exploration, architecture analysis, dependency mapping
-├── 👨‍💻 IMPLEMENTATION_AGENT: Core feature development (backend / frontend / DB)
-├── 🧪 VALIDATION_AGENT:      Smoke tests, health checks, behavior verification
-└── 📊 COORDINATOR_AGENT:     Merge results, resolve conflicts, deliver final diff
-```
+### When to orchestrate
 
-### Mission Lifecycle
-1. ANALYZE → Identify complexity, spawn sub-agents with precise scopes
-2. PARALLEL EXECUTION → Sub-agents work independently
-3. MERGE → Coordinator combines results, resolves conflicts
-4. VALIDATE → `make api-health`, `make api-ping`, UI smoke check
-5. COMPLETE → Summary: files changed, test commands, expected output, risks
+Orchestrate by default if the task touches more than one of:
 
-### Sub-Agent Templates
+- backend
+- frontend
+- DB or migrations
+- Telegram bot
+- settings or navigation
+- validation across multiple flows
 
-**RESEARCH_AGENT**
-```
-MISSION: Explore [area] of the codebase — routes, models, services, frontend pages
-OUTPUT: Structured summary of relevant files, patterns, and dependencies
-SCOPE: Read-only, no changes
-```
+Good examples:
 
-**IMPLEMENTATION_AGENT**
-```
-MISSION: Implement [feature/fix] per spec
-OUTPUT: Minimal diff — backend route / model / service / frontend page
-REQUIREMENTS: Additive changes, no side effects, feature branch only
-```
+- new use case
+- feature spanning API and GUI
+- dashboard plus settings plus bot integration
+- migration-backed work
+- changes that affect existing flows in multiple modules
 
-**VALIDATION_AGENT**
-```
-MISSION: Verify [feature] against acceptance criteria
-OUTPUT: Pass/fail for each criterion + exact commands run
-STEPS: make up → make api-health → make api-ping → UI check
-```
+Do not force orchestration for tiny isolated fixes.
+
+### Operating model
+
+#### 1. Orchestrator first
+
+Before editing, the orchestrator should:
+
+- inspect the relevant repo context
+- identify impacted layers
+- decide which sub-agents are needed
+- define a minimal execution plan
+- decide what can be parallelized safely
+
+#### 2. Recommended sub-agents
+
+Use the smallest useful set:
+
+- Research agent
+  - maps routes, models, UI, settings, telegram hooks, and tests
+  - read-only
+
+- Backend agent
+  - FastAPI routes
+  - SQLModel models
+  - migrations
+  - backend utilities and tests
+
+- Frontend agent
+  - Next.js routes
+  - page structure
+  - typed API integration
+  - navigation, settings, and mobile UX
+
+- Telegram agent
+  - bot menu structure
+  - callbacks
+  - text flows
+  - event notifications
+  - keeps parity with useful GUI flows, not necessarily full duplication
+
+- Validation agent
+  - backend tests
+  - frontend tests
+  - typecheck
+  - docker rebuild
+  - targeted smoke tests
+
+#### 3. Parallelization rules
+
+Parallelize:
+
+- file reading
+- codebase discovery
+- backend and frontend exploration
+- independent implementation tracks
+- test discovery and verification prep
+
+Do not parallelize:
+
+- two agents editing the same file
+- migration design and model edits independently without coordination
+- conflicting UI and API contract changes without a fixed schema first
+
+#### 4. Merge discipline
+
+The orchestrator should:
+
+- integrate final code
+- resolve any contract mismatches
+- ensure typed frontend/backend alignment
+- update `docs/agent-tasks/...`
+- run final validation
+- present one coherent result
+
+### Repo-specific orchestration patterns
+
+#### Typical Family Ops feature
+
+Use:
+
+- Research agent
+- Backend agent
+- Frontend agent
+- Telegram agent if the feature has bot value
+- Validation agent
+- Orchestrator integrates
+
+#### Dashboard or reporting work
+
+Use:
+
+- Research agent
+- Backend agent for aggregation logic
+- Frontend agent for KPI/report UI
+- Validation agent
+- Orchestrator integrates
+
+#### DB-backed feature
+
+Use:
+
+- Research agent
+- Backend agent
+- Validation agent
+- optional Frontend agent
+- Orchestrator ensures migration and rollout note exist
+
+#### Telegram-heavy feature
+
+Use:
+
+- Research agent
+- Telegram agent
+- Backend agent if new API or state is needed
+- Validation agent
+- Orchestrator integrates
+
+### Sub-agent prompts should be narrow
+
+Each sub-agent should get:
+
+- exact scope
+- files or modules to inspect
+- expected output
+- constraints
+- whether it is read-only or implementation
+
+Bad:
+
+- “Implement finance feature”
+
+Good:
+
+- “Analyze finance-related routes, settings patterns, and navigation insertion points; output affected files and risks only”
+- “Implement backend aggregation for fixed costs and add tests; do not touch frontend”
+- “Implement finance dashboard page using existing card and navigation patterns; do not change backend contract”
+
+### Validation expectations
+
+After orchestration, the final validation path should usually include the relevant subset of:
+
+- `PYTHONPATH=backend python3 -m unittest discover -s backend/tests -p 'test_*.py'`
+- `cd frontend && npm test`
+- `cd frontend && npx tsc --noEmit`
+- `cd infra && docker compose up -d --build --force-recreate`
+- targeted API checks
+- targeted browser or UI checks
+
+### Family Ops design consistency
+
+The orchestrator must ensure that cross-cutting features are consistently integrated into:
+
+- home screen
+- tile layout if used
+- bottom navigation if relevant
+- settings if configurable
+- Telegram bot if the use case benefits from mobile bot usage
+
+Do not treat backend, frontend, and Telegram as separate products.
+Integrate them coherently.
 
 ---
 

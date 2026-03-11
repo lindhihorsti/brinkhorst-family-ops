@@ -12,6 +12,7 @@ type TelegramSettings = {
   notify_new_chore: boolean;
   notify_new_shopping_list: boolean;
   notify_new_expense: boolean;
+  notify_new_fixed_expense: boolean;
   notify_new_pinboard_note: boolean;
   notify_new_birthday: boolean;
   notify_new_family_member: boolean;
@@ -28,6 +29,7 @@ export default function BenachrichtigungenPage() {
     notify_new_chore: false,
     notify_new_shopping_list: false,
     notify_new_expense: false,
+    notify_new_fixed_expense: false,
     notify_new_pinboard_note: false,
     notify_new_birthday: false,
     notify_new_family_member: false,
@@ -51,6 +53,7 @@ export default function BenachrichtigungenPage() {
           notify_new_chore: d.telegram?.notify_new_chore ?? false,
           notify_new_shopping_list: d.telegram?.notify_new_shopping_list ?? false,
           notify_new_expense: d.telegram?.notify_new_expense ?? false,
+          notify_new_fixed_expense: d.telegram?.notify_new_fixed_expense ?? false,
           notify_new_pinboard_note: d.telegram?.notify_new_pinboard_note ?? false,
           notify_new_birthday: d.telegram?.notify_new_birthday ?? false,
           notify_new_family_member: d.telegram?.notify_new_family_member ?? false,
@@ -131,6 +134,11 @@ export default function BenachrichtigungenPage() {
               <input type="checkbox" checked={telegram.notify_new_expense}
                 onChange={(e) => setTelegram((prev) => ({ ...prev, notify_new_expense: e.target.checked }))} />
               Neue Ausgabe
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
+              <input type="checkbox" checked={telegram.notify_new_fixed_expense}
+                onChange={(e) => setTelegram((prev) => ({ ...prev, notify_new_fixed_expense: e.target.checked }))} />
+              Neue Fixkosten
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
               <input type="checkbox" checked={telegram.notify_new_pinboard_note}

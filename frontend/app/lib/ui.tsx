@@ -522,6 +522,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: "🏠" },
   { href: "/kueche", label: "Küche", icon: "🍳" },
   { href: "/einkauf", label: "Eink.", icon: "🛒" },
+  { href: "/finanzen", label: "Fin.", icon: "🏦" },
   { href: "/ideen", label: "Ideen", icon: "💡" },
   { href: "/aufgaben", label: "Aufgaben", icon: "✅" },
   { href: "/geburtstage", label: "Geb.", icon: "🎂" },
