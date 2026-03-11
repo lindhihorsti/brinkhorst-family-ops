@@ -219,3 +219,44 @@ class Birthday(SQLModel, table=True):
     )
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class FixedExpense(SQLModel, table=True):
+    __tablename__ = "fixed_expenses"
+
+    id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    )
+    name: str
+    provider: Optional[str] = None
+    category: str = Field(default="sonstiges", sa_column=Column(String, nullable=False, server_default="sonstiges"))
+    amount: float = Field(sa_column=Column(Numeric(10, 2), nullable=False))
+    currency: str = Field(default="chf", sa_column=Column(String, nullable=False, server_default="chf"))
+    interval: str = Field(default="monthly", sa_column=Column(String, nullable=False, server_default="monthly"))
+    next_due_date: date = Field(sa_column=Column(Date, nullable=False))
+    payment_method: Optional[str] = None
+    responsible_party: str = Field(default="gemeinsam", sa_column=Column(String, nullable=False, server_default="gemeinsam"))
+    account_label: Optional[str] = None
+    contract_start_date: Optional[date] = Field(default=None, sa_column=Column(Date, nullable=True))
+    contract_end_date: Optional[date] = Field(default=None, sa_column=Column(Date, nullable=True))
+    cancellation_notice_days: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
+    notes: Optional[str] = None
+    is_active: bool = Field(default=True, sa_column=Column(Boolean, nullable=False, server_default=text("true")))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class FinanceMonthlyIncome(SQLModel, table=True):
+    __tablename__ = "finance_monthly_incomes"
+
+    id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    )
+    month_start: date = Field(sa_column=Column(Date, nullable=False))
+    person: str = Field(default="dennis", sa_column=Column(String, nullable=False))
+    net_income_amount: float = Field(sa_column=Column(Numeric(10, 2), nullable=False))
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

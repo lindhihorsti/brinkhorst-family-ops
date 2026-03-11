@@ -54,6 +54,15 @@ def telegram_expense_created_text(payload: Dict[str, Any]) -> str:
     return f"💸 Neue Ausgabe: {title} · {format_currency_amount(amount)} · {category} · {paid_by}"
 
 
+def telegram_fixed_expense_created_text(payload: Dict[str, Any]) -> str:
+    title = short_text(payload.get("name"), 50)
+    amount = float(payload.get("amount") or 0.0)
+    category = str(payload.get("category_label") or payload.get("category") or "Sonstiges").strip()
+    responsible = str(payload.get("responsible_label") or payload.get("responsible_party") or "Gemeinsam").strip()
+    interval = str(payload.get("interval_label") or payload.get("interval") or "Monatlich").strip()
+    return f"🏦 Neue Fixkosten: {title} · {format_currency_amount(amount)} · {category} · {responsible} · {interval}"
+
+
 def telegram_pinboard_note_created_text(content: str, tag: str) -> str:
     return f"📌 Neue Pinnwand-Notiz ({tag}): {short_text(content, 90)}"
 

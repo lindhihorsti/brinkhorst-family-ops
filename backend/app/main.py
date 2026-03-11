@@ -22,6 +22,25 @@ from app.domain_utils import (
     days_until_birthday,
     expense_party_label,
 )
+from app.finance_utils import (
+    FINANCE_CATEGORIES,
+    FINANCE_CATEGORY_LABELS,
+    FINANCE_INTERVALS,
+    FINANCE_INTERVAL_LABELS,
+    FINANCE_RESPONSIBLE_LABELS,
+    FINANCE_RESPONSIBLE_PARTIES,
+    FinanceYearlyInput,
+    GERMAN_MONTH_NAMES,
+    build_finance_dashboard,
+    build_finance_yearly_overview,
+    decimal_money,
+    expense_applies_to_month,
+    expense_due_date_in_month,
+    format_chf,
+    month_start_from_string,
+    normalize_monthly_amount,
+    FinanceDashboardInput,
+)
 from app.models import (
     Recipe,
     AppState,
@@ -32,6 +51,8 @@ from app.models import (
     Birthday,
     MealHistory,
     Expense,
+    FinanceMonthlyIncome,
+    FixedExpense,
     ShoppingList,
     ShoppingListItem,
 )
@@ -47,6 +68,7 @@ from app.telegram_events import (
     telegram_birthday_created_text,
     telegram_chore_created_text,
     telegram_expense_created_text,
+    telegram_fixed_expense_created_text,
     telegram_family_member_created_text,
     telegram_pinboard_note_created_text,
     telegram_recipe_created_text,
@@ -122,6 +144,48 @@ if engine and AUTO_MIGRATE:
                 """
             )
         )
+        conn.execute(
+            sql_text(
+                """
+                CREATE TABLE IF NOT EXISTS public.fixed_expenses (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name TEXT NOT NULL,
+                    provider TEXT NULL,
+                    category TEXT NOT NULL DEFAULT 'sonstiges',
+                    amount NUMERIC(10, 2) NOT NULL,
+                    currency TEXT NOT NULL DEFAULT 'chf',
+                    interval TEXT NOT NULL DEFAULT 'monthly',
+                    next_due_date DATE NOT NULL,
+                    payment_method TEXT NULL,
+                    responsible_party TEXT NOT NULL DEFAULT 'gemeinsam',
+                    account_label TEXT NULL,
+                    contract_start_date DATE NULL,
+                    contract_end_date DATE NULL,
+                    cancellation_notice_days INTEGER NULL,
+                    notes TEXT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        conn.execute(
+            sql_text(
+                """
+                CREATE TABLE IF NOT EXISTS public.finance_monthly_incomes (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    month_start DATE NOT NULL,
+                    person TEXT NOT NULL,
+                    net_income_amount NUMERIC(10, 2) NOT NULL,
+                    notes TEXT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT finance_monthly_incomes_month_person_key UNIQUE (month_start, person)
+                )
+                """
+            )
+        )
         conn.commit()
 
 GIT_SHA = os.getenv("GIT_SHA", "local").strip() or "local"
@@ -178,6 +242,7 @@ DEFAULT_TELEGRAM = {
     "notify_new_chore": False,
     "notify_new_shopping_list": False,
     "notify_new_expense": False,
+    "notify_new_fixed_expense": False,
     "notify_new_pinboard_note": False,
     "notify_new_birthday": False,
     "notify_new_family_member": False,
@@ -1793,6 +1858,7 @@ def _get_settings_telegram() -> Dict[str, Any]:
         "notify_new_chore": bool(data.get("notify_new_chore", False)),
         "notify_new_shopping_list": bool(data.get("notify_new_shopping_list", False)),
         "notify_new_expense": bool(data.get("notify_new_expense", False)),
+        "notify_new_fixed_expense": bool(data.get("notify_new_fixed_expense", False)),
         "notify_new_pinboard_note": bool(data.get("notify_new_pinboard_note", False)),
         "notify_new_birthday": bool(data.get("notify_new_birthday", False)),
         "notify_new_family_member": bool(data.get("notify_new_family_member", False)),
@@ -2215,6 +2281,7 @@ class TelegramSettingsPayload(BaseModel):
     notify_new_chore: bool = False
     notify_new_shopping_list: bool = False
     notify_new_expense: bool = False
+    notify_new_fixed_expense: bool = False
     notify_new_pinboard_note: bool = False
     notify_new_birthday: bool = False
     notify_new_family_member: bool = False
@@ -2282,6 +2349,50 @@ class BirthdaySettingsPayload(BaseModel):
     gift_budget_range: Optional[str] = None
     gift_preferred_types: Optional[List[str]] = None
     gift_no_goes: Optional[List[str]] = None
+
+
+class FixedExpenseCreatePayload(BaseModel):
+    name: str
+    provider: Optional[str] = None
+    category: Literal["wohnen", "versicherungen", "mobilitaet", "kommunikation_medien", "familie_kind", "finanzen", "sonstiges"] = "sonstiges"
+    amount: float
+    interval: Literal["monthly", "quarterly", "semiannual", "annual", "one_time"] = "monthly"
+    next_due_date: date
+    payment_method: Optional[str] = None
+    responsible_party: Literal["dennis", "julia", "gemeinsam"] = "gemeinsam"
+    account_label: Optional[str] = None
+    contract_start_date: Optional[date] = None
+    contract_end_date: Optional[date] = None
+    cancellation_notice_days: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class FixedExpenseUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    provider: Optional[str] = None
+    category: Optional[Literal["wohnen", "versicherungen", "mobilitaet", "kommunikation_medien", "familie_kind", "finanzen", "sonstiges"]] = None
+    amount: Optional[float] = None
+    interval: Optional[Literal["monthly", "quarterly", "semiannual", "annual", "one_time"]] = None
+    next_due_date: Optional[date] = None
+    payment_method: Optional[str] = None
+    responsible_party: Optional[Literal["dennis", "julia", "gemeinsam"]] = None
+    account_label: Optional[str] = None
+    contract_start_date: Optional[date] = None
+    contract_end_date: Optional[date] = None
+    cancellation_notice_days: Optional[int] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class FinanceMonthlyIncomeUpsertPayload(BaseModel):
+    month: str
+    person: Literal["dennis", "julia"]
+    net_income_amount: float
+    notes: Optional[str] = None
+
+
+class FinanceCopyPreviousPayload(BaseModel):
+    month: str
 
 
 class ActivitiesMoodPayload(BaseModel):
@@ -2479,6 +2590,7 @@ def api_put_settings_telegram(payload: TelegramSettingsPayload):
         "notify_new_chore": bool(payload.notify_new_chore),
         "notify_new_shopping_list": bool(payload.notify_new_shopping_list),
         "notify_new_expense": bool(payload.notify_new_expense),
+        "notify_new_fixed_expense": bool(payload.notify_new_fixed_expense),
         "notify_new_pinboard_note": bool(payload.notify_new_pinboard_note),
         "notify_new_birthday": bool(payload.notify_new_birthday),
         "notify_new_family_member": bool(payload.notify_new_family_member),
@@ -2503,6 +2615,457 @@ def api_put_settings_shop(payload: ShopSettingsPayload):
     }
     _db_set_app_state_value(APP_STATE_SETTINGS_SHOP, json.dumps(data))
     return {"ok": True, "shop": data}
+
+
+def _serialize_fixed_expense(item: FixedExpense, today: Optional[date] = None) -> Dict[str, Any]:
+    today = today or date.today()
+    monthly_value = normalize_monthly_amount(item.amount, item.interval)
+    return {
+        "id": str(item.id),
+        "name": item.name,
+        "provider": item.provider,
+        "category": item.category,
+        "category_label": FINANCE_CATEGORY_LABELS.get(item.category, "Sonstiges"),
+        "amount": float(decimal_money(item.amount)),
+        "amount_text": format_chf(item.amount),
+        "currency": item.currency,
+        "interval": item.interval,
+        "interval_label": FINANCE_INTERVAL_LABELS.get(item.interval, "Monatlich"),
+        "monthly_amount": float(monthly_value),
+        "monthly_amount_text": format_chf(monthly_value),
+        "next_due_date": item.next_due_date.isoformat(),
+        "responsible_party": item.responsible_party,
+        "responsible_label": FINANCE_RESPONSIBLE_LABELS.get(item.responsible_party, "Gemeinsam"),
+        "payment_method": item.payment_method,
+        "account_label": item.account_label,
+        "contract_start_date": item.contract_start_date.isoformat() if item.contract_start_date else None,
+        "contract_end_date": item.contract_end_date.isoformat() if item.contract_end_date else None,
+        "cancellation_notice_days": item.cancellation_notice_days,
+        "notes": item.notes,
+        "is_active": bool(item.is_active),
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+
+
+def _serialize_fixed_expense_for_month(item: FixedExpense, month_start: date, today: Optional[date] = None) -> Dict[str, Any]:
+    data = _serialize_fixed_expense(item, today=today)
+    data["is_active_in_month"] = expense_applies_to_month(item, month_start)
+    month_due = expense_due_date_in_month(item, month_start)
+    data["month_due_date"] = month_due.isoformat() if month_due else None
+    return data
+
+
+def _serialize_finance_income(item: FinanceMonthlyIncome) -> Dict[str, Any]:
+    amount = decimal_money(item.net_income_amount)
+    return {
+        "id": str(item.id),
+        "month": item.month_start.isoformat(),
+        "person": item.person,
+        "label": FINANCE_RESPONSIBLE_LABELS.get(item.person, item.person.title()),
+        "net_income_amount": float(amount),
+        "net_income_amount_text": format_chf(amount),
+        "notes": item.notes,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+
+
+def _finance_income_map(session: Session, month_start: date) -> Dict[str, float]:
+    rows = list(
+        session.exec(
+            select(FinanceMonthlyIncome).where(FinanceMonthlyIncome.month_start == month_start)
+        ).all()
+    )
+    data = {"dennis": 0.0, "julia": 0.0}
+    for row in rows:
+        if row.person in data:
+            data[row.person] = float(decimal_money(row.net_income_amount))
+    return data
+
+
+def _finance_income_year_map(session: Session, year: int) -> Dict[str, Dict[str, float]]:
+    rows = list(
+        session.exec(
+            select(FinanceMonthlyIncome).where(
+                FinanceMonthlyIncome.month_start >= date(year, 1, 1),
+                FinanceMonthlyIncome.month_start <= date(year, 12, 31),
+            )
+        ).all()
+    )
+    data: Dict[str, Dict[str, float]] = {}
+    for row in rows:
+        bucket = data.setdefault(row.month_start.isoformat(), {"dennis": 0.0, "julia": 0.0})
+        if row.person in bucket:
+            bucket[row.person] = float(decimal_money(row.net_income_amount))
+    return data
+
+
+def _finance_month_label(month_start: date) -> str:
+    return f"{GERMAN_MONTH_NAMES[month_start.month - 1]} {month_start.year}"
+
+
+def _finance_fixed_expense_month_summary(session: Session, month_start: date) -> Dict[str, Any]:
+    rows = list(
+        session.exec(
+            select(FixedExpense).where(FixedExpense.is_active == True).order_by(FixedExpense.next_due_date, FixedExpense.name)  # noqa: E712
+        ).all()
+    )
+    applicable = [item for item in rows if expense_applies_to_month(item, month_start)]
+    items = [_serialize_fixed_expense_for_month(item, month_start) for item in applicable]
+    monthly_total = sum((decimal_money(item["monthly_amount"]) for item in items), decimal_money(0))
+    due_total = sum((decimal_money(item["amount"]) for item in items if item.get("month_due_date")), decimal_money(0))
+    return {
+        "month": month_start.isoformat(),
+        "month_label": _finance_month_label(month_start),
+        "summary": {
+            "monthly_total": float(monthly_total),
+            "monthly_total_text": format_chf(monthly_total),
+            "due_total": float(due_total),
+            "due_total_text": format_chf(due_total),
+            "count": len(items),
+        },
+        "items": items,
+    }
+
+
+@app.get("/api/finance/dashboard")
+def api_finance_dashboard(month: Optional[str] = None):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    month_start = month_start_from_string(month, date.today().replace(day=1))
+    with Session(engine) as session:
+        expenses = list(
+            session.exec(
+                select(FixedExpense).where(FixedExpense.is_active == True).order_by(FixedExpense.next_due_date, FixedExpense.name)  # noqa: E712
+            ).all()
+        )
+        incomes = _finance_income_map(session, month_start)
+        dashboard = build_finance_dashboard(
+            FinanceDashboardInput(expenses=expenses, incomes=incomes, month_start=month_start, today=date.today())
+        )
+        return {"ok": True, "dashboard": dashboard}
+
+
+@app.get("/api/finance/yearly")
+def api_finance_yearly(year: Optional[int] = None):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    selected_year = int(year or date.today().year)
+    with Session(engine) as session:
+        expenses = list(
+            session.exec(
+                select(FixedExpense).where(FixedExpense.is_active == True).order_by(FixedExpense.next_due_date, FixedExpense.name)  # noqa: E712
+            ).all()
+        )
+        incomes_by_month = _finance_income_year_map(session, selected_year)
+        overview = build_finance_yearly_overview(
+            FinanceYearlyInput(expenses=expenses, incomes_by_month=incomes_by_month, year=selected_year, today=date.today())
+        )
+        return {"ok": True, "overview": overview}
+
+
+@app.get("/api/finance/fixed-expenses")
+def api_list_fixed_expenses(
+    category: Optional[str] = None,
+    interval: Optional[str] = None,
+    responsible_party: Optional[str] = None,
+    status: str = "active",
+):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        stmt = select(FixedExpense)
+        if category and category in FINANCE_CATEGORY_LABELS:
+            stmt = stmt.where(FixedExpense.category == category)
+        if interval and interval in FINANCE_INTERVAL_LABELS:
+            stmt = stmt.where(FixedExpense.interval == interval)
+        if responsible_party and responsible_party in FINANCE_RESPONSIBLE_LABELS:
+            stmt = stmt.where(FixedExpense.responsible_party == responsible_party)
+        if status == "active":
+            stmt = stmt.where(FixedExpense.is_active == True)  # noqa: E712
+        elif status == "inactive":
+            stmt = stmt.where(FixedExpense.is_active == False)  # noqa: E712
+        rows = list(session.exec(stmt.order_by(FixedExpense.is_active.desc(), FixedExpense.next_due_date, FixedExpense.name)).all())
+        return {"ok": True, "items": [_serialize_fixed_expense(item) for item in rows]}
+
+
+@app.get("/api/finance/fixed-expense-months")
+def api_list_fixed_expense_months(limit: int = 12):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    safe_limit = min(max(limit, 1), 24)
+    base_month = date.today().replace(day=1)
+    months = []
+    cursor = base_month
+    for _ in range(safe_limit):
+        months.append(cursor)
+        cursor = (cursor.replace(day=1) - timedelta(days=1)).replace(day=1)
+    with Session(engine) as session:
+        items = []
+        for month_start in months:
+            summary = _finance_fixed_expense_month_summary(session, month_start)
+            items.append(
+                {
+                    "month": summary["month"],
+                    "month_label": summary["month_label"],
+                    **summary["summary"],
+                }
+            )
+        return {"ok": True, "items": items}
+
+
+@app.get("/api/finance/fixed-expenses/month-detail")
+def api_fixed_expenses_month_detail(month: str):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    month_start = month_start_from_string(month, date.today().replace(day=1))
+    with Session(engine) as session:
+        return {"ok": True, **_finance_fixed_expense_month_summary(session, month_start)}
+
+
+@app.post("/api/finance/fixed-expenses")
+def api_create_fixed_expense(payload: FixedExpenseCreatePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Name fehlt")
+    if payload.amount <= 0:
+        raise HTTPException(400, "Betrag muss größer als 0 sein")
+    with Session(engine) as session:
+        item = FixedExpense(
+            name=name,
+            provider=(payload.provider or "").strip() or None,
+            category=payload.category,
+            amount=float(decimal_money(payload.amount)),
+            interval=payload.interval,
+            next_due_date=payload.next_due_date,
+            payment_method=(payload.payment_method or "").strip() or None,
+            responsible_party=payload.responsible_party,
+            account_label=(payload.account_label or "").strip() or None,
+            contract_start_date=payload.contract_start_date,
+            contract_end_date=payload.contract_end_date,
+            cancellation_notice_days=payload.cancellation_notice_days,
+            notes=(payload.notes or "").strip() or None,
+            updated_at=datetime.utcnow(),
+        )
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        serialized = _serialize_fixed_expense(item)
+        _maybe_send_telegram_event("notify_new_fixed_expense", telegram_fixed_expense_created_text(serialized))
+        return {"ok": True, "item": serialized}
+
+
+@app.get("/api/finance/fixed-expenses/{expense_id}")
+def api_get_fixed_expense(expense_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        item = session.get(FixedExpense, expense_id)
+        if not item:
+            raise HTTPException(404, "Fixkosten nicht gefunden")
+        return {"ok": True, "item": _serialize_fixed_expense(item)}
+
+
+@app.patch("/api/finance/fixed-expenses/{expense_id}")
+def api_update_fixed_expense(expense_id: UUID, payload: FixedExpenseUpdatePayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        item = session.get(FixedExpense, expense_id)
+        if not item:
+            raise HTTPException(404, "Fixkosten nicht gefunden")
+        data = payload.model_dump(exclude_unset=True)
+        if "name" in data:
+            name = (data["name"] or "").strip()
+            if not name:
+                raise HTTPException(400, "Name fehlt")
+            item.name = name
+        if "amount" in data:
+            if float(data["amount"]) <= 0:
+                raise HTTPException(400, "Betrag muss größer als 0 sein")
+            item.amount = float(decimal_money(data["amount"]))
+        for field in [
+            "provider",
+            "category",
+            "interval",
+            "next_due_date",
+            "payment_method",
+            "responsible_party",
+            "account_label",
+            "contract_start_date",
+            "contract_end_date",
+            "cancellation_notice_days",
+            "notes",
+            "is_active",
+        ]:
+            if field in data and field not in {"name", "amount"}:
+                value = data[field]
+                if isinstance(value, str):
+                    value = value.strip() or None
+                setattr(item, field, value)
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        return {"ok": True, "item": _serialize_fixed_expense(item)}
+
+
+@app.delete("/api/finance/fixed-expenses/{expense_id}")
+def api_delete_fixed_expense(expense_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        item = session.get(FixedExpense, expense_id)
+        if not item:
+            raise HTTPException(404, "Fixkosten nicht gefunden")
+        item.is_active = False
+        item.updated_at = datetime.utcnow()
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        return {"ok": True, "item": _serialize_fixed_expense(item)}
+
+
+@app.get("/api/finance/incomes")
+def api_list_finance_incomes(month: Optional[str] = None):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    month_start = month_start_from_string(month, date.today().replace(day=1))
+    with Session(engine) as session:
+        rows = list(session.exec(select(FinanceMonthlyIncome).where(FinanceMonthlyIncome.month_start == month_start)).all())
+        items = [_serialize_finance_income(item) for item in rows]
+        mapped = {item["person"]: item for item in items}
+        total = decimal_money(mapped.get("dennis", {}).get("net_income_amount")) + decimal_money(mapped.get("julia", {}).get("net_income_amount"))
+        return {
+            "ok": True,
+            "month": month_start.isoformat(),
+            "month_label": _finance_month_label(month_start),
+            "items": items,
+            "summary": {
+                "dennis": float(decimal_money(mapped.get("dennis", {}).get("net_income_amount"))),
+                "julia": float(decimal_money(mapped.get("julia", {}).get("net_income_amount"))),
+                "gesamt": float(total),
+                "gesamt_text": format_chf(total),
+            },
+        }
+
+
+@app.get("/api/finance/income-months")
+def api_list_finance_income_months(limit: int = 12):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    safe_limit = min(max(limit, 1), 24)
+    base_month = date.today().replace(day=1)
+    generated_months = []
+    cursor = base_month
+    for _ in range(safe_limit):
+        generated_months.append(cursor)
+        cursor = (cursor.replace(day=1) - timedelta(days=1)).replace(day=1)
+
+    with Session(engine) as session:
+        rows = list(session.exec(select(FinanceMonthlyIncome)).all())
+        month_values: Dict[date, Dict[str, Any]] = {}
+        month_set = set(generated_months)
+        for row in rows:
+            month_set.add(row.month_start)
+            bucket = month_values.setdefault(row.month_start, {"dennis": decimal_money(0), "julia": decimal_money(0)})
+            if row.person in {"dennis", "julia"}:
+                bucket[row.person] = decimal_money(row.net_income_amount)
+
+        months = sorted(month_set, reverse=True)
+        items = []
+        for month_start in months:
+            bucket = month_values.get(month_start, {"dennis": decimal_money(0), "julia": decimal_money(0)})
+            total = bucket["dennis"] + bucket["julia"]
+            items.append(
+                {
+                    "month": month_start.isoformat(),
+                    "month_label": _finance_month_label(month_start),
+                    "dennis": float(bucket["dennis"]),
+                    "dennis_text": format_chf(bucket["dennis"]),
+                    "julia": float(bucket["julia"]),
+                    "julia_text": format_chf(bucket["julia"]),
+                    "gesamt": float(total),
+                    "gesamt_text": format_chf(total),
+                    "has_values": bool(bucket["dennis"] > 0 or bucket["julia"] > 0),
+                }
+            )
+        return {"ok": True, "items": items}
+
+
+@app.put("/api/finance/incomes")
+def api_upsert_finance_income(payload: FinanceMonthlyIncomeUpsertPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    if payload.net_income_amount < 0:
+        raise HTTPException(400, "Einkommen darf nicht negativ sein")
+    month_start = month_start_from_string(payload.month, date.today().replace(day=1))
+    with Session(engine) as session:
+        item = session.exec(
+            select(FinanceMonthlyIncome).where(
+                FinanceMonthlyIncome.month_start == month_start,
+                FinanceMonthlyIncome.person == payload.person,
+            )
+        ).first()
+        if not item:
+            item = FinanceMonthlyIncome(
+                month_start=month_start,
+                person=payload.person,
+                net_income_amount=float(decimal_money(payload.net_income_amount)),
+                notes=(payload.notes or "").strip() or None,
+                updated_at=datetime.utcnow(),
+            )
+        else:
+            item.net_income_amount = float(decimal_money(payload.net_income_amount))
+            item.notes = (payload.notes or "").strip() or None
+            item.updated_at = datetime.utcnow()
+        session.add(item)
+        session.commit()
+        session.refresh(item)
+        return {"ok": True, "item": _serialize_finance_income(item)}
+
+
+@app.post("/api/finance/incomes/copy-previous")
+def api_copy_previous_finance_income(payload: FinanceCopyPreviousPayload):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    month_start = month_start_from_string(payload.month, date.today().replace(day=1))
+    previous_month = (month_start.replace(day=1) - timedelta(days=1)).replace(day=1)
+    copied = []
+    with Session(engine) as session:
+        previous_items = list(
+            session.exec(select(FinanceMonthlyIncome).where(FinanceMonthlyIncome.month_start == previous_month)).all()
+        )
+        if not previous_items:
+            return {"ok": False, "error": "Im Vormonat sind keine Einkommen hinterlegt."}
+        for previous in previous_items:
+            current = session.exec(
+                select(FinanceMonthlyIncome).where(
+                    FinanceMonthlyIncome.month_start == month_start,
+                    FinanceMonthlyIncome.person == previous.person,
+                )
+            ).first()
+            if current:
+                current.net_income_amount = previous.net_income_amount
+                current.notes = previous.notes
+                current.updated_at = datetime.utcnow()
+                session.add(current)
+                copied.append(current)
+                continue
+            current = FinanceMonthlyIncome(
+                month_start=month_start,
+                person=previous.person,
+                net_income_amount=previous.net_income_amount,
+                notes=previous.notes,
+                updated_at=datetime.utcnow(),
+            )
+            session.add(current)
+            copied.append(current)
+        session.commit()
+        return {"ok": True, "items": [_serialize_finance_income(item) for item in copied], "month": month_start.isoformat()}
 
 
 @app.get("/api/activities/settings")
@@ -3463,6 +4026,7 @@ def _tg_main_menu_rows() -> List[List[Tuple[str, str]]]:
         [("💸 Split", "menu:split"), ("✅ Aufgaben", "menu:chores")],
         [("📌 Pinnwand", "menu:pinboard"), ("🎂 Geburtstage", "menu:birthdays")],
         [("👥 Familie", "menu:family"), ("📚 Rezepte", "menu:recipes")],
+        [("🏦 Finanzen", "menu:finance")],
     ]
 
 
@@ -3520,6 +4084,15 @@ def _tg_family_rows() -> List[List[Tuple[str, str]]]:
 def _tg_recipes_rows() -> List[List[Tuple[str, str]]]:
     return [
         [("📚 Letzte Rezepte", "recipes:list")],
+        [("Zurück", "menu:main")],
+    ]
+
+
+def _tg_finance_rows() -> List[List[Tuple[str, str]]]:
+    return [
+        [("📊 Übersicht", "finance:overview"), ("⏰ Fällig", "finance:due")],
+        [("📋 Fixkosten", "finance:list"), ("➕ Fixkosten", "finance:add")],
+        [("👤 Dennis", "finance:person:dennis"), ("👤 Julia", "finance:person:julia")],
         [("Zurück", "menu:main")],
     ]
 
@@ -3604,6 +4177,14 @@ async def _tg_show_main_menu(chat_id: int) -> None:
         chat_id,
         "Family Ops Bot\n\nWähle einen Bereich:",
         _tg_main_menu_rows(),
+    )
+
+
+async def _tg_show_finance_menu(chat_id: int) -> None:
+    await _tg_send_menu(
+        chat_id,
+        "🏦 Finanzen\n\nFixkosten, Monatsbudgets und Überblick.",
+        _tg_finance_rows(),
     )
 
 
@@ -4090,6 +4671,65 @@ async def _tg_send_shopping_list_detail(chat_id: int, list_id: str) -> None:
     await _tg_send_menu(chat_id, "\n".join(lines), _tg_shopping_detail_rows(list_id))
 
 
+async def _tg_send_finance_overview(chat_id: int) -> None:
+    dashboard = api_finance_dashboard().get("dashboard") or {}
+    summary = dashboard.get("summary") or {}
+    incomes = dashboard.get("incomes") or {}
+    lines = [
+        f"🏦 Finanzen · {dashboard.get('month_label') or ''}".strip(),
+        f"Monatliche Fixkosten: {summary.get('monthly_fixed_total_text') or 'CHF 0.00'}",
+        f"Jährliche Fixkosten: {summary.get('annual_fixed_total_text') or 'CHF 0.00'}",
+        f"Nächste 30 Tage: {summary.get('next_30_days_total_text') or 'CHF 0.00'}",
+        f"Haushaltseinkommen: {incomes.get('gesamt_text') or 'CHF 0.00'}",
+        f"Verfügbar nach Fixkosten: {summary.get('available_after_fixed_total_text') or 'CHF 0.00'}",
+    ]
+    await _tg_send_menu(chat_id, "\n".join(lines), _tg_finance_rows())
+
+
+async def _tg_send_finance_person(chat_id: int, person: str) -> None:
+    dashboard = api_finance_dashboard().get("dashboard") or {}
+    info = (dashboard.get("people") or {}).get(person) or {}
+    if not info:
+        await _tg_send(chat_id, "Keine Daten vorhanden.")
+        return
+    lines = [
+        f"🏦 {info.get('label')}",
+        f"Einkommen: {info.get('income_text') or 'CHF 0.00'}",
+        f"Direkt getragene Fixkosten: {info.get('direct_costs_text') or 'CHF 0.00'}",
+        f"Anteil gemeinsame Fixkosten: {info.get('shared_cost_share_text') or 'CHF 0.00'}",
+        f"Gesamtbelastung: {info.get('allocated_costs_text') or 'CHF 0.00'}",
+        f"Verfügbar nach Fixkosten: {info.get('available_after_allocation_text') or 'CHF 0.00'}",
+    ]
+    await _tg_send_menu(chat_id, "\n".join(lines), _tg_finance_rows())
+
+
+async def _tg_send_finance_due(chat_id: int) -> None:
+    dashboard = api_finance_dashboard().get("dashboard") or {}
+    items = dashboard.get("upcoming_due_items") or []
+    if not items:
+        await _tg_send_menu(chat_id, "Keine Fälligkeiten vorhanden.", _tg_finance_rows())
+        return
+    lines = ["⏰ Nächste Fälligkeiten"]
+    for item in items[:8]:
+        lines.append(
+            f"• {item['next_due_date']} · {item['name']} · {item['amount_text']} · {item['responsible_label']}"
+        )
+    await _tg_send_menu(chat_id, "\n".join(lines), _tg_finance_rows())
+
+
+async def _tg_send_finance_list(chat_id: int) -> None:
+    items = (api_list_fixed_expenses().get("items") or [])[:8]
+    if not items:
+        await _tg_send_menu(chat_id, "Noch keine Fixkosten erfasst.", [[("➕ Fixkosten", "finance:add")], [("Zurück", "menu:finance")]])
+        return
+    lines = ["📋 Fixkosten"]
+    for item in items:
+        lines.append(
+            f"• {item['name']} · {item['amount_text']} · {item['interval_label']} · {item['responsible_label']}"
+        )
+    await _tg_send_menu(chat_id, "\n".join(lines), _tg_finance_rows())
+
+
 async def _tg_send_chores(chat_id: int) -> None:
     result = api_list_chores()
     chores = result.get("chores") or []
@@ -4371,6 +5011,50 @@ async def _tg_handle_flow_message(chat_id: int, text_value: str) -> bool:
         await _tg_send_menu(chat_id, "Welche Kategorie?", rows)
         return True
 
+    if flow == "finance_name":
+        state["name"] = text_value
+        state["flow"] = "finance_amount"
+        _tg_set_state(chat_id, state)
+        await _tg_send_menu(chat_id, "Wie hoch ist der Betrag in CHF?", _tg_cancel_rows())
+        return True
+
+    if flow == "finance_amount":
+        cleaned = text_value.replace(",", ".")
+        try:
+            amount = float(cleaned)
+        except ValueError:
+            await _tg_send_menu(chat_id, "Bitte einen gültigen Betrag eingeben, z. B. 129.90", _tg_cancel_rows())
+            return True
+        if amount <= 0:
+            await _tg_send_menu(chat_id, "Der Betrag muss größer als 0 sein.", _tg_cancel_rows())
+            return True
+        state["amount"] = amount
+        state["flow"] = "finance_interval_wait"
+        _tg_set_state(chat_id, state)
+        rows = [[(label, f"flow:finance:interval:{key}")] for key, label in FINANCE_INTERVALS]
+        rows.append([("Abbrechen", "flow:cancel")])
+        await _tg_send_menu(chat_id, "Welches Intervall hat diese Fixkosten?", rows)
+        return True
+
+    if flow == "finance_due":
+        try:
+            due_date = date.fromisoformat(text_value.strip())
+        except Exception:
+            await _tg_send_menu(chat_id, "Bitte ein Datum im Format YYYY-MM-DD eingeben.", _tg_cancel_rows())
+            return True
+        payload = FixedExpenseCreatePayload(
+            name=state["name"],
+            amount=float(state["amount"]),
+            category=state.get("category") or "sonstiges",
+            interval=state.get("interval") or "monthly",
+            next_due_date=due_date,
+            responsible_party=state.get("responsible_party") or "gemeinsam",
+        )
+        result = api_create_fixed_expense(payload)
+        _tg_clear_state(chat_id)
+        await _tg_send_menu(chat_id, f"✅ Fixkosten gespeichert: {result['item']['name']}", _tg_finance_rows())
+        return True
+
     return False
 
 
@@ -4404,6 +5088,9 @@ async def _tg_handle_callback(chat_id: int, callback_id: str, data: str, today: 
         return
     if data == "menu:recipes":
         await _tg_show_recipes_menu(chat_id)
+        return
+    if data == "menu:finance":
+        await _tg_show_finance_menu(chat_id)
         return
 
     if data == "weekly:today":
@@ -4571,6 +5258,51 @@ async def _tg_handle_callback(chat_id: int, callback_id: str, data: str, today: 
         await _tg_send_recipes(chat_id)
         return
 
+    if data == "finance:overview":
+        await _tg_send_finance_overview(chat_id)
+        return
+    if data == "finance:due":
+        await _tg_send_finance_due(chat_id)
+        return
+    if data == "finance:list":
+        await _tg_send_finance_list(chat_id)
+        return
+    if data == "finance:add":
+        _tg_start_flow(chat_id, "finance_name")
+        rows = [[(label, f"flow:finance:category:{key}")] for key, label in FINANCE_CATEGORIES]
+        rows.append([("Abbrechen", "flow:cancel")])
+        await _tg_send_menu(chat_id, "Neue Fixkosten\n\nWähle zuerst die Kategorie.", rows)
+        return
+    if data.startswith("finance:person:"):
+        await _tg_send_finance_person(chat_id, data.split(":")[-1])
+        return
+    if data.startswith("flow:finance:category:"):
+        category = data.split(":")[-1]
+        state = _tg_get_state(chat_id)
+        state["category"] = category
+        state["flow"] = "finance_name"
+        _tg_set_state(chat_id, state)
+        await _tg_send_menu(chat_id, "Wie heißt diese Fixkosten-Position?", _tg_cancel_rows())
+        return
+    if data.startswith("flow:finance:responsible:"):
+        responsible = data.split(":")[-1]
+        state = _tg_get_state(chat_id)
+        state["responsible_party"] = responsible
+        state["flow"] = "finance_due"
+        _tg_set_state(chat_id, state)
+        await _tg_send_menu(chat_id, "Nächste Fälligkeit im Format YYYY-MM-DD", _tg_cancel_rows())
+        return
+    if data.startswith("flow:finance:interval:"):
+        interval = data.split(":")[-1]
+        state = _tg_get_state(chat_id)
+        state["interval"] = interval
+        state["flow"] = "finance_responsible_wait"
+        _tg_set_state(chat_id, state)
+        rows = [[(label, f"flow:finance:responsible:{key}")] for key, label in FINANCE_RESPONSIBLE_PARTIES]
+        rows.append([("Abbrechen", "flow:cancel")])
+        await _tg_send_menu(chat_id, "Wer trägt diese Kosten?", rows)
+        return
+
     if data == "flow:cancel":
         _tg_clear_state(chat_id)
         await _tg_show_main_menu(chat_id)
@@ -4626,6 +5358,10 @@ async def telegram_webhook(request: Request):
 
     if cmd.lower() in {"/start", "/menu", "menu", "hilfe", "/hilfe"}:
         await _tg_show_main_menu(chat_id)
+        return {"ok": True}
+
+    if cmd.lower() in {"finanzen", "/finanzen"}:
+        await _tg_show_finance_menu(chat_id)
         return {"ok": True}
 
     # --- add ---
@@ -4854,7 +5590,7 @@ async def telegram_webhook(request: Request):
     help_text = (
         "Befehle:\n"
         "menu — mobiles Hauptmenü\n"
-        "plan | shop | was | status\n"
+        "plan | shop | was | status | finanzen\n"
         "swap | confirm | cancel\n"
         "list — Rezepte lesen\n"
         "notiz [text] | aufgabe [text]\n"

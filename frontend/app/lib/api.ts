@@ -196,6 +196,210 @@ export type ShoppingListCreate = {
   estimate_currency?: "chf" | "eur";
 };
 
+export type FixedExpenseCategory =
+  | "wohnen"
+  | "versicherungen"
+  | "mobilitaet"
+  | "kommunikation_medien"
+  | "familie_kind"
+  | "finanzen"
+  | "sonstiges";
+
+export type FixedExpenseInterval = "monthly" | "quarterly" | "semiannual" | "annual" | "one_time";
+export type FinanceResponsibleParty = "dennis" | "julia" | "gemeinsam";
+
+export type FixedExpense = {
+  id: string;
+  name: string;
+  provider?: string | null;
+  category: FixedExpenseCategory;
+  category_label: string;
+  amount: number;
+  amount_text: string;
+  currency: string;
+  interval: FixedExpenseInterval;
+  interval_label: string;
+  monthly_amount: number;
+  monthly_amount_text: string;
+  next_due_date: string;
+  month_due_date?: string | null;
+  is_active_in_month?: boolean;
+  responsible_party: FinanceResponsibleParty;
+  responsible_label: string;
+  payment_method?: string | null;
+  account_label?: string | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  cancellation_notice_days?: number | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type FixedExpenseCreate = {
+  name: string;
+  provider?: string | null;
+  category: FixedExpenseCategory;
+  amount: number;
+  interval: FixedExpenseInterval;
+  next_due_date: string;
+  payment_method?: string | null;
+  responsible_party: FinanceResponsibleParty;
+  account_label?: string | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  cancellation_notice_days?: number | null;
+  notes?: string | null;
+};
+
+export type FinanceIncome = {
+  id: string;
+  month: string;
+  person: "dennis" | "julia";
+  label: string;
+  net_income_amount: number;
+  net_income_amount_text: string;
+  notes?: string | null;
+};
+
+export type FinanceIncomeMonth = {
+  month: string;
+  month_label: string;
+  dennis: number;
+  dennis_text: string;
+  julia: number;
+  julia_text: string;
+  gesamt: number;
+  gesamt_text: string;
+  has_values: boolean;
+};
+
+export type FixedExpenseMonth = {
+  month: string;
+  month_label: string;
+  monthly_total: number;
+  monthly_total_text: string;
+  due_total: number;
+  due_total_text: string;
+  count: number;
+};
+
+export type FixedExpenseMonthDetail = {
+  month: string;
+  month_label: string;
+  summary: {
+    monthly_total: number;
+    monthly_total_text: string;
+    due_total: number;
+    due_total_text: string;
+    count: number;
+  };
+  items: FixedExpense[];
+};
+
+export type FinanceYearlyOverview = {
+  year: number;
+  year_label: string;
+  summary: {
+    annual_fixed_total: number;
+    annual_fixed_total_text: string;
+    actual_due_total: number;
+    actual_due_total_text: string;
+    monthly_average: number;
+    monthly_average_text: string;
+    household_income_total: number;
+    household_income_total_text: string;
+    available_after_fixed_total: number;
+    available_after_fixed_total_text: string;
+  };
+  monthly_breakdown: { month: string; label: string; monthly_total: number; monthly_total_text: string }[];
+  by_category: { category: string; label: string; annual_total: number; annual_total_text: string; percentage: number }[];
+  by_responsible_party: { responsible_party: string; label: string; color?: string; annual_total: number; annual_total_text: string; percentage: number }[];
+  annual_cost_drivers: (FixedExpense & { annual_total: number; annual_total_text: string })[];
+  yearly_due_items: { id: string; name: string; month_due_date: string; amount_text: string; interval_label: string; responsible_label: string; category_label: string }[];
+  one_time_costs: (FixedExpense & { month_label: string })[];
+  people: Record<string, {
+    label: string;
+    color?: string;
+    income_total: number;
+    income_total_text: string;
+    direct_costs: number;
+    direct_costs_text: string;
+    shared_cost_share: number;
+    shared_cost_share_text: string;
+    allocated_costs: number;
+    allocated_costs_text: string;
+    available_after_allocation: number;
+    available_after_allocation_text: string;
+  }>;
+};
+
+export type FinanceDashboard = {
+  month: string;
+  month_label: string;
+  summary: {
+    monthly_fixed_total: number;
+    monthly_fixed_total_text: string;
+    annual_fixed_total: number;
+    annual_fixed_total_text: string;
+    next_30_days_total: number;
+    next_30_days_total_text: string;
+    due_in_month_total: number;
+    due_in_month_total_text: string;
+    household_income_total: number;
+    household_income_total_text: string;
+    available_after_fixed_total: number;
+    available_after_fixed_total_text: string;
+  };
+  incomes: {
+    dennis: number;
+    dennis_text: string;
+    julia: number;
+    julia_text: string;
+    gesamt: number;
+    gesamt_text: string;
+  };
+  by_category: {
+    category: string;
+    label: string;
+    monthly_total: number;
+    monthly_total_text: string;
+    percentage: number;
+    carried_by: {
+      responsible_party: string;
+      label: string;
+      color?: string;
+      monthly_total: number;
+      monthly_total_text: string;
+      percentage_of_category: number;
+    }[];
+  }[];
+  top_cost_drivers: FixedExpense[];
+  upcoming_due_items: FixedExpense[];
+  periodic_costs: FixedExpense[];
+  by_responsible_party: { responsible_party: string; label: string; color?: string; monthly_total: number; monthly_total_text: string; percentage: number }[];
+  people: Record<string, {
+    person: string;
+    label: string;
+    color?: string;
+    income: number;
+    income_text: string;
+    direct_costs: number;
+    direct_costs_text: string;
+    shared_costs: number;
+    shared_costs_text: string;
+    shared_cost_share: number;
+    shared_cost_share_text: string;
+    allocated_costs: number;
+    allocated_costs_text: string;
+    available_after_allocation: number;
+    available_after_allocation_text: string;
+    available_after_direct: number;
+    available_after_direct_text: string;
+  }>;
+};
+
 export const api = {
   listRecipes: (q?: string) =>
     http<Recipe[]>(`/api/recipes${q ? `?q=${encodeURIComponent(q)}` : ""}`),
@@ -342,5 +546,71 @@ export const api = {
       error?: string;
     }>(`/api/shopping-lists/${id}/categorize`, {
       method: "POST",
+    }),
+
+  getFinanceDashboard: (month?: string) =>
+    http<{ ok: boolean; dashboard: FinanceDashboard }>(`/api/finance/dashboard${month ? `?month=${encodeURIComponent(month)}` : ""}`).then((r) => r.dashboard),
+
+  getFinanceYearlyOverview: (year?: number) =>
+    http<{ ok: boolean; overview: FinanceYearlyOverview }>(`/api/finance/yearly${year ? `?year=${encodeURIComponent(String(year))}` : ""}`).then((r) => r.overview),
+
+  listFixedExpenses: (params?: { category?: string; interval?: string; responsible_party?: string; status?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.category) q.set("category", params.category);
+    if (params?.interval) q.set("interval", params.interval);
+    if (params?.responsible_party) q.set("responsible_party", params.responsible_party);
+    if (params?.status) q.set("status", params.status);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return http<{ ok: boolean; items: FixedExpense[] }>(`/api/finance/fixed-expenses${suffix}`).then((r) => r.items ?? []);
+  },
+
+  listFixedExpenseMonths: (limit?: number) =>
+    http<{ ok: boolean; items: FixedExpenseMonth[] }>(
+      `/api/finance/fixed-expense-months${limit ? `?limit=${encodeURIComponent(String(limit))}` : ""}`
+    ).then((r) => r.items ?? []),
+
+  getFixedExpenseMonthDetail: (month: string) =>
+    http<{ ok: boolean } & FixedExpenseMonthDetail>(`/api/finance/fixed-expenses/month-detail?month=${encodeURIComponent(month)}`),
+
+  getFixedExpense: (id: string) =>
+    http<{ ok: boolean; item: FixedExpense }>(`/api/finance/fixed-expenses/${id}`).then((r) => r.item),
+
+  createFixedExpense: (payload: FixedExpenseCreate) =>
+    http<{ ok: boolean; item: FixedExpense }>(`/api/finance/fixed-expenses`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  updateFixedExpense: (id: string, payload: Partial<FixedExpenseCreate> & { is_active?: boolean }) =>
+    http<{ ok: boolean; item: FixedExpense }>(`/api/finance/fixed-expenses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  archiveFixedExpense: (id: string) =>
+    http<{ ok: boolean; item: FixedExpense }>(`/api/finance/fixed-expenses/${id}`, {
+      method: "DELETE",
+    }),
+
+  listFinanceIncomes: (month?: string) =>
+    http<{ ok: boolean; month: string; month_label: string; items: FinanceIncome[]; summary: { dennis: number; julia: number; gesamt: number; gesamt_text: string } }>(
+      `/api/finance/incomes${month ? `?month=${encodeURIComponent(month)}` : ""}`
+    ),
+
+  listFinanceIncomeMonths: (limit?: number) =>
+    http<{ ok: boolean; items: FinanceIncomeMonth[] }>(
+      `/api/finance/income-months${limit ? `?limit=${encodeURIComponent(String(limit))}` : ""}`
+    ).then((r) => r.items ?? []),
+
+  upsertFinanceIncome: (payload: { month: string; person: "dennis" | "julia"; net_income_amount: number; notes?: string | null }) =>
+    http<{ ok: boolean; item: FinanceIncome }>(`/api/finance/incomes`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  copyPreviousFinanceIncome: (month: string) =>
+    http<{ ok: boolean; items?: FinanceIncome[]; error?: string; month?: string }>(`/api/finance/incomes/copy-previous`, {
+      method: "POST",
+      body: JSON.stringify({ month }),
     }),
 };

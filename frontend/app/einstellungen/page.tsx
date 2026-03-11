@@ -30,6 +30,12 @@ const SECTIONS = [
     sub: "Standardansicht · Wochenplan-Snapshot · Shop-Format",
   },
   {
+    href: "/einstellungen/finanzen",
+    icon: "🏦",
+    title: "Finanzen",
+    sub: "Fixkosten · Monatseinkommen · Verantwortlichkeit",
+  },
+  {
     href: "/einstellungen/benachrichtigungen",
     icon: "🔔",
     title: "Benachrichtigungen",
