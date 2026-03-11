@@ -115,7 +115,7 @@ export default function WeeklyPlanHistoryDetailPage() {
             fontSize: 60,
             boxShadow: "var(--shadow-md)",
           }}>
-            🗓️
+            📅
           </div>
         </div>
 

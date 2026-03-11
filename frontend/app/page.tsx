@@ -68,9 +68,10 @@ function StandardUseCases() {
 
   const iconBox = (accent: string) => ({
     width: 44, height: 44, borderRadius: 14,
-    background: accent + "22",
+    background: `color-mix(in srgb, ${accent} 16%, var(--bg))`,
+    border: `1px solid color-mix(in srgb, ${accent} 26%, transparent)`,
     display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 22, flexShrink: 0,
+    fontSize: 22, flexShrink: 0, color: accent,
   });
 
   return (
@@ -103,7 +104,7 @@ function TileUseCases() {
               style={{
                 position: "relative",
                 overflow: "hidden",
-                minHeight: 188,
+                height: 204,
                 borderRadius: 26,
                 padding: 18,
                 border: `1px solid color-mix(in srgb, ${uc.accent} 30%, var(--border))`,
@@ -142,7 +143,7 @@ function TileUseCases() {
               </div>
 
               <div style={{ position: "relative", textAlign: "center" }}>
-                <h2 style={{ margin: 0, fontSize: 16, lineHeight: 1.12, fontWeight: 800 }}>
+                <h2 style={{ margin: 0, fontSize: 16, lineHeight: 1.12, fontWeight: 800, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {uc.title}
                 </h2>
                 <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
@@ -211,9 +212,8 @@ function SettingsTile() {
 
 export default function LandingPage() {
   return (
-    <main style={{
+    <main className="logo-backed-page" style={{
       minHeight: "100dvh",
-      background: "radial-gradient(circle at top, color-mix(in srgb, var(--bg-subtle) 65%, transparent) 0%, var(--bg) 55%)",
       color: "var(--fg)",
       fontFamily: "var(--font)",
       paddingBottom: "var(--nav-height)",
@@ -221,7 +221,7 @@ export default function LandingPage() {
       <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
         <div className="logo-stage">
           <img
-            src="/logo.PNG"
+            src="/logo-light-transparent.png"
             alt="Family Ops"
             className="logo-img logo-img-light"
             style={{ width: 292, maxWidth: "82vw", height: "auto" }}

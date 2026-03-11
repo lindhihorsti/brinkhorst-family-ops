@@ -28,6 +28,21 @@ export default function GeburtstageHubPage() {
       paddingBottom: "var(--nav-height)",
     }}>
       <div style={{ maxWidth: 430, margin: "0 auto", padding: "20px 22px 44px" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
+          <span style={{
+            width: 104,
+            height: 104,
+            borderRadius: 28,
+            background: "color-mix(in srgb, var(--geburtstage-accent) 14%, var(--bg))",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 64,
+          }}>
+            🎂
+          </span>
+        </div>
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, gap: 12 }}>
           <div>
             <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--geburtstage-accent)" }}>
@@ -47,69 +62,64 @@ export default function GeburtstageHubPage() {
           </Link>
         </div>
 
-        <div style={{ display: "grid", gap: 14 }}>
-          {options.map((option) => (
-            <Link key={option.href} href={option.href} style={{ textDecoration: "none", color: "inherit" }}>
-              <article className="nav-tile" style={{
-                position: "relative",
-                overflow: "hidden",
-                borderRadius: 26,
-                border: `1px solid color-mix(in srgb, ${option.accent} 28%, var(--border))`,
-                background: `linear-gradient(180deg, color-mix(in srgb, ${option.accent} 12%, var(--bg)) 0%, color-mix(in srgb, ${option.accent} 18%, var(--bg-subtle)) 100%)`,
-                boxShadow: "var(--shadow-md)",
-                padding: 20,
-                minHeight: 168,
-                display: "grid",
-                alignItems: "space-between",
-              }}>
-                <div style={{
-                  position: "absolute",
-                  right: -24,
-                  top: -22,
-                  width: 118,
-                  height: 118,
-                  borderRadius: 999,
-                  background: `color-mix(in srgb, ${option.accent} 18%, transparent)`,
-                }} />
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, position: "relative" }}>
-                  <div style={{
-                    width: 72,
-                    height: 72,
-                    borderRadius: 24,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 40,
-                    background: `color-mix(in srgb, ${option.accent} 18%, var(--bg))`,
-                    border: `1px solid color-mix(in srgb, ${option.accent} 38%, transparent)`,
-                  }}>
+        <div className="home-layout-standard">
+          <div style={{ display: "grid", gap: 12 }}>
+            {options.map((option) => (
+              <Link key={option.href} href={option.href} style={{ textDecoration: "none", color: "inherit" }}>
+                <div className="nav-tile" style={{
+                  border: "1px solid var(--border)", borderRadius: 20, padding: "14px 16px",
+                  boxShadow: "var(--shadow-sm)", background: "var(--bg)",
+                  display: "flex", alignItems: "center", gap: 14,
+                }}>
+                  <span style={{ width: 44, height: 44, borderRadius: 14, background: `${option.accent}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
                     {option.icon}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{option.title}</p>
+                    <p style={{ fontSize: 12, marginTop: 2, color: "var(--fg-muted)" }}>{option.subtitle}</p>
                   </div>
-                  <div style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 999,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: `color-mix(in srgb, ${option.accent} 14%, var(--bg))`,
-                    color: option.accent,
-                    fontSize: 22,
-                    fontWeight: 800,
-                    flexShrink: 0,
-                  }}>
-                    →
+                  <span style={{ fontSize: 14, color: "var(--fg-muted)", flexShrink: 0 }}>›</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="home-layout-tiles">
+          <div style={{ display: "grid", gap: 14 }}>
+            {options.map((option) => (
+              <Link key={option.href} href={option.href} style={{ textDecoration: "none", color: "inherit" }}>
+                <article className="nav-tile" style={{
+                  position: "relative",
+                  overflow: "hidden",
+                  borderRadius: 26,
+                  border: `1px solid color-mix(in srgb, ${option.accent} 28%, var(--border))`,
+                  background: `linear-gradient(180deg, color-mix(in srgb, ${option.accent} 12%, var(--bg)) 0%, color-mix(in srgb, ${option.accent} 18%, var(--bg-subtle)) 100%)`,
+                  boxShadow: "var(--shadow-md)",
+                  padding: 20,
+                  minHeight: 168,
+                  display: "grid",
+                  alignItems: "space-between",
+                }}>
+                  <div style={{ position: "absolute", right: -24, top: -22, width: 118, height: 118, borderRadius: 999, background: `color-mix(in srgb, ${option.accent} 18%, transparent)` }} />
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, position: "relative" }}>
+                    <div style={{ width: 72, height: 72, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, background: `color-mix(in srgb, ${option.accent} 18%, var(--bg))`, border: `1px solid color-mix(in srgb, ${option.accent} 38%, transparent)` }}>
+                      {option.icon}
+                    </div>
+                    <div style={{ width: 38, height: 38, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", background: `color-mix(in srgb, ${option.accent} 14%, var(--bg))`, color: option.accent, fontSize: 22, fontWeight: 800, flexShrink: 0 }}>
+                      →
+                    </div>
                   </div>
-                </div>
-                <div style={{ position: "relative", marginTop: 18 }}>
-                  <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.1 }}>{option.title}</h2>
-                  <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.45, color: "var(--fg-muted)" }}>
-                    {option.subtitle}
-                  </p>
-                </div>
-              </article>
-            </Link>
-          ))}
+                  <div style={{ position: "relative", marginTop: 18 }}>
+                    <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.1 }}>{option.title}</h2>
+                    <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.45, color: "var(--fg-muted)" }}>
+                      {option.subtitle}
+                    </p>
+                  </div>
+                </article>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
       <BottomNav current="/geburtstage" />

@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from "react";
 import {
+  applyLightBgColor,
   applyHomeLayout,
   HOME_LAYOUT_KEY,
   HOME_LAYOUT_STANDARD,
   HOME_LAYOUT_TILES,
+  LIGHT_BG_COLOR_KEY,
+  LIGHT_BG_DEFAULT,
+  normalizeLightBgColor,
   normalizeHomeLayout,
 } from "../../lib/appearance.mjs";
 import { BtnLink, Page, styles } from "../../lib/ui";
@@ -22,12 +26,14 @@ const OPTIONS: { value: Theme; label: string; sub: string; icon: string }[] = [
 export default function ErscheinungsbildPage() {
   const [theme, setThemeState] = useState<Theme>("system");
   const [homeLayout, setHomeLayoutState] = useState<HomeLayout>(HOME_LAYOUT_STANDARD);
+  const [lightBgColor, setLightBgColorState] = useState(LIGHT_BG_DEFAULT);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem("theme");
       if (stored === "light" || stored === "dark") setThemeState(stored);
       setHomeLayoutState(normalizeHomeLayout(localStorage.getItem(HOME_LAYOUT_KEY)) as HomeLayout);
+      setLightBgColorState(normalizeLightBgColor(localStorage.getItem(LIGHT_BG_COLOR_KEY)));
     } catch { /* ssr */ }
   }, []);
 
@@ -49,6 +55,19 @@ export default function ErscheinungsbildPage() {
       localStorage.setItem(HOME_LAYOUT_KEY, nextLayout);
     } catch { /* ignore */ }
     applyHomeLayout(document.documentElement, nextLayout);
+  }
+
+  function setLightBgColor(nextColor: string) {
+    const normalized = normalizeLightBgColor(nextColor);
+    setLightBgColorState(normalized);
+    try {
+      if (normalized === LIGHT_BG_DEFAULT) {
+        localStorage.removeItem(LIGHT_BG_COLOR_KEY);
+      } else {
+        localStorage.setItem(LIGHT_BG_COLOR_KEY, normalized);
+      }
+    } catch { /* ignore */ }
+    applyLightBgColor(document.documentElement, normalized);
   }
 
   return (
@@ -96,6 +115,25 @@ export default function ErscheinungsbildPage() {
       </div>
 
       <div style={{ height: 22 }} />
+
+      <div style={{ ...styles.card, padding: 18, marginBottom: 22 }}>
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Hintergrund im hellen Modus</p>
+          <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 4 }}>
+            Optionaler Grundton für den hellen Modus. Standard bleibt pures Weiß und wird überall in der App konsistent verwendet.
+          </p>
+        </div>
+        <div style={{ display: "grid", gap: 12 }}>
+          <label style={{ ...styles.label, marginBottom: 0 }}>Farbe</label>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input type="color" value={lightBgColor} onChange={(e) => setLightBgColor(e.target.value)} style={{ width: 56, height: 44, border: "1px solid var(--border)", borderRadius: 12, background: "var(--bg)", padding: 4 }} />
+            <input value={lightBgColor} onChange={(e) => setLightBgColor(e.target.value)} style={styles.input} />
+          </div>
+          <button type="button" onClick={() => setLightBgColor(LIGHT_BG_DEFAULT)} style={styles.button}>
+            Auf Weiß zurücksetzen
+          </button>
+        </div>
+      </div>
 
       <div style={{ ...styles.card, padding: 18 }}>
         <div style={{ marginBottom: 12 }}>
