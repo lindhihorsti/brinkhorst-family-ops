@@ -79,8 +79,8 @@ function SplitContent() {
       iconAccent="#059669"
       right={
         <div style={{ display: "flex", gap: 8 }}>
-          <BtnLink href="/">Home</BtnLink>
           <BtnLink href="/split/auswertung">Auswertung</BtnLink>
+          <BtnLink href="/">Home</BtnLink>
         </div>
       }
       navCurrent="/split"

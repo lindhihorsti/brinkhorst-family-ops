@@ -47,7 +47,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var d=document.documentElement;var t=localStorage.getItem('theme');if(t==='dark'||t==='light')d.setAttribute('data-theme',t);var hl=localStorage.getItem('home_layout');d.setAttribute('data-home-layout',hl==='tiles'?'tiles':'standard');}catch(e){}`,
+            __html: `try{var d=document.documentElement;var t=localStorage.getItem('theme');if(t==='dark'||t==='light')d.setAttribute('data-theme',t);var hl=localStorage.getItem('home_layout');d.setAttribute('data-home-layout',hl==='tiles'?'tiles':'standard');var bg=localStorage.getItem('light_bg_color');if(/^#[0-9a-fA-F]{6}$/.test(bg||'')){d.style.setProperty('--user-light-bg',bg.toLowerCase());}}catch(e){}`,
           }}
         />
         {children}

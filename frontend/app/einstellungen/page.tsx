@@ -69,17 +69,24 @@ const SECTIONS = [
 
 export default function EinstellungenPage() {
   return (
-    <main style={{
-      minHeight: "100dvh", background: "var(--bg)", color: "var(--fg)",
+    <main className="logo-backed-page" style={{
+      minHeight: "100dvh", color: "var(--fg)",
       fontFamily: "var(--font)", paddingBottom: "var(--nav-height)",
     }}>
       <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 4 }}>
-        <div className="logo-stage">
-          <img src="/logo.PNG" alt="Family Ops"
-            className="logo-img logo-img-light" style={{ width: 200, height: "auto" }} />
-          <img src="/logo-dark.png" alt="Family Ops Dark"
-            className="logo-img logo-img-dark" style={{ width: 268, height: "auto" }} />
-        </div>
+        <span style={{
+          width: 104,
+          height: 104,
+          borderRadius: 28,
+          background: "linear-gradient(180deg, #64748b22 0%, #64748b40 100%)",
+          border: "1px solid color-mix(in srgb, #64748b 30%, var(--border))",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 64,
+        }}>
+          ⚙️
+        </span>
       </div>
 
       <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 22px 40px" }}>
@@ -122,7 +129,7 @@ export default function EinstellungenPage() {
         <SystemStatus marginTop={24} />
       </div>
 
-      <BottomNav current="/" />
+      <BottomNav current="/einstellungen" />
     </main>
   );
 }

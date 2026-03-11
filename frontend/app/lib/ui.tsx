@@ -519,16 +519,16 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Home", icon: "🏠" },
   { href: "/kueche", label: "Küche", icon: "🍳" },
   { href: "/einkauf", label: "Eink.", icon: "🛒" },
   { href: "/finanzen", label: "Fin.", icon: "🏦" },
   { href: "/ideen", label: "Ideen", icon: "💡" },
+  { href: "/", label: "Home", icon: "🏠" },
+  { href: "/einstellungen", label: "Einst.", icon: "⚙️" },
   { href: "/aufgaben", label: "Aufgaben", icon: "✅" },
   { href: "/geburtstage", label: "Geb.", icon: "🎂" },
   { href: "/pinnwand", label: "Pinnwand", icon: "📌" },
   { href: "/split", label: "Split", icon: "💸" },
-  { href: "/einstellungen", label: "Einst.", icon: "⚙️" },
 ];
 
 export function BottomNav({ current }: { current?: string }) {

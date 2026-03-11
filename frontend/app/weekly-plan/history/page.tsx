@@ -75,7 +75,7 @@ export default function WeeklyPlanHistoryPage() {
             fontSize: 60,
             boxShadow: "var(--shadow-md)",
           }}>
-            🗂️
+            📅
           </div>
         </div>
 
@@ -114,42 +114,83 @@ export default function WeeklyPlanHistoryPage() {
           </div>
         ) : null}
 
-        <div style={{ display: "grid", gap: 14 }}>
-          {items.map((item) => (
-            <Link
-              key={item.week_start}
-              href={`/weekly-plan/history/${item.week_start}`}
-              style={{ textDecoration: "none", color: "inherit" }}
-            >
-              <article className="nav-tile" style={{
-                borderRadius: 24,
-                border: "1px solid color-mix(in srgb, #e8673a 24%, var(--border))",
-                background: "linear-gradient(180deg, color-mix(in srgb, #e8673a 10%, var(--bg)) 0%, color-mix(in srgb, #e8673a 16%, var(--bg-subtle)) 100%)",
-                boxShadow: "var(--shadow-md)",
-                padding: 18,
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#e8673a", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                      KW {item.calendar_week}
+        <div className="home-layout-standard">
+          <div style={{ display: "grid", gap: 14 }}>
+            {items.map((item) => (
+              <Link
+                key={item.week_start}
+                href={`/weekly-plan/history/${item.week_start}`}
+                style={{ textDecoration: "none", color: "inherit" }}
+              >
+                <article className="nav-tile" style={{
+                  borderRadius: 24,
+                  border: "1px solid color-mix(in srgb, #e8673a 24%, var(--border))",
+                  background: "linear-gradient(180deg, color-mix(in srgb, #e8673a 10%, var(--bg)) 0%, color-mix(in srgb, #e8673a 16%, var(--bg-subtle)) 100%)",
+                  boxShadow: "var(--shadow-md)",
+                  padding: 18,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#e8673a", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                        KW {item.calendar_week}
+                      </div>
+                      <h2 style={{ margin: "8px 0 0", fontSize: 20, lineHeight: 1.1 }}>
+                        {formatDate(item.week_start)} bis {formatDate(item.week_end)}
+                      </h2>
                     </div>
-                    <h2 style={{ margin: "8px 0 0", fontSize: 20, lineHeight: 1.1 }}>
-                      {formatDate(item.week_start)} bis {formatDate(item.week_end)}
-                    </h2>
+                    <span style={{ fontSize: 22, color: "#e8673a", fontWeight: 800 }}>→</span>
                   </div>
-                  <span style={{ fontSize: 22, color: "#e8673a", fontWeight: 800 }}>→</span>
-                </div>
 
-                <div style={{ marginTop: 14, display: "grid", gap: 6 }}>
-                  {item.plan.days.slice(0, 3).map((day) => (
-                    <div key={`${item.week_start}-${day.day}`} style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-                      <strong style={{ color: "var(--fg)" }}>{day.label}</strong> · {day.title}
+                  <div style={{ marginTop: 14, display: "grid", gap: 6 }}>
+                    {item.plan.days.slice(0, 3).map((day) => (
+                      <div key={`${item.week_start}-${day.day}`} style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+                        <strong style={{ color: "var(--fg)" }}>{day.label}</strong> · {day.title}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="home-layout-tiles">
+          <div style={{ display: "grid", gap: 14 }}>
+            {items.map((item) => (
+              <Link key={item.week_start} href={`/weekly-plan/history/${item.week_start}`} style={{ textDecoration: "none", color: "inherit" }}>
+                <article className="nav-tile" style={{
+                  position: "relative",
+                  overflow: "hidden",
+                  borderRadius: 26,
+                  border: "1px solid color-mix(in srgb, #e8673a 24%, var(--border))",
+                  background: "linear-gradient(180deg, color-mix(in srgb, #e8673a 10%, var(--bg)) 0%, color-mix(in srgb, #e8673a 16%, var(--bg-subtle)) 100%)",
+                  boxShadow: "var(--shadow-md)",
+                  padding: 18,
+                  minHeight: 168,
+                }}>
+                  <div style={{ position: "absolute", right: -20, top: -18, width: 108, height: 108, borderRadius: 999, background: "color-mix(in srgb, #e8673a 16%, transparent)" }} />
+                  <div style={{ position: "relative", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#e8673a", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                        KW {item.calendar_week}
+                      </div>
+                      <h2 style={{ margin: "8px 0 0", fontSize: 20, lineHeight: 1.1 }}>
+                        {formatDate(item.week_start)} bis {formatDate(item.week_end)}
+                      </h2>
                     </div>
-                  ))}
-                </div>
-              </article>
-            </Link>
-          ))}
+                    <span style={{ fontSize: 22, color: "#e8673a", fontWeight: 800 }}>→</span>
+                  </div>
+                  <div style={{ position: "relative", marginTop: 14, display: "grid", gap: 6 }}>
+                    {item.plan.days.slice(0, 3).map((day) => (
+                      <div key={`${item.week_start}-${day.day}`} style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+                        <strong style={{ color: "var(--fg)" }}>{day.label}</strong> · {day.title}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
       <BottomNav current="/kueche" />
