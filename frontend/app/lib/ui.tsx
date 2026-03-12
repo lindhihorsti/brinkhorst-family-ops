@@ -276,7 +276,7 @@ export function Page({
 
 export function BtnLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} style={styles.button}>
+    <Link href={href} scroll={href === "/" ? false : undefined} style={styles.button}>
       {children}
     </Link>
   );
@@ -538,6 +538,7 @@ export function BottomNav({ current }: { current?: string }) {
         <Link
           key={item.href}
           href={item.href}
+          scroll={item.href === "/" ? false : undefined}
           className={`bottom-nav-item${current === item.href || (item.href !== "/" && current?.startsWith(item.href)) ? " active" : ""}`}
         >
           <span style={{ fontSize: 20 }}>{item.icon}</span>
