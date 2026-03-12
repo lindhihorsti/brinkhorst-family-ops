@@ -64,11 +64,9 @@ export default function FamiliePage() {
         title="Familienmitglied hinzufügen"
         onClose={() => setMemberForm(null)}
         footer={
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "grid", gap: 10 }}>
             <button style={{ ...styles.button, flex: 1 }} onClick={() => setMemberForm(null)}>Abbrechen</button>
-            <button style={{ ...styles.buttonPrimary, flex: 1 }} onClick={handleSave} disabled={saving || !memberForm?.name}>
-              {saving ? "Speichere…" : "Hinzufügen"}
-            </button>
+            <button style={{ ...styles.buttonPrimary, width: "100%" }} onClick={handleSave} disabled={saving || !memberForm?.name}>Speichern</button>
           </div>
         }
       >
@@ -126,6 +124,14 @@ export default function FamiliePage() {
           </div>
         ))}
       </div>
+
+      <button
+        type="button"
+        style={{ ...styles.buttonPrimary, width: "100%" }}
+        onClick={() => setMemberForm({ name: "", initials: "", color: MEMBER_COLORS[0] })}
+      >
+        Familienmitglied hinzufügen
+      </button>
     </Page>
   );
 }

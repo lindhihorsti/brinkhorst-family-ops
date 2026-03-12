@@ -76,8 +76,6 @@ export default function GeburtstageSettingsPage() {
       subtitle="Geburtstagsübersicht und Geschenkideen getrennt konfigurieren"
       right={<BtnLink href="/einstellungen">Zurück</BtnLink>}
       navCurrent="/einstellungen"
-      icon="🎁"
-      iconAccent="#db2777"
     >
       {loading ? <p style={styles.small}>Lade…</p> : null}
       {error ? <p style={{ ...styles.small, color: "var(--danger)" }}>{error}</p> : null}
@@ -159,9 +157,7 @@ export default function GeburtstageSettingsPage() {
           </div>
         </div>
 
-        <button type="button" style={styles.buttonPrimary} onClick={handleSave} disabled={saving}>
-          {saving ? "Speichert…" : "Speichern"}
-        </button>
+        <button type="button" style={{ ...styles.buttonPrimary, width: "100%" }} onClick={handleSave} disabled={saving}>Speichern</button>
         {msg ? <p style={{ ...styles.small, color: msg === "Gespeichert." ? "var(--success)" : "var(--danger)" }}>{msg}</p> : null}
       </div>
     </Page>

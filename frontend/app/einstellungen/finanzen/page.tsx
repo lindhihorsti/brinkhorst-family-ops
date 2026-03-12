@@ -5,8 +5,6 @@ export default function FinanzenSettingsPage() {
     <Page
       title="Finanzen"
       subtitle="Monatseinkommen pflegst du direkt im Finanzbereich, damit monatliche Schwankungen sauber abgebildet werden."
-      icon="🏦"
-      iconAccent="#b88900"
       right={<BtnLink href="/einstellungen">Zurück</BtnLink>}
       navCurrent="/einstellungen"
     >
@@ -19,7 +17,7 @@ export default function FinanzenSettingsPage() {
 
       <div style={styles.cardSubtle}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>Schnellzugriff</div>
-        <a href="/finanzen" style={styles.buttonPrimary}>Zu Finanzen</a>
+        <a href="/finanzen" style={{ ...styles.buttonPrimary, width: "100%" }}>Zu Finanzen</a>
       </div>
     </Page>
   );

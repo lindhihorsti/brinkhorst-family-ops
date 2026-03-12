@@ -34,7 +34,7 @@ export default function PinnwandSettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const save = async (updated: Category[]) => {
+  const save = async () => {
     setSaving(true);
     setMsg(null);
     setError(null);
@@ -42,7 +42,7 @@ export default function PinnwandSettingsPage() {
       const res = await fetch("/api/pinboard/categories", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories: updated }),
+        body: JSON.stringify({ categories }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.ok) {
@@ -50,8 +50,7 @@ export default function PinnwandSettingsPage() {
         return;
       }
       setCategories(data.categories);
-      setMsg("Gespeichert");
-      setTimeout(() => setMsg(null), 2000);
+      setMsg("Gespeichert.");
     } catch {
       setError("Netzwerkfehler");
     } finally {
@@ -60,9 +59,7 @@ export default function PinnwandSettingsPage() {
   };
 
   const handleDelete = (id: string) => {
-    const updated = categories.filter((c) => c.id !== id);
-    setCategories(updated);
-    save(updated);
+    setCategories((prev) => prev.filter((c) => c.id !== id));
   };
 
   const handleAdd = () => {
@@ -74,11 +71,9 @@ export default function PinnwandSettingsPage() {
       return;
     }
     setAddError(null);
-    const updated = [...categories, { id, label, color: newColor }];
-    setCategories(updated);
+    setCategories((prev) => [...prev, { id, label, color: newColor }]);
     setNewLabel("");
     setNewColor("#3b82f6");
-    save(updated);
   };
 
   return (
@@ -170,14 +165,11 @@ export default function PinnwandSettingsPage() {
                 }}
               />
             </div>
-            <button
-              onClick={handleAdd}
-              disabled={saving}
-              style={{ ...styles.buttonPrimary }}
-            >
-              {saving ? "Speichere…" : "Hinzufügen"}
+            <button onClick={handleAdd} disabled={saving} style={styles.button}>
+              Kategorie hinzufügen
             </button>
           </div>
+          <button onClick={save} disabled={saving} style={{ ...styles.buttonPrimary, width: "100%" }}>Speichern</button>
         </>
       )}
     </Page>

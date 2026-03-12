@@ -53,33 +53,29 @@ export default function AufgabenSettingsPage() {
       {loading ? (
         <div style={{ textAlign: "center", padding: "32px 0", opacity: 0.6 }}>Lade…</div>
       ) : (
-        <div style={styles.card}>
-          {error ? <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div> : null}
-          {msg ? <div style={{ ...styles.successBox, marginBottom: 14 }}>{msg}</div> : null}
+        <>
+          <div style={styles.card}>
+            {error ? <div style={{ ...styles.errorBox, marginBottom: 14 }}>{error}</div> : null}
+            {msg ? <div style={{ ...styles.successBox, marginBottom: 14 }}>{msg}</div> : null}
 
-          <label style={styles.label}>
-            Maximale Punkte pro Aufgabe: <strong>{maxPoints}</strong>
-          </label>
-          <input
-            type="range"
-            min={1}
-            max={10}
-            value={maxPoints}
-            onChange={(e) => setMaxPoints(Number(e.target.value))}
-            style={{ width: "100%", margin: "12px 0 16px", accentColor: "#7c3aed" }}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--font-size-xs)", color: "var(--fg-muted)", marginBottom: 20 }}>
-            <span>1</span><span>5</span><span>10</span>
+            <label style={styles.label}>
+              Maximale Punkte pro Aufgabe: <strong>{maxPoints}</strong>
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={10}
+              value={maxPoints}
+              onChange={(e) => setMaxPoints(Number(e.target.value))}
+              style={{ width: "100%", margin: "12px 0 16px", accentColor: "#7c3aed" }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--font-size-xs)", color: "var(--fg-muted)" }}>
+              <span>1</span><span>5</span><span>10</span>
+            </div>
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={styles.buttonPrimary}
-          >
-            {saving ? "Speichere…" : "Speichern"}
-          </button>
-        </div>
+          <button onClick={handleSave} disabled={saving} style={{ ...styles.buttonPrimary, width: "100%" }}>Speichern</button>
+        </>
       )}
     </Page>
   );

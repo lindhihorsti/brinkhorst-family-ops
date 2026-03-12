@@ -166,12 +166,9 @@ export default function BenachrichtigungenPage() {
             <p style={small}>Sende dem Bot eine Nachricht, um den Chat zu registrieren.</p>
           )}
         </div>
-
-        <button style={styles.buttonPrimary} onClick={handleSave} disabled={saving}>
-          {saving ? "Speichere…" : "Speichern"}
-        </button>
-        {msg && <p style={small}>{msg}</p>}
       </div>
+      <button style={{ ...styles.buttonPrimary, width: "100%" }} onClick={handleSave} disabled={saving}>Speichern</button>
+      {msg && <p style={small}>{msg}</p>}
     </Page>
   );
 }
