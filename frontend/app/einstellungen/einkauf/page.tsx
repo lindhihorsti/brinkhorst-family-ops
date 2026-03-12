@@ -75,8 +75,6 @@ export default function EinkaufSettingsPage() {
       subtitle="Standards für Snapshot, Darstellung und Shop-Format"
       right={<BtnLink href="/einstellungen">Zurück</BtnLink>}
       navCurrent="/einstellungen"
-      icon="🛒"
-      iconAccent="#0f766e"
     >
       {loading && <p style={styles.small}>Lade…</p>}
       {error && <p style={{ ...styles.small, color: "var(--danger)" }}>{error}</p>}
@@ -143,9 +141,7 @@ export default function EinkaufSettingsPage() {
         </p>
       </div>
 
-      <button style={styles.buttonPrimary} onClick={handleSave} disabled={saving}>
-        {saving ? "Speichere…" : "Speichern"}
-      </button>
+      <button style={{ ...styles.buttonPrimary, width: "100%" }} onClick={handleSave} disabled={saving}>Speichern</button>
       {msg && <p style={small}>{msg}</p>}
     </Page>
   );

@@ -114,8 +114,6 @@ export default function AktivitaetenPage() {
       subtitle="Ausflüge und Zuhause getrennt konfigurieren"
       right={<BtnLink href="/einstellungen">Zurück</BtnLink>}
       navCurrent="/einstellungen"
-      icon="💡"
-      iconAccent="#2b7fff"
     >
       {loading && <p style={styles.small}>Lade…</p>}
       {error && <p style={{ ...styles.small, color: "var(--danger)" }}>{error}</p>}
@@ -343,9 +341,7 @@ export default function AktivitaetenPage() {
           </div>
         </div>
 
-        <button style={styles.buttonPrimary} onClick={handleSave} disabled={saving}>
-          {saving ? "Speichere…" : "Einstellungen speichern"}
-        </button>
+        <button style={{ ...styles.buttonPrimary, width: "100%" }} onClick={handleSave} disabled={saving}>Speichern</button>
         {msg && <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 4 }}>{msg}</p>}
       </div>
     </Page>

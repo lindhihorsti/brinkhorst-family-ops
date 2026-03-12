@@ -27,6 +27,8 @@ export default function ErscheinungsbildPage() {
   const [theme, setThemeState] = useState<Theme>("system");
   const [homeLayout, setHomeLayoutState] = useState<HomeLayout>(HOME_LAYOUT_STANDARD);
   const [lightBgColor, setLightBgColorState] = useState(LIGHT_BG_DEFAULT);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -37,8 +39,7 @@ export default function ErscheinungsbildPage() {
     } catch { /* ssr */ }
   }, []);
 
-  function setTheme(t: Theme) {
-    setThemeState(t);
+  function persistTheme(t: Theme) {
     const html = document.documentElement;
     if (t === "system") {
       html.removeAttribute("data-theme");
@@ -49,17 +50,15 @@ export default function ErscheinungsbildPage() {
     }
   }
 
-  function setHomeLayout(nextLayout: HomeLayout) {
-    setHomeLayoutState(nextLayout);
+  function persistHomeLayout(nextLayout: HomeLayout) {
     try {
       localStorage.setItem(HOME_LAYOUT_KEY, nextLayout);
     } catch { /* ignore */ }
     applyHomeLayout(document.documentElement, nextLayout);
   }
 
-  function setLightBgColor(nextColor: string) {
+  function persistLightBgColor(nextColor: string) {
     const normalized = normalizeLightBgColor(nextColor);
-    setLightBgColorState(normalized);
     try {
       if (normalized === LIGHT_BG_DEFAULT) {
         localStorage.removeItem(LIGHT_BG_COLOR_KEY);
@@ -68,6 +67,21 @@ export default function ErscheinungsbildPage() {
       }
     } catch { /* ignore */ }
     applyLightBgColor(document.documentElement, normalized);
+  }
+
+  function handleSave() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      persistTheme(theme);
+      persistHomeLayout(homeLayout);
+      persistLightBgColor(lightBgColor);
+      setMsg("Gespeichert.");
+    } catch {
+      setMsg("Fehler");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -83,7 +97,7 @@ export default function ErscheinungsbildPage() {
           return (
             <button
               key={opt.value}
-              onClick={() => setTheme(opt.value)}
+              onClick={() => setThemeState(opt.value)}
               style={{
                 display: "flex", alignItems: "center", gap: 14,
                 border: active ? "2px solid var(--fg)" : "1px solid var(--border)",
@@ -126,10 +140,10 @@ export default function ErscheinungsbildPage() {
         <div style={{ display: "grid", gap: 12 }}>
           <label style={{ ...styles.label, marginBottom: 0 }}>Farbe</label>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <input type="color" value={lightBgColor} onChange={(e) => setLightBgColor(e.target.value)} style={{ width: 56, height: 44, border: "1px solid var(--border)", borderRadius: 12, background: "var(--bg)", padding: 4 }} />
-            <input value={lightBgColor} onChange={(e) => setLightBgColor(e.target.value)} style={styles.input} />
+            <input type="color" value={lightBgColor} onChange={(e) => setLightBgColorState(normalizeLightBgColor(e.target.value))} style={{ width: 56, height: 44, border: "1px solid var(--border)", borderRadius: 12, background: "var(--bg)", padding: 4 }} />
+            <input value={lightBgColor} onChange={(e) => setLightBgColorState(normalizeLightBgColor(e.target.value))} style={styles.input} />
           </div>
-          <button type="button" onClick={() => setLightBgColor(LIGHT_BG_DEFAULT)} style={styles.button}>
+          <button type="button" onClick={() => setLightBgColorState(LIGHT_BG_DEFAULT)} style={styles.button}>
             Auf Weiß zurücksetzen
           </button>
         </div>
@@ -161,7 +175,7 @@ export default function ErscheinungsbildPage() {
             return (
               <button
                 key={opt.value}
-                onClick={() => setHomeLayout(opt.value)}
+                onClick={() => setHomeLayoutState(opt.value)}
                 style={{
                   display: "flex", alignItems: "center", gap: 14,
                   border: active ? "2px solid var(--fg)" : "1px solid var(--border)",
@@ -192,6 +206,11 @@ export default function ErscheinungsbildPage() {
           })}
         </div>
       </div>
+
+      <div style={{ height: 22 }} />
+
+      <button type="button" style={{ ...styles.buttonPrimary, width: "100%" }} onClick={handleSave} disabled={saving}>Speichern</button>
+      {msg ? <p style={{ ...styles.small, color: msg === "Gespeichert." ? "var(--success)" : "var(--danger)" }}>{msg}</p> : null}
     </Page>
   );
 }

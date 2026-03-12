@@ -44,13 +44,10 @@ export default function KuecheSettingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
-  const [pantrySaving, setPantrySaving] = useState(false);
-  const [pantryMsg, setPantryMsg] = useState<string | null>(null);
-
   const [preferenceOptions, setPreferenceOptions] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [prefSaving, setPrefSaving] = useState(false);
-  const [prefMsg, setPrefMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -76,30 +73,30 @@ export default function KuecheSettingsPage() {
     load();
   }, []);
 
-  const handlePantrySave = async () => {
-    setPantrySaving(true); setPantryMsg(null);
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg(null);
     try {
-      const res = await fetch("/api/settings/pantry", {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: pantryItems }),
-      });
-      if (!res.ok) throw new Error(`${res.status}`);
-      const d = (await res.json()) as SettingsData;
+      const [pantryRes, prefRes] = await Promise.all([
+        fetch("/api/settings/pantry", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: pantryItems }),
+        }),
+        fetch("/api/settings/preferences", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags: selectedTags }),
+        }),
+      ]);
+      if (!pantryRes.ok) throw new Error(`${pantryRes.status}`);
+      if (!prefRes.ok) throw new Error(`${prefRes.status}`);
+      const d = (await pantryRes.json()) as SettingsData;
       setPantryItems(d.pantry?.items ?? pantryItems);
-      setPantryMsg("Gespeichert.");
-    } catch (e) { setPantryMsg(getErrorMessage(e, "Fehler")); } finally { setPantrySaving(false); }
-  };
-
-  const handlePrefSave = async () => {
-    setPrefSaving(true); setPrefMsg(null);
-    try {
-      const res = await fetch("/api/settings/preferences", {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tags: selectedTags }),
-      });
-      if (!res.ok) throw new Error(`${res.status}`);
-      setPrefMsg("Gespeichert.");
-    } catch (e) { setPrefMsg(getErrorMessage(e, "Fehler")); } finally { setPrefSaving(false); }
+      setMsg("Gespeichert.");
+    } catch (e) {
+      setMsg(getErrorMessage(e, "Fehler"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const small: React.CSSProperties = { fontSize: 12, color: "var(--fg-muted)", marginTop: 6 };
@@ -145,11 +142,7 @@ export default function KuecheSettingsPage() {
             + Hinzufügen
           </button>
           <button style={styles.button} onClick={() => setPantryItems(DEFAULT_PANTRY)}>Zurücksetzen</button>
-          <button style={styles.buttonPrimary} onClick={handlePantrySave} disabled={pantrySaving}>
-            {pantrySaving ? "Speichere…" : "Speichern"}
-          </button>
         </div>
-        {pantryMsg && <p style={small}>{pantryMsg}</p>}
       </div>
 
       {/* Präferenzen */}
@@ -166,14 +159,10 @@ export default function KuecheSettingsPage() {
             </label>
           ))}
         </div>
-        <div style={{ marginTop: 12 }}>
-          <button style={styles.buttonPrimary} onClick={handlePrefSave} disabled={prefSaving}>
-            {prefSaving ? "Speichere…" : "Präferenzen speichern"}
-          </button>
-        </div>
-        {prefMsg && <p style={small}>{prefMsg}</p>}
       </div>
 
+      <button type="button" style={{ ...styles.buttonPrimary, width: "100%" }} onClick={handleSave} disabled={saving}>Speichern</button>
+      {msg ? <p style={{ ...styles.small, color: msg === "Gespeichert." ? "var(--success)" : "var(--danger)" }}>{msg}</p> : null}
     </Page>
   );
 }
