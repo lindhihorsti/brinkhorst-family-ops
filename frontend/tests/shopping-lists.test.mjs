@@ -2,16 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { estimateCurrencyLabel, formatEstimateTotal } from "../app/einkauf/currency.mjs";
-import { categoryGroups, recipeGroups, shoppingTextOutput, splitShoppingItems } from "../app/einkauf/format.mjs";
+import { categoryGroups, pantryGroups, recipeGroups, shoppingTextOutput, splitShoppingItems } from "../app/einkauf/format.mjs";
 
 test("splitShoppingItems keeps manual items separate from recipe items", () => {
   const result = splitShoppingItems([
     { content: "Milch", source: "manual" },
     { content: "Tomaten", source: "recipe" },
+    { content: "Zwiebel", source: "pantry", pantry_name: "Zwiebeln", pantry_uncertain: false },
   ]);
 
   assert.deepEqual(result.manual, [{ content: "Milch", source: "manual" }]);
   assert.deepEqual(result.recipe, [{ content: "Tomaten", source: "recipe" }]);
+  assert.deepEqual(result.pantry, [{ content: "Zwiebel", source: "pantry", pantry_name: "Zwiebeln", pantry_uncertain: false }]);
 });
 
 test("recipeGroups groups imported recipe items by recipe title", () => {
@@ -75,6 +77,42 @@ test("shoppingTextOutput prefers stored categories for recipe items", () => {
   ]);
 
   assert.equal(text, "Manuell\n- Milch\n\nAus Rezepten\nGemüse\n- Tomaten\n\nTeigwaren\n- Penne");
+});
+
+test("shoppingTextOutput renders pantry matches as separate review section", () => {
+  const text = shoppingTextOutput([
+    { content: "Tomaten", source: "recipe", recipe_title: "Pasta" },
+    { content: "Rote Zwiebel", source: "pantry", recipe_title: "Pasta", pantry_name: "Zwiebeln", pantry_uncertain: true },
+  ], "per_recipe");
+
+  assert.equal(
+    text,
+    "Aus Rezepten\nPasta\n- Tomaten\n\nIm Basisvorrat erkannt\nPasta\n- Rote Zwiebel (als Zwiebeln, bitte prüfen)"
+  );
+});
+
+test("pantryGroups consolidates pantry matches for ai mode", () => {
+  const groups = pantryGroups([
+    { id: "1", content: "Rote Zwiebel", source: "pantry", pantry_name: "Zwiebeln", pantry_uncertain: false },
+    { id: "2", content: "Zwiebel", source: "pantry", pantry_name: "Zwiebeln", pantry_uncertain: false },
+  ], true);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].title, "Zwiebeln");
+  assert.equal(groups[0].count, 2);
+});
+
+test("shoppingTextOutput consolidates pantry matches in ai mode", () => {
+  const text = shoppingTextOutput([
+    { content: "Tomaten", source: "recipe", recipe_title: "Pasta" },
+    { content: "Rote Zwiebel", source: "pantry", recipe_title: "Pasta", pantry_name: "Zwiebeln", pantry_uncertain: true },
+    { content: "Zwiebel", source: "pantry", recipe_title: "Suppe", pantry_name: "Zwiebeln", pantry_uncertain: true },
+  ], "ai_consolidated");
+
+  assert.equal(
+    text,
+    "Aus Rezepten\nPasta\n- Tomaten\n\nIm Basisvorrat erkannt\nZwiebeln\n- 2 Zwiebeln (bitte prüfen)"
+  );
 });
 
 test("formatEstimateTotal uses CHF by default", () => {

@@ -114,6 +114,8 @@ def shopping_snapshot_items(
             "content": content,
             "source": "manual",
             "recipe_title": None,
+            "pantry_name": None,
+            "pantry_uncertain": False,
         })
 
     if not include_weekly_items or not shop_payload:
@@ -130,19 +132,63 @@ def shopping_snapshot_items(
                     "content": content,
                     "source": "recipe",
                     "recipe_title": recipe_title,
+                    "pantry_name": None,
+                    "pantry_uncertain": False,
                 })
+        for match in shop_payload.get("pantry_matches") or []:
+            content = (match.get("content") or "").strip()
+            if not content:
+                continue
+            if not bool(match.get("uncertain")):
+                continue
+            items.append({
+                "content": content,
+                "source": "pantry",
+                "recipe_title": (match.get("recipe_title") or "").strip() or None,
+                "pantry_name": (match.get("pantry_name") or "").strip() or None,
+                "pantry_uncertain": bool(match.get("uncertain")),
+            })
         return items
 
-    for raw in shop_payload.get("buy") or []:
-        name = (raw.get("name") or "").strip()
-        if not name:
+    snapshot_lines = [str(raw).strip() for raw in (shop_payload.get("snapshot_buy_lines") or []) if str(raw).strip()]
+    if not snapshot_lines:
+        snapshot_lines = [str(raw).strip() for raw in (shop_payload.get("buy_lines") or []) if str(raw).strip()]
+    if snapshot_lines:
+        for raw in snapshot_lines:
+            items.append({
+                "content": raw,
+                "source": "recipe",
+                "recipe_title": None,
+                "pantry_name": None,
+                "pantry_uncertain": False,
+            })
+    else:
+        for raw in shop_payload.get("buy") or []:
+            name = (raw.get("name") or "").strip()
+            if not name:
+                continue
+            count = int(raw.get("count") or 1)
+            suffix = f" x{count}" if count > 1 else ""
+            items.append({
+                "content": f"{name}{suffix}",
+                "source": "recipe",
+                "recipe_title": None,
+                "pantry_name": None,
+                "pantry_uncertain": False,
+            })
+
+    for match in shop_payload.get("pantry_matches") or []:
+        content = (match.get("content") or "").strip()
+        if not content:
             continue
-        count = int(raw.get("count") or 1)
-        suffix = f" x{count}" if count > 1 else ""
+        if not bool(match.get("uncertain")):
+            continue
         items.append({
-            "content": f"{name}{suffix}",
-            "source": "recipe",
-            "recipe_title": None,
+            "content": content,
+            "source": "pantry",
+            "recipe_title": (match.get("recipe_title") or "").strip() or None,
+            "pantry_name": (match.get("pantry_name") or "").strip() or None,
+            "pantry_uncertain": bool(match.get("uncertain")),
         })
 
     return items
