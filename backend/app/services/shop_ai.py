@@ -518,5 +518,13 @@ def transform_shop_list(
         return cleaned_input, "AI Sortierung nicht verfügbar."
     if not cleaned_output and cleaned_input:
         return cleaned_input, "AI Sortierung nicht verfügbar."
-
     return cleaned_output, None
+
+
+def prepare_shop_lines_for_snapshot(to_buy_lines: List[str]) -> List[str]:
+    raw_input = [str(x).strip() for x in (to_buy_lines or []) if x and str(x).strip()]
+    cleaned_input = _expand_compound_lines(raw_input)
+    if not cleaned_input:
+        return []
+    prepared_input = _pre_aggregate_lines(cleaned_input)
+    return prepared_input or cleaned_input

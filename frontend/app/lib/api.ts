@@ -159,8 +159,10 @@ export type ExpenseReport = {
 export type ShoppingListItem = {
   id: string;
   content: string;
-  source: "manual" | "recipe";
+  source: "manual" | "recipe" | "pantry";
   recipe_title?: string | null;
+  pantry_name?: string | null;
+  pantry_uncertain: boolean;
   category?: string | null;
   checked: boolean;
   item_order: number;
@@ -181,9 +183,16 @@ export type ShoppingList = {
   updated_at?: string | null;
   manual_count: number;
   recipe_count: number;
+  pantry_count: number;
   total_count: number;
   checked_count: number;
   items?: ShoppingListItem[];
+};
+
+export type PantrySuggestion = {
+  pantry_name: string;
+  uncertain: boolean;
+  aliases: { alias: string; count: number; source: "heuristic" | "ai" }[];
 };
 
 export type ShoppingListCreate = {
@@ -506,7 +515,7 @@ export const api = {
       body: JSON.stringify({ content }),
     }),
 
-  updateShoppingListItem: (id: string, itemId: string, payload: { checked?: boolean }) =>
+  updateShoppingListItem: (id: string, itemId: string, payload: { checked?: boolean; source?: "manual" | "recipe" | "pantry"; content?: string }) =>
     http<{ ok: boolean; item: ShoppingList }>(`/api/shopping-lists/${id}/items/${itemId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -547,6 +556,11 @@ export const api = {
     }>(`/api/shopping-lists/${id}/categorize`, {
       method: "POST",
     }),
+
+  getPantrySuggestions: () =>
+    http<{ ok: boolean; suggestions: PantrySuggestion[]; unmatched_common: { name: string; count: number }[] }>(
+      `/api/settings/pantry/suggestions`
+    ),
 
   getFinanceDashboard: (month?: string) =>
     http<{ ok: boolean; dashboard: FinanceDashboard }>(`/api/finance/dashboard${month ? `?month=${encodeURIComponent(month)}` : ""}`).then((r) => r.dashboard),

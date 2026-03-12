@@ -78,6 +78,8 @@ from app.telegram_events import (
 from app.services import swap_service
 from app.services.shop_output import (
     build_shop_payload,
+    recipe_ingredient_counts,
+    suggest_pantry_aliases_from_ingredients,
     SHOP_OUTPUT_AI,
     SHOP_OUTPUT_PER_RECIPE,
     SHOP_OUTPUT_MODES,
@@ -140,7 +142,9 @@ if engine and AUTO_MIGRATE:
             sql_text(
                 """
                 ALTER TABLE IF EXISTS public.shopping_list_items
-                    ADD COLUMN IF NOT EXISTS category TEXT
+                    ADD COLUMN IF NOT EXISTS category TEXT,
+                    ADD COLUMN IF NOT EXISTS pantry_name TEXT,
+                    ADD COLUMN IF NOT EXISTS pantry_uncertain BOOLEAN NOT NULL DEFAULT FALSE
                 """
             )
         )
@@ -233,6 +237,43 @@ DEFAULT_PANTRY_ITEMS = [
     {"name": "Knoblauch", "uncertain": True, "aliases": []},
     {"name": "Zwiebeln", "uncertain": True, "aliases": []},
 ]
+
+
+def _pantry_key(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _normalize_pantry_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for raw in items:
+        name = str(raw.get("name") or "").strip()
+        if not name:
+            continue
+        key = _pantry_key(name)
+        aliases = [str(a).strip() for a in (raw.get("aliases") or []) if str(a).strip()]
+        uncertain = bool(raw.get("uncertain"))
+
+        if key not in merged:
+            merged[key] = {
+                "name": name,
+                "uncertain": uncertain,
+                "aliases": [],
+            }
+            order.append(key)
+        else:
+            merged[key]["uncertain"] = merged[key]["uncertain"] and uncertain
+
+        seen_aliases = {a.lower() for a in merged[key]["aliases"]}
+        seen_aliases.add(merged[key]["name"].lower())
+        for alias in aliases:
+            alias_key = alias.lower()
+            if alias_key in seen_aliases:
+                continue
+            merged[key]["aliases"].append(alias)
+            seen_aliases.add(alias_key)
+
+    return [merged[key] for key in order]
 DEFAULT_PREFERENCES = {"tags": []}
 DEFAULT_TELEGRAM = {
     "auto_send_plan": False,
@@ -1621,6 +1662,113 @@ def _openai_categorize_shopping_recipe_items(items: List[Dict[str, Any]]) -> Dic
     return {"items": all_items, "model": model}
 
 
+def _openai_suggest_pantry_aliases(
+    pantry_items: List[Dict[str, Any]],
+    ingredient_counts: Dict[str, int],
+) -> Dict[str, List[str]]:
+    if not os.getenv("OPENAI_API_KEY"):
+        return {}
+
+    from openai import OpenAI
+
+    model = (os.getenv("OPENAI_MODEL_ACTIVITIES", "gpt-5.2") or "gpt-5.2").strip()
+    timeout_raw = (os.getenv("OPENAI_SHOP_TIMEOUT_SECONDS") or os.getenv("OPENAI_TIMEOUT_SECONDS") or "").strip()
+    timeout = float(timeout_raw) if timeout_raw else 30.0
+    client = OpenAI(timeout=timeout).with_options(max_retries=0)
+
+    frequent = [
+        {"ingredient": name, "count": count}
+        for name, count in sorted(ingredient_counts.items(), key=lambda row: (-row[1], row[0].lower()))[:120]
+    ]
+    if not frequent:
+        return {}
+
+    user_payload = {
+        "pantry_items": [
+            {
+                "name": item.get("name"),
+                "aliases": item.get("aliases") or [],
+                "uncertain": bool(item.get("uncertain")),
+            }
+            for item in pantry_items
+        ],
+        "recipe_ingredients": frequent,
+        "rules": {
+            "language": "de",
+            "only_clear_matches": True,
+            "do_not_invent_ingredients": True,
+            "do_not_invent_pantry_items": True,
+            "max_aliases_per_item": 6,
+        },
+    }
+    schema = {
+        "type": "json_schema",
+        "name": "pantry_alias_suggestions",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "pantry_name": {"type": "string"},
+                            "aliases": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["pantry_name", "aliases"],
+                    },
+                }
+            },
+            "required": ["suggestions"],
+        },
+        "strict": True,
+    }
+    system_text = (
+        "Du ordnest echte Rezept-Zutaten vorhandenen Basisvorrats-Artikeln zu. "
+        "Schlage nur dann eine Zutat als Alias vor, wenn sie klar dieselbe Zutat oder eine eindeutige Schreibvariante ist. "
+        "Keine neuen Vorratsartikel, keine erfundenen Zutaten, keine lockeren Oberbegriffe. "
+        "Wenn du unsicher bist, lasse den Vorschlag weg. "
+        "Gib nur JSON im verlangten Schema aus."
+    )
+    try:
+        response = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
+                {"role": "user", "content": [{"type": "input_text", "text": json.dumps(user_payload, ensure_ascii=False)}]},
+            ],
+            text={"format": schema},
+            max_output_tokens=1800,
+            truncation="auto",
+        )
+    except Exception:
+        return {}
+
+    data = _parse_response_json_any(response)
+    if not isinstance(data, dict):
+        return {}
+
+    valid_pantry = {str(item.get("name") or "").strip() for item in pantry_items if str(item.get("name") or "").strip()}
+    valid_ingredients = set(ingredient_counts.keys())
+    result: Dict[str, List[str]] = {}
+    for row in data.get("suggestions") or []:
+        if not isinstance(row, dict):
+            continue
+        pantry_name = str(row.get("pantry_name") or "").strip()
+        if pantry_name not in valid_pantry:
+            continue
+        aliases: List[str] = []
+        for alias in row.get("aliases") or []:
+            clean = str(alias or "").strip()
+            if clean and clean in valid_ingredients and clean not in aliases:
+                aliases.append(clean)
+        if aliases:
+            result[pantry_name] = aliases
+    return result
+
+
 def _extract_output_text(response) -> Optional[str]:
     output_text = getattr(response, "output_text", None)
     if output_text:
@@ -1800,7 +1948,7 @@ def _validate_pantry_items(items: List["PantryItemPayload"]) -> List[Dict[str, A
                 "aliases": deduped_aliases,
             }
         )
-    return cleaned
+    return _normalize_pantry_items(cleaned)
 
 
 def _clean_tags(tags: List[str]) -> List[str]:
@@ -1818,7 +1966,7 @@ def _get_settings_pantry() -> List[Dict[str, Any]]:
     data = _db_get_app_state_json(APP_STATE_SETTINGS_PANTRY, {"items": DEFAULT_PANTRY_ITEMS})
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list):
-        return list(DEFAULT_PANTRY_ITEMS)
+        return _normalize_pantry_items(list(DEFAULT_PANTRY_ITEMS))
     normalized = []
     for raw in items:
         if not isinstance(raw, dict):
@@ -1837,7 +1985,7 @@ def _get_settings_pantry() -> List[Dict[str, Any]]:
                 "aliases": aliases,
             }
         )
-    return normalized or list(DEFAULT_PANTRY_ITEMS)
+    return _normalize_pantry_items(normalized or list(DEFAULT_PANTRY_ITEMS))
 
 
 def _get_settings_preferences() -> Dict[str, Any]:
@@ -2319,6 +2467,8 @@ class ShoppingListItemPayload(BaseModel):
 
 class ShoppingListItemUpdatePayload(BaseModel):
     checked: Optional[bool] = None
+    source: Optional[Literal["manual", "recipe", "pantry"]] = None
+    content: Optional[str] = None
 
 
 class ShoppingListSnapshotPayload(BaseModel):
@@ -2566,6 +2716,17 @@ def api_put_settings_pantry(payload: PantrySettingsPayload):
     cleaned = _validate_pantry_items(payload.items or [])
     _db_set_app_state_value(APP_STATE_SETTINGS_PANTRY, json.dumps({"items": cleaned}))
     return {"ok": True, "pantry": {"items": cleaned}}
+
+
+@app.get("/api/settings/pantry/suggestions")
+def api_get_settings_pantry_suggestions():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    pantry_items = _get_settings_pantry()
+    counts = recipe_ingredient_counts(engine)
+    ai_suggestions = _openai_suggest_pantry_aliases(pantry_items, counts)
+    suggestions = suggest_pantry_aliases_from_ingredients(pantry_items, counts, ai_suggestions)
+    return {"ok": True, **suggestions}
 
 
 @app.put("/api/settings/preferences")
@@ -3481,10 +3642,11 @@ def api_weekly_shop(notify: int = 0):
 
 
 def _sorted_shopping_items(items: List[ShoppingListItem]) -> List[ShoppingListItem]:
+    source_rank = {"manual": 0, "recipe": 1, "pantry": 2}
     return sorted(
         items,
         key=lambda item: (
-            0 if item.source == "manual" else 1,
+            source_rank.get(item.source, 3),
             item.item_order,
             item.created_at.isoformat() if item.created_at else "",
         ),
@@ -3504,6 +3666,8 @@ def _serialize_shopping_item(item: ShoppingListItem) -> Dict[str, Any]:
         "content": item.content,
         "source": item.source,
         "recipe_title": item.recipe_title,
+        "pantry_name": item.pantry_name,
+        "pantry_uncertain": bool(item.pantry_uncertain),
         "category": item.category,
         "checked": bool(item.checked),
         "item_order": item.item_order,
@@ -3514,13 +3678,15 @@ def _serialize_shopping_list(session: Session, shopping_list: ShoppingList, incl
     items = _shopping_list_items(session, shopping_list.id) if include_items else []
     manual_count = 0
     recipe_count = 0
+    pantry_count = 0
     checked_count = 0
     total_count = 0
 
     if include_items:
         total_count = len(items)
         manual_count = sum(1 for item in items if item.source == "manual")
-        recipe_count = total_count - manual_count
+        recipe_count = sum(1 for item in items if item.source == "recipe")
+        pantry_count = sum(1 for item in items if item.source == "pantry")
         checked_count = sum(1 for item in items if item.checked)
     else:
         rows = session.exec(
@@ -3528,7 +3694,8 @@ def _serialize_shopping_list(session: Session, shopping_list: ShoppingList, incl
         ).all()
         total_count = len(rows)
         manual_count = sum(1 for item in rows if item.source == "manual")
-        recipe_count = total_count - manual_count
+        recipe_count = sum(1 for item in rows if item.source == "recipe")
+        pantry_count = sum(1 for item in rows if item.source == "pantry")
         checked_count = sum(1 for item in rows if item.checked)
 
     payload = {
@@ -3546,6 +3713,7 @@ def _serialize_shopping_list(session: Session, shopping_list: ShoppingList, incl
         "updated_at": shopping_list.updated_at.isoformat() if shopping_list.updated_at else None,
         "manual_count": manual_count,
         "recipe_count": recipe_count,
+        "pantry_count": pantry_count,
         "total_count": total_count,
         "checked_count": checked_count,
     }
@@ -3573,11 +3741,15 @@ def _current_week_shop_payload(mode: str) -> Tuple[Optional[Dict[str, Any]], Opt
 def _append_shopping_items(session: Session, list_id: UUID, items: List[Dict[str, Any]]) -> None:
     manual_idx = 0
     recipe_idx = 0
+    pantry_idx = 0
     for item in items:
         source = item.get("source") or "manual"
         if source == "manual":
             item_order = manual_idx
             manual_idx += 1
+        elif source == "pantry":
+            item_order = pantry_idx
+            pantry_idx += 1
         else:
             item_order = recipe_idx
             recipe_idx += 1
@@ -3588,6 +3760,8 @@ def _append_shopping_items(session: Session, list_id: UUID, items: List[Dict[str
                 item_order=item_order,
                 source=source,
                 recipe_title=item.get("recipe_title"),
+                pantry_name=item.get("pantry_name"),
+                pantry_uncertain=bool(item.get("pantry_uncertain")),
                 category=item.get("category"),
                 checked=False,
             )
@@ -3600,25 +3774,12 @@ def _replace_weekly_snapshot(session: Session, shopping_list: ShoppingList, impo
         select(ShoppingListItem).where(ShoppingListItem.list_id == shopping_list.id)
     ).all()
     for item in existing_items:
-        if item.source == "recipe":
+        if item.source in {"recipe", "pantry"}:
             session.delete(item)
 
     if shop_payload:
         recipe_items = shopping_snapshot_items([], True, import_mode, shop_payload)
-        manual_items = [item for item in existing_items if item.source == "manual"]
-        manual_count = len(manual_items)
-        for idx, item in enumerate(recipe_items):
-            session.add(
-                ShoppingListItem(
-                    list_id=shopping_list.id,
-                    content=item["content"],
-                    item_order=idx,
-                    source="recipe",
-                    recipe_title=item.get("recipe_title"),
-                    category=item.get("category"),
-                    checked=False,
-                )
-            )
+        _append_shopping_items(session, shopping_list.id, recipe_items)
         shopping_list.includes_weekly_items = True
         shopping_list.import_mode = import_mode
         shopping_list.updated_at = datetime.utcnow()
@@ -3791,6 +3952,31 @@ def api_update_shopping_list_item(list_id: UUID, item_id: UUID, payload: Shoppin
         data = payload.model_dump(exclude_unset=True)
         if "checked" in data:
             item.checked = bool(data["checked"])
+        if "content" in data:
+            content = str(data["content"] or "").strip()
+            if not content:
+                raise HTTPException(400, "Inhalt fehlt")
+            item.content = content
+        if "source" in data:
+            next_source = str(data["source"] or "").strip()
+            if next_source not in {"manual", "recipe", "pantry"}:
+                raise HTTPException(400, "Ungültige Quelle")
+            if next_source != item.source:
+                if next_source == "recipe":
+                    current_recipe = [
+                        row for row in session.exec(
+                            select(ShoppingListItem).where(ShoppingListItem.list_id == list_id)
+                        ).all()
+                        if row.source == "recipe"
+                    ]
+                    item.item_order = max([row.item_order for row in current_recipe], default=-1) + 1
+                    item.category = None
+                    if shopping_list.import_mode == "ai_consolidated":
+                        item.recipe_title = None
+                    item.pantry_name = None
+                    item.pantry_uncertain = False
+                    item.checked = False
+                item.source = next_source
         shopping_list.updated_at = datetime.utcnow()
         session.add(item)
         session.add(shopping_list)
@@ -4644,7 +4830,7 @@ async def _tg_send_shopping_lists(chat_id: int) -> None:
     rows: List[List[Tuple[str, str]]] = []
     for item in items[:6]:
         lines.append(
-            f"• {item['title']} · {item['manual_count']} manuell · {item['recipe_count']} Rezept-Zutaten"
+            f"• {item['title']} · {item['manual_count']} manuell · {item['recipe_count']} Einkauf · {item.get('pantry_count', 0)} Basisvorrat"
         )
         rows.append([(item["title"][:24], f"shopping:view:{item['id']}")])
     rows.append([("➕ Neue Liste", "shopping:add"), ("Zurück", "menu:shopping")])
@@ -4658,16 +4844,24 @@ async def _tg_send_shopping_list_detail(chat_id: int, list_id: str) -> None:
         return
     lines = [
         f"🛒 {item['title']}",
-        f"{item['manual_count']} manuell · {item['recipe_count']} aus Rezepten · {item['checked_count']}/{item['total_count']} erledigt",
+        f"{item['manual_count']} manuell · {item['recipe_count']} Einkauf · {item.get('pantry_count', 0)} Basisvorrat · {item['checked_count']}/{item['total_count']} erledigt",
     ]
     last_category = None
+    pantry_header_added = False
     for shopping_item in (item.get("items") or [])[:12]:
         category = (shopping_item.get("category") or "").strip() or None
         if shopping_item.get("source") == "recipe" and category and category != last_category:
             lines.append(f"— {category}")
             last_category = category
+        if shopping_item.get("source") == "pantry" and not pantry_header_added:
+            lines.append("— Im Basisvorrat erkannt")
+            pantry_header_added = True
         prefix = "☑️" if shopping_item.get("checked") else "•"
-        lines.append(f"{prefix} {shopping_item['content']}")
+        if shopping_item.get("source") == "pantry":
+            suffix = f" (als {shopping_item.get('pantry_name')})" if shopping_item.get("pantry_name") else ""
+            lines.append(f"🧺 {shopping_item['content']}{suffix}")
+        else:
+            lines.append(f"{prefix} {shopping_item['content']}")
     await _tg_send_menu(chat_id, "\n".join(lines), _tg_shopping_detail_rows(list_id))
 
 
