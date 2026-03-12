@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useLayoutEffect } from "react";
 import { BottomNav } from "./lib/ui";
 
 type UseCase = {
@@ -211,6 +214,56 @@ function SettingsTile() {
 }
 
 export default function LandingPage() {
+  useLayoutEffect(() => {
+    const storageKey = "scroll:/";
+    const restoreTimers = new Set<number>();
+
+    const save = () => {
+      try {
+        sessionStorage.setItem(storageKey, String(window.scrollY));
+      } catch {
+        // ignore browser storage issues
+      }
+    };
+
+    const restore = () => {
+      try {
+        const raw = sessionStorage.getItem(storageKey);
+        if (!raw) return;
+        const y = Number(raw);
+        if (!Number.isFinite(y) || y <= 0) return;
+        const apply = () => {
+          const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+          const target = Math.min(y, maxScroll);
+          window.scrollTo(0, target);
+        };
+        // Restore repeatedly because some browsers / Next transitions still reset
+        // scroll after the first paint when navigating back to the landing page.
+        [0, 50, 120, 250, 500, 900].forEach((delay) => {
+          const id = window.setTimeout(apply, delay);
+          restoreTimers.add(id);
+        });
+      } catch {
+        // ignore browser storage issues
+      }
+    };
+
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    restore();
+    window.addEventListener("scroll", save, { passive: true });
+    window.addEventListener("pagehide", save);
+    window.addEventListener("pageshow", restore);
+    return () => {
+      save();
+      restoreTimers.forEach((id) => window.clearTimeout(id));
+      window.history.scrollRestoration = previousScrollRestoration;
+      window.removeEventListener("scroll", save);
+      window.removeEventListener("pagehide", save);
+      window.removeEventListener("pageshow", restore);
+    };
+  }, []);
+
   return (
     <main className="logo-backed-page" style={{
       minHeight: "100dvh",
