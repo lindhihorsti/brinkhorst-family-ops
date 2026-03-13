@@ -258,6 +258,23 @@ html[data-theme="light"] {
   --logo-stage-border: color-mix(in srgb, var(--user-light-bg) 70%, #c29b70 30%);
 }
 
+html.weekly-plan-root,
+body.weekly-plan-root {
+  overscroll-behavior-y: none;
+}
+
+@supports (-webkit-touch-callout: none) {
+  html.weekly-plan-root,
+  body.weekly-plan-root {
+    height: 100%;
+  }
+
+  body.weekly-plan-root {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+}
+
 html[data-theme="light"] .logo-stage {
   background: transparent;
   border-color: transparent;
