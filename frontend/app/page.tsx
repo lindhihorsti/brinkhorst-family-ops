@@ -99,7 +99,7 @@ function StandardUseCases() {
 function TileUseCases() {
   return (
     <div className="home-layout-tiles">
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(var(--tile-columns), minmax(0, 1fr))", gap: 12, marginBottom: 20 }}>
         {USE_CASES.map((uc) => (
           <Link key={uc.href} href={uc.href} style={{ textDecoration: "none" }}>
             <article
@@ -107,7 +107,7 @@ function TileUseCases() {
               style={{
                 position: "relative",
                 overflow: "hidden",
-                height: 204,
+                height: "var(--home-tile-height)",
                 borderRadius: 26,
                 padding: 18,
                 border: `1px solid color-mix(in srgb, ${uc.accent} 30%, var(--border))`,
@@ -277,18 +277,18 @@ export default function LandingPage() {
             src="/logo-light-transparent.png"
             alt="Family Ops"
             className="logo-img logo-img-light"
-            style={{ width: 292, maxWidth: "82vw", height: "auto" }}
+            style={{ width: "min(292px, calc(var(--display-surface-width) * 0.72))", maxWidth: "82vw", height: "auto" }}
           />
           <img
             src="/logo-dark.png"
             alt="Family Ops Dark"
             className="logo-img logo-img-dark"
-            style={{ width: 392, maxWidth: "92vw", height: "auto" }}
+            style={{ width: "min(392px, calc(var(--display-surface-width) * 0.78))", maxWidth: "92vw", height: "auto" }}
           />
         </div>
       </div>
 
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 18px 40px" }}>
+      <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
         <div style={{ marginBottom: 18, textAlign: "center" }}>
           <p style={{ margin: 0, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--fg-muted)" }}>
             Dashboard

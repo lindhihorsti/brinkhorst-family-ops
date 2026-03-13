@@ -20,9 +20,9 @@ export const styles: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font)",
   },
   container: {
-    maxWidth: 420,
+    maxWidth: "var(--page-max-width)",
     margin: "0 auto",
-    padding: "28px 22px 44px 22px",
+    padding: "var(--page-top-padding) var(--page-x-padding) var(--page-bottom-padding) var(--page-x-padding)",
   },
 
   headerRow: {
@@ -32,13 +32,13 @@ export const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     marginBottom: 18,
   },
-  title: { fontSize: "var(--font-size-xl)", fontWeight: 700, margin: 0, lineHeight: 1.2, color: "var(--fg)" },
-  subtitle: { fontSize: "var(--font-size-sm)", marginTop: 6, marginBottom: 0, color: "var(--fg-muted)" },
+  title: { fontSize: "var(--header-title-size)", fontWeight: 700, margin: 0, lineHeight: 1.15, color: "var(--fg)" },
+  subtitle: { fontSize: "var(--header-subtitle-size)", marginTop: 6, marginBottom: 0, color: "var(--fg-muted)" },
 
   card: {
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-lg)",
-    padding: 16,
+    padding: "var(--card-padding)",
     boxShadow: "var(--shadow-sm)",
     background: "var(--bg)",
     color: "var(--fg)",
@@ -47,7 +47,7 @@ export const styles: Record<string, React.CSSProperties> = {
     display: "block",
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-lg)",
-    padding: 16,
+    padding: "var(--card-padding)",
     boxShadow: "var(--shadow-sm)",
     background: "var(--bg)",
     textDecoration: "none",
@@ -56,7 +56,7 @@ export const styles: Record<string, React.CSSProperties> = {
   cardSubtle: {
     border: "1px solid var(--border)",
     borderRadius: "var(--radius-md)",
-    padding: 14,
+    padding: "calc(var(--card-padding) - 2px)",
     background: "var(--bg-subtle)",
     color: "var(--fg)",
   },
@@ -185,8 +185,8 @@ export const styles: Record<string, React.CSSProperties> = {
     left: "50%",
     bottom: "calc(var(--nav-height) + 12px)",
     transform: "translateX(-50%)",
-    width: "calc(100% - 44px)",
-    maxWidth: 420,
+    width: "calc(100% - (var(--page-x-padding) * 2))",
+    maxWidth: "var(--fab-max-width)",
     zIndex: 50,
   },
   fab: {
@@ -384,7 +384,7 @@ export function Modal({
           borderRadius: "var(--radius-lg) var(--radius-lg) 0 0",
           padding: "24px 22px 32px",
           width: "100%",
-          maxWidth: 480,
+          maxWidth: "var(--modal-max-width)",
           maxHeight: "85dvh",
           overflowY: "auto",
         }}
@@ -480,7 +480,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <div style={{
         position: "fixed", bottom: "calc(var(--nav-height) + 16px)", left: "50%",
         transform: "translateX(-50%)",
-        width: "calc(100% - 44px)", maxWidth: 420,
+        width: "calc(100% - (var(--page-x-padding) * 2))", maxWidth: "var(--toast-max-width)",
         zIndex: 300, display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none",
       }}>
         {toasts.map((t) => (
@@ -541,7 +541,7 @@ export function BottomNav({ current }: { current?: string }) {
           scroll={item.href === "/" ? false : undefined}
           className={`bottom-nav-item${current === item.href || (item.href !== "/" && current?.startsWith(item.href)) ? " active" : ""}`}
         >
-          <span style={{ fontSize: 20 }}>{item.icon}</span>
+          <span style={{ fontSize: "var(--nav-icon-size)" }}>{item.icon}</span>
           <span>{item.label}</span>
         </Link>
       ))}
