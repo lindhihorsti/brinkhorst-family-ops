@@ -1,6 +1,12 @@
 import unittest
 
-from app.shopping_utils import shopping_estimate_context, shopping_estimate_lines, shopping_snapshot_items
+from app.shopping_utils import (
+    infer_single_item_category,
+    reorder_recipe_items_by_category,
+    shopping_estimate_context,
+    shopping_estimate_lines,
+    shopping_snapshot_items,
+)
 from app.services.shop_output import match_pantry_item, suggest_pantry_aliases_from_ingredients
 from app.services.shop_ai import prepare_shop_lines_for_snapshot
 from app.models import ShoppingList, ShoppingListItem
@@ -178,6 +184,21 @@ class ShoppingListUtilsTest(unittest.TestCase):
     def test_prepare_shop_lines_for_snapshot_sums_knoblauchzehen(self):
         prepared = prepare_shop_lines_for_snapshot(["2 Knoblauchzehen", "3 Knoblauchzehen", "Milch"])
         self.assertEqual(prepared, ["5 Knoblauchzehen", "Milch"])
+
+    def test_infer_single_item_category_detects_knoblauchzehen_as_gemuese(self):
+        self.assertEqual(infer_single_item_category("5 Knoblauchzehen"), "Gemüse & Kräuter")
+
+    def test_reorder_recipe_items_by_category_places_added_item_in_matching_group(self):
+        a = ShoppingListItem(content="2 Tomaten", source="recipe", category="Gemüse & Kräuter", item_order=0)
+        b = ShoppingListItem(content="Pasta", source="recipe", category="Teigwaren, Reis & Getreide", item_order=1)
+        c = ShoppingListItem(content="5 Knoblauchzehen", source="recipe", category="Gemüse & Kräuter", item_order=2)
+
+        categories = reorder_recipe_items_by_category([a, b, c])
+
+        self.assertEqual(categories, ["Gemüse & Kräuter", "Teigwaren, Reis & Getreide"])
+        self.assertEqual(a.item_order, 0)
+        self.assertEqual(c.item_order, 1)
+        self.assertEqual(b.item_order, 2)
 
 
 if __name__ == "__main__":
