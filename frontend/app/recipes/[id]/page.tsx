@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, type Recipe } from "../../lib/api";
 import { getErrorMessage } from "../../lib/errors";
-import { BtnLink, Chip, ConfirmModal, Page, styles } from "../../lib/ui";
+import { BtnLink, Chip, ConfirmModal, Page, StarRating, styles } from "../../lib/ui";
 
 export default function RecipeDetailPage() {
   const params = useParams<{ id: string }>();
@@ -21,6 +21,9 @@ export default function RecipeDetailPage() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [ratingBusy, setRatingBusy] = useState(false);
+  const [ratingError, setRatingError] = useState<string | null>(null);
+  const numericRating = item?.rating == null ? 0 : Number(item.rating);
 
   useEffect(() => {
     if (!id) return; // <- wichtig
@@ -55,6 +58,24 @@ export default function RecipeDetailPage() {
       setArchiveError(getErrorMessage(e, "Archivieren fehlgeschlagen."));
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const rateRecipe = async (rating: number) => {
+    if (!id || !item || ratingBusy) return;
+    setRatingBusy(true);
+    setRatingError(null);
+    try {
+      const res = await api.rateRecipe(id, rating);
+      setItem((prev) => prev ? {
+        ...prev,
+        rating: typeof res.rating === "number" ? res.rating : rating,
+        cooked_count: typeof res.cooked_count === "number" ? res.cooked_count : prev.cooked_count,
+      } : prev);
+    } catch (e) {
+      setRatingError(getErrorMessage(e, "Bewertung konnte nicht gespeichert werden."));
+    } finally {
+      setRatingBusy(false);
     }
   };
 
@@ -102,6 +123,17 @@ export default function RecipeDetailPage() {
               {item.tags?.length ? <Chip text={`${item.tags.length} Tags`} /> : <Chip text="0 Tags" />}
               {item.ingredients?.length ? <Chip text={`${item.ingredients.length} Zutaten`} /> : <Chip text="0 Zutaten" />}
             </div>
+
+            <div style={styles.divider} />
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Bewertung</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <StarRating value={Number.isFinite(numericRating) ? numericRating : 0} onChange={rateRecipe} />
+              <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+                {Number.isFinite(numericRating) && numericRating > 0 ? `${Math.round(numericRating)} von 5` : "Noch nicht bewertet"}
+              </span>
+              {ratingBusy ? <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Speichere…</span> : null}
+            </div>
+            {ratingError ? <div style={{ marginTop: 8, fontSize: 12, color: "var(--danger)" }}>{ratingError}</div> : null}
 
             {item.source_url ? (
               <>

@@ -12,6 +12,7 @@ type DayEntry = {
   recipe_id: string | null;
   title: string;
   source_url?: string | null;
+  rating?: number | null;
 };
 
 type WeeklyHistoryItem = {

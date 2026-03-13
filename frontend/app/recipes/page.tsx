@@ -253,11 +253,9 @@ export default function RecipesPage() {
                       {r.ingredients?.length ? `${r.ingredients.length} Zutaten` : "keine Zutaten"}
                       {r.cooked_count ? ` · ${r.cooked_count}× gekocht` : ""}
                     </div>
-                    {r.rating ? (
-                      <div style={{ marginTop: 4 }}>
-                        <StarRating value={r.rating} readonly />
-                      </div>
-                    ) : null}
+                    <div style={{ marginTop: 4 }}>
+                      <StarRating value={r.rating == null ? 0 : Number(r.rating)} readonly />
+                    </div>
                     {r.collection_name ? (
                       <div style={{ marginTop: 4 }}>
                         <span style={{ ...styles.chip, background: "var(--kueche-accent)22", borderColor: "var(--kueche-accent)44", color: "var(--kueche-accent)" }}>

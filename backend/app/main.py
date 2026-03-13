@@ -4665,19 +4665,21 @@ def _resolve_day_title(rid: Optional[str]) -> str:
     return _resolve_day_meta(rid)["title"]
 
 
-def _resolve_day_meta(rid: Optional[str]) -> Dict[str, Optional[str]]:
+def _resolve_day_meta(rid: Optional[str]) -> Dict[str, Any]:
     if not rid:
-        return {"title": "—", "source_url": None}
+        return {"title": "—", "source_url": None, "rating": None}
     if rid.startswith("KI:"):
-        return {"title": rid, "source_url": None}
+        return {"title": rid, "source_url": None, "rating": None}
     title = rid
     source_url = None
+    rating = None
     with Session(engine) as session:
         r = session.get(Recipe, rid)
         if r:
             title = r.title
             source_url = r.source_url
-    return {"title": title, "source_url": source_url}
+            rating = float(r.rating) if r.rating is not None else None
+    return {"title": title, "source_url": source_url, "rating": rating}
 
 
 def _build_day_entries(days: Dict[str, str]) -> List[Dict[str, Any]]:
@@ -4702,6 +4704,7 @@ def _build_day_entries(days: Dict[str, str]) -> List[Dict[str, Any]]:
                 "recipe_id": recipe_id,
                 "title": meta["title"],
                 "source_url": meta["source_url"],
+                "rating": meta["rating"],
             }
         )
     return entries
@@ -6496,29 +6499,24 @@ def _table_exists(conn, table_name: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class RecipeRatingPayload(BaseModel):
-    rating: float  # 1.0 - 5.0
+    rating: int  # 1 - 5
 
 
 @app.post("/api/recipes/{recipe_id}/rate")
 def api_rate_recipe(recipe_id: UUID, payload: RecipeRatingPayload):
     if engine is None:
         raise HTTPException(500, "DATABASE_URL missing")
-    if not (1.0 <= payload.rating <= 5.0):
-        raise HTTPException(400, "rating must be 1.0-5.0")
+    if not (1 <= payload.rating <= 5):
+        raise HTTPException(400, "rating must be 1-5")
     with Session(engine) as session:
         r = session.get(Recipe, recipe_id)
         if not r:
             raise HTTPException(404, "Not found")
-        count = (r.cooked_count or 0) + 1
-        prev_avg = float(r.rating or payload.rating)
-        prev_count = max(count - 1, 1)
-        new_avg = round(((prev_avg * prev_count) + payload.rating) / count, 1)
-        r.rating = new_avg
-        r.cooked_count = count
+        r.rating = int(payload.rating)
         session.add(r)
         session.commit()
         session.refresh(r)
-    return {"ok": True, "rating": r.rating, "cooked_count": r.cooked_count}
+    return {"ok": True, "rating": int(r.rating) if r.rating is not None else None, "cooked_count": r.cooked_count}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

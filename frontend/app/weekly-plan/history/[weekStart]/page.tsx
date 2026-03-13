@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getErrorMessage } from "../../../lib/errors";
 import { getWeeklyPlanHref } from "../../../lib/weekly-plan-links.mjs";
-import { BottomNav } from "../../../lib/ui";
+import { BottomNav, StarRating } from "../../../lib/ui";
 
 type DayEntry = {
   day: number;
@@ -14,6 +14,7 @@ type DayEntry = {
   recipe_id: string | null;
   title: string;
   source_url?: string | null;
+  rating?: number | null;
 };
 
 type WeeklyHistoryItem = {
@@ -43,6 +44,9 @@ function DayGrid({ days }: { days: DayEntry[] }) {
             <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6, color: "var(--fg-muted)" }}>{d.label}</div>
             <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.2, color: "var(--fg)", textDecoration: href ? "underline" : "none", textUnderlineOffset: href ? 3 : undefined }}>
               {d.title}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <StarRating value={d.rating == null ? 0 : Number(d.rating)} readonly size={14} />
             </div>
           </>
         );

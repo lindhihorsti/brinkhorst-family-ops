@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../lib/errors";
 import { getWeeklyPlanHref } from "../lib/weekly-plan-links.mjs";
-import { BtnLink, ConfirmModal, Page, styles } from "../lib/ui";
+import { BtnLink, ConfirmModal, Page, StarRating, styles } from "../lib/ui";
 
 type DayEntry = {
   day: number;
@@ -12,6 +12,7 @@ type DayEntry = {
   recipe_id: string | null;
   title: string;
   source_url?: string | null;
+  rating?: number | null;
 };
 
 type PlanPayload = {
@@ -112,6 +113,9 @@ function DayGrid({ days }: { days: DayEntry[] }) {
             <div style={cardStyles.dayLabel}>{d.label}</div>
             <div style={{ ...cardStyles.dayTitle, textDecoration: href ? "underline" : "none", textUnderlineOffset: href ? 3 : undefined }}>
               {d.title}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <StarRating value={d.rating == null ? 0 : Number(d.rating)} readonly size={14} />
             </div>
           </>
         );
