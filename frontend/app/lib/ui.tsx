@@ -535,8 +535,33 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function BottomNav({ current }: { current?: string }) {
+  const navRef = React.useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const raw = window.sessionStorage.getItem("familyops:bottom-nav-scroll-left");
+    if (!raw) return;
+    const saved = Number(raw);
+    if (Number.isFinite(saved)) {
+      nav.scrollLeft = saved;
+    }
+  }, []);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const handleScroll = () => {
+      window.sessionStorage.setItem("familyops:bottom-nav-scroll-left", String(nav.scrollLeft));
+    };
+
+    nav.addEventListener("scroll", handleScroll, { passive: true });
+    return () => nav.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <nav className="bottom-nav">
+    <nav ref={navRef} className="bottom-nav">
       {NAV_ITEMS.map((item) => (
         <Link
           key={item.href}
