@@ -15,7 +15,7 @@ export default function KuechePage() {
       minHeight: "100dvh", background: "var(--bg)", color: "var(--fg)",
       fontFamily: "var(--font)", paddingBottom: "var(--nav-height)",
     }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "28px 22px 40px" }}>
+      <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "var(--page-top-padding) var(--page-x-padding) var(--page-bottom-padding)" }}>
 
         {/* Icon */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
@@ -23,7 +23,7 @@ export default function KuechePage() {
             width: 104, height: 104, borderRadius: 28,
             background: "#e8673a22",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 64,
+            fontSize: "clamp(56px, 7vw, 64px)",
           }}>🍳</span>
         </div>
 
@@ -79,7 +79,7 @@ export default function KuechePage() {
                   background: "linear-gradient(180deg, color-mix(in srgb, #e8673a 12%, var(--bg)) 0%, color-mix(in srgb, #e8673a 18%, var(--bg-subtle)) 100%)",
                   boxShadow: "var(--shadow-md)",
                   padding: 20,
-                  minHeight: 168,
+                  minHeight: "var(--hub-tile-min-height)",
                   display: "grid",
                   alignItems: "space-between",
                 }}>

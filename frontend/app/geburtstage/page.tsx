@@ -27,7 +27,7 @@ export default function GeburtstageHubPage() {
       fontFamily: "var(--font)",
       paddingBottom: "var(--nav-height)",
     }}>
-      <div style={{ maxWidth: 430, margin: "0 auto", padding: "20px 22px 44px" }}>
+      <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "20px var(--page-x-padding) var(--page-bottom-padding)" }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
           <span style={{
             width: 104,
@@ -37,7 +37,7 @@ export default function GeburtstageHubPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 64,
+            fontSize: "clamp(56px, 7vw, 64px)",
           }}>
             🎂
           </span>
@@ -48,7 +48,7 @@ export default function GeburtstageHubPage() {
             <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--geburtstage-accent)" }}>
               Geburtstage & Geschenke
             </p>
-            <h1 style={{ margin: "6px 0 0", fontSize: 28, lineHeight: 1.1 }}>Was braucht ihr gerade?</h1>
+            <h1 style={{ margin: "6px 0 0", fontSize: "var(--hero-title-size)", lineHeight: 1.08 }}>Was braucht ihr gerade?</h1>
             <p style={{ margin: "10px 0 0", fontSize: 14, color: "var(--fg-muted)", maxWidth: 320 }}>
               Geburtstage pflegen oder in einem kurzen Flow passende Geschenkideen finden.
             </p>
@@ -97,7 +97,7 @@ export default function GeburtstageHubPage() {
                   background: `linear-gradient(180deg, color-mix(in srgb, ${option.accent} 12%, var(--bg)) 0%, color-mix(in srgb, ${option.accent} 18%, var(--bg-subtle)) 100%)`,
                   boxShadow: "var(--shadow-md)",
                   padding: 20,
-                  minHeight: 168,
+                  minHeight: "var(--hub-tile-min-height)",
                   display: "grid",
                   alignItems: "space-between",
                 }}>

@@ -83,15 +83,15 @@ export default function EinstellungenPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 64,
+          fontSize: "clamp(56px, 7vw, 64px)",
         }}>
           ⚙️
         </span>
       </div>
 
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 22px 40px" }}>
+      <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h1 style={{ fontSize: "var(--font-size-xl)", fontWeight: 700, margin: 0 }}>Einstellungen</h1>
+          <h1 style={{ fontSize: "var(--header-title-size)", fontWeight: 700, margin: 0 }}>Einstellungen</h1>
           <Link href="/" style={{
             display: "inline-flex", alignItems: "center", gap: 4,
             border: "1px solid var(--border)", borderRadius: 999,
