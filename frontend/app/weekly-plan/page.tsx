@@ -191,26 +191,21 @@ export default function WeeklyPlanPage() {
   }, []);
 
   useEffect(() => {
-    let startY = 0;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverscroll = html.style.overscrollBehaviorY;
+    const prevBodyOverscroll = body.style.overscrollBehaviorY;
 
-    const handleTouchStart = (event: TouchEvent) => {
-      startY = event.touches[0]?.clientY ?? 0;
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      const currentY = event.touches[0]?.clientY ?? startY;
-      const pullingDown = currentY > startY;
-      if (!pullingDown) return;
-      if (window.scrollY > 0) return;
-      event.preventDefault();
-    };
-
-    document.addEventListener("touchstart", handleTouchStart, { passive: true });
-    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    html.classList.add("weekly-plan-root");
+    body.classList.add("weekly-plan-root");
+    html.style.overscrollBehaviorY = "none";
+    body.style.overscrollBehaviorY = "none";
 
     return () => {
-      document.removeEventListener("touchstart", handleTouchStart);
-      document.removeEventListener("touchmove", handleTouchMove);
+      html.classList.remove("weekly-plan-root");
+      body.classList.remove("weekly-plan-root");
+      html.style.overscrollBehaviorY = prevHtmlOverscroll;
+      body.style.overscrollBehaviorY = prevBodyOverscroll;
     };
   }, []);
 
