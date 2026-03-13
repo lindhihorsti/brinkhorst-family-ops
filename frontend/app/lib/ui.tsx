@@ -310,10 +310,12 @@ export function StarRating({
   value,
   onChange,
   readonly,
+  size = 18,
 }: {
   value: number;
   onChange?: (v: number) => void;
   readonly?: boolean;
+  size?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const display = hover ?? value;
@@ -326,6 +328,7 @@ export function StarRating({
           onClick={() => !readonly && onChange?.(i)}
           onMouseEnter={() => !readonly && setHover(i)}
           onMouseLeave={() => !readonly && setHover(null)}
+          style={{ fontSize: size }}
         >
           ★
         </span>

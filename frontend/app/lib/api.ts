@@ -442,7 +442,7 @@ export const api = {
     }),
 
   rateRecipe: (id: string, rating: number) =>
-    http<{ ok: boolean }>(`/api/recipes/${id}/rate`, {
+    http<{ ok: boolean; rating: number; cooked_count: number }>(`/api/recipes/${id}/rate`, {
       method: "POST",
       body: JSON.stringify({ rating }),
     }),
