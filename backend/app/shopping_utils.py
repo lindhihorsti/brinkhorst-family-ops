@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict, List, Optional
 
 SHOPPING_CATEGORY_ORDER = [
@@ -15,6 +16,118 @@ SHOPPING_CATEGORY_ORDER = [
     "Haushalt & Sonstiges",
 ]
 SHOPPING_CATEGORY_SET = set(SHOPPING_CATEGORY_ORDER)
+
+_SINGLE_ITEM_CATEGORY_KEYWORDS = {
+    "Gemüse & Kräuter": (
+        "zwiebel", "zwiebeln", "knoblauch", "knoblauchzehe", "knoblauchzehen", "tomate", "tomaten",
+        "gurke", "gurken", "karotte", "karotten", "paprika", "salat", "spinat", "brokkoli",
+        "pilz", "pilze", "champignon", "zucchini", "lauch", "porree", "sellerie", "kartoffel",
+        "kartoffeln", "ingwer", "basilikum", "petersilie", "schnittlauch", "koriander", "dill",
+        "rosmarin", "thymian", "minze",
+    ),
+    "Obst": (
+        "apfel", "äpfel", "banane", "bananen", "zitrone", "zitronen", "limette", "limetten",
+        "orange", "orangen", "beere", "beeren", "traube", "trauben", "birne", "birnen",
+        "mango", "ananas", "kiwi",
+    ),
+    "Fleisch & Fisch": (
+        "fleisch", "fisch", "lachs", "thunfisch", "huhn", "hähn", "chicken", "poulet",
+        "rind", "hack", "speck", "schinken", "wurst", "garnelen", "shrimp", "tofu",
+    ),
+    "Milchprodukte & Eier": (
+        "milch", "rahm", "sahne", "joghurt", "quark", "skyr", "mozzarella", "käse", "kaese",
+        "feta", "parmesan", "butter", "ei", "eier", "frischkäse", "frischkaese",
+    ),
+    "Teigwaren, Reis & Getreide": (
+        "nudel", "nudeln", "pasta", "spaghetti", "reis", "risotto", "couscous", "bulgur",
+        "quinoa", "hafer", "haferflocken", "mehl", "polenta", "linsen", "bohnen", "kichererbse",
+        "kichererbsen",
+    ),
+    "Brot & Backwaren": (
+        "brot", "bröt", "broet", "toast", "bagel", "wrap", "croissant", "teig", "blätterteig",
+        "blaetterteig", "pizza", "brötchen", "broetchen",
+    ),
+    "Konserven & Gläser": (
+        "passata", "dosentomaten", "tomatenmark", "mais", "oliven", "konserve", "glas",
+        "kokosmilch", "bouillon", "brühe", "bruehe", "kapern",
+    ),
+    "Gewürze, Öle & Saucen": (
+        "salz", "pfeffer", "öl", "oel", "essig", "sojasauce", "senf", "honig", "gewürz",
+        "gewuerz", "curry", "paprikapulver", "zimt", "oregano", "chili", "muskat", "sauce",
+        "ketchup", "mayonnaise",
+    ),
+    "Tiefkühlprodukte": (
+        "tiefkühl", "tiefkuehl", "gefroren", "tk ", "tiefkühl", "frühlingsrolle", "fruehlingsrolle",
+    ),
+    "Snacks & Süßes": (
+        "schokolade", "keks", "kekse", "chips", "snack", "dessert", "zucker", "sirup",
+        "marmelade", "nutella",
+    ),
+    "Getränke": (
+        "wasser", "saft", "cola", "tee", "kaffee", "milchdrink", "wein", "bier", "getränk",
+        "getraenk",
+    ),
+    "Haushalt & Sonstiges": (
+        "shampoo", "waschmittel", "spülmittel", "spuelmittel", "seife", "toilettenpapier",
+        "küchenrolle", "kuechenrolle", "müll", "muell", "kerze", "katzenfutter", "hundefutter",
+    ),
+}
+
+_LEADING_AMOUNT_OR_UNIT_RE = re.compile(
+    r"^\s*(?:\d+[.,]?\d*|ein|eine|einen|einer|zwei|drei|vier|fuenf|fünf|sechs|sieben|acht|neun|zehn)?\s*"
+    r"(?:kg|g|gramm|l|ml|cl|el|tl|stk|stueck|stück)?\s*",
+    flags=re.IGNORECASE,
+)
+
+
+def _normalize_item_text(value: str) -> str:
+    text = (value or "").strip().lower()
+    text = text.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    text = _LEADING_AMOUNT_OR_UNIT_RE.sub("", text, count=1)
+    text = re.sub(r"[^a-z0-9\s]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def infer_single_item_category(content: str) -> str:
+    normalized = _normalize_item_text(content)
+    if not normalized:
+        return "Haushalt & Sonstiges"
+
+    best_category = "Haushalt & Sonstiges"
+    best_score = 0
+    for category in SHOPPING_CATEGORY_ORDER:
+        keywords = _SINGLE_ITEM_CATEGORY_KEYWORDS.get(category, ())
+        score = 0
+        for keyword in keywords:
+            if keyword in normalized:
+                score += max(1, len(keyword) // 4)
+        if score > best_score:
+            best_score = score
+            best_category = category
+
+    return best_category
+
+
+def reorder_recipe_items_by_category(recipe_items: List[Any]) -> List[str]:
+    grouped: Dict[str, List[Any]] = {}
+    for item in sorted(
+        recipe_items,
+        key=lambda entry: (
+            getattr(entry, "item_order", 0),
+            getattr(getattr(entry, "created_at", None), "isoformat", lambda: "")(),
+        ),
+    ):
+        category = str(getattr(item, "category", "") or "").strip() or "Haushalt & Sonstiges"
+        grouped.setdefault(category, []).append(item)
+
+    ordered_categories = [category for category in SHOPPING_CATEGORY_ORDER if category in grouped]
+    order_counter = 0
+    for category in ordered_categories:
+        for item in grouped[category]:
+            item.item_order = order_counter
+            order_counter += 1
+    return ordered_categories
 
 
 def apply_ai_categories_to_recipe_items(

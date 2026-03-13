@@ -180,7 +180,7 @@ export default function BasisvorratSettingsPage() {
         </p>
         <div style={{ display: "grid", gap: 12 }}>
           {pantryItems.map((item, idx) => (
-            <div key={`${item.name}-${idx}`} style={{ ...styles.cardSubtle, display: "grid", gap: 10 }}>
+            <div key={idx} style={{ ...styles.cardSubtle, display: "grid", gap: 10 }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <input
                   style={{ ...styles.input, flex: 1 }}

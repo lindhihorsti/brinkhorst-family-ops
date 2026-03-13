@@ -60,6 +60,8 @@ from app.shopping_utils import (
     SHOPPING_CATEGORY_ORDER,
     apply_ai_categories_to_recipe_items,
     chunk_shopping_category_items,
+    infer_single_item_category,
+    reorder_recipe_items_by_category,
     shopping_estimate_context,
     shopping_estimate_lines,
     shopping_snapshot_items,
@@ -3973,6 +3975,8 @@ def api_update_shopping_list_item(list_id: UUID, item_id: UUID, payload: Shoppin
                     item.category = None
                     if shopping_list.import_mode == "ai_consolidated":
                         item.recipe_title = None
+                        item.category = infer_single_item_category(item.content)
+                        reorder_recipe_items_by_category(current_recipe + [item])
                     item.pantry_name = None
                     item.pantry_uncertain = False
                     item.checked = False
