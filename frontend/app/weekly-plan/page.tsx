@@ -191,6 +191,30 @@ export default function WeeklyPlanPage() {
   }, []);
 
   useEffect(() => {
+    let startY = 0;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      startY = event.touches[0]?.clientY ?? 0;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY ?? startY;
+      const pullingDown = currentY > startY;
+      if (!pullingDown) return;
+      if (window.scrollY > 0) return;
+      event.preventDefault();
+    };
+
+    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, []);
+
+  useEffect(() => {
     if (current?.has_draft && current.draft) {
       setSwapDraft(current.draft);
       setSwapStep("preview");
