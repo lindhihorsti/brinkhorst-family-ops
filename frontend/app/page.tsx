@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLayoutEffect } from "react";
-import { BottomNav } from "./lib/ui";
+import { BottomNav, PremiumPillNav } from "./lib/ui";
 
 type UseCase = {
   href: string;
@@ -213,6 +213,102 @@ function SettingsTile() {
   );
 }
 
+// ─── Bento-Konfiguration ─────────────────────────────────────────────────────
+
+type BentoTile = {
+  href: string;
+  icon: string;
+  label: string;
+  sub: string;
+  from: string;
+  to: string;
+  wide?: boolean;
+};
+
+const BENTO: BentoTile[] = [
+  { href: "/kueche",      icon: "🍳", label: "Küche & Wochenplan",    sub: "Rezepte · Planung",        from: "var(--kueche-from)",      to: "var(--kueche-to)",      wide: true },
+  { href: "/einkauf",     icon: "🛒", label: "Einkaufsliste",          sub: "Listen & Snapshots",       from: "var(--einkauf-from)",     to: "var(--einkauf-to)" },
+  { href: "/finanzen",    icon: "🏦", label: "Finanzen",               sub: "Budget & Split",           from: "var(--finanzen-from)",    to: "var(--finanzen-to)" },
+  { href: "/ideen",       icon: "💡", label: "Was unternehmen wir?",   sub: "Ausflüge · Zuhause",       from: "var(--ideen-from)",       to: "var(--ideen-to)",       wide: true },
+  { href: "/aufgaben",    icon: "✅", label: "Aufgaben",               sub: "Haushalt & Punkte",        from: "var(--aufgaben-from)",    to: "var(--aufgaben-to)" },
+  { href: "/geburtstage", icon: "🎂", label: "Geburtstage",            sub: "Termine & Geschenke",      from: "var(--geburtstage-from)", to: "var(--geburtstage-to)" },
+  { href: "/pinnwand",    icon: "📌", label: "Pinnwand",               sub: "Notizen & Kategorien",     from: "var(--pinnwand-from)",    to: "var(--pinnwand-to)" },
+  { href: "/split",       icon: "💸", label: "Ausgaben & Split",       sub: "Schulden & Abrechnung",    from: "var(--split-from)",       to: "var(--split-to)" },
+];
+
+// ─── Premium Home ─────────────────────────────────────────────────────────────
+
+function PremiumHome() {
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 11) return "Guten Morgen";
+    if (h < 17) return "Guten Tag";
+    return "Guten Abend";
+  })();
+
+  return (
+    <div className="premium-home">
+      <div className="p-home-wrap">
+        {/* Hintergrund */}
+        <div className="p-home-bg" aria-hidden="true" />
+
+        {/* Header mit Greeting + Logo + Settings */}
+        <header className="p-home-header">
+          <div className="p-home-header-top">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-v2-light.png" alt="Family Ops" className="p-home-logo p-home-logo-hero" />
+            <Link href="/einstellungen" className="p-home-settings-icon" aria-label="Einstellungen">
+              ⚙️
+            </Link>
+          </div>
+          <div className="p-home-greeting">
+            <h1 className="p-home-greeting-label">{greeting} 👋</h1>
+            <p className="p-home-greeting-sub">Brinkhorst Family Ops</p>
+          </div>
+        </header>
+
+        {/* Bento Grid */}
+        <div className="p-bento">
+          {BENTO.map((tile) => (
+            <Link
+              key={tile.href}
+              href={tile.href}
+              className={`p-tile p-tile-anim${tile.wide ? " p-tile-wide" : ""}`}
+              style={{
+                background: `linear-gradient(135deg, ${tile.from} 0%, ${tile.to} 100%)`,
+                boxShadow: `0 8px 24px color-mix(in srgb, ${tile.from} 35%, transparent), 0 2px 6px rgba(0,0,0,0.12)`,
+              }}
+            >
+              <div className="p-tile-shine" />
+              {tile.wide ? (
+                <>
+                  <span className="p-tile-wide-icon">{tile.icon}</span>
+                  <div className="p-tile-wide-text">
+                    <p className="p-tile-label">{tile.label}</p>
+                    <p className="p-tile-sub">{tile.sub}</p>
+                  </div>
+                  <span className="p-tile-arrow">→</span>
+                </>
+              ) : (
+                <>
+                  <div className="p-tile-top">
+                    <span className="p-tile-icon">{tile.icon}</span>
+                  </div>
+                  <div className="p-tile-bottom">
+                    <p className="p-tile-label">{tile.label}</p>
+                    <p className="p-tile-sub">{tile.sub}</p>
+                  </div>
+                </>
+              )}
+            </Link>
+          ))}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   useLayoutEffect(() => {
     const storageKey = "scroll:/";
@@ -265,41 +361,48 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <main className="logo-backed-page" style={{
+    <main style={{
       minHeight: "100dvh",
       color: "var(--fg)",
       fontFamily: "var(--font)",
       paddingBottom: "var(--nav-height)",
+      background: "var(--bg)",
     }}>
-      <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
-        <div className="logo-stage">
-          <img
-            src="/logo-light-transparent.png"
-            alt="Family Ops"
-            className="logo-img logo-img-light"
-            style={{ width: "min(292px, calc(var(--display-surface-width) * 0.72))", maxWidth: "82vw", height: "auto" }}
-          />
-          <img
-            src="/logo-dark.png"
-            alt="Family Ops Dark"
-            className="logo-img logo-img-dark"
-            style={{ width: "min(392px, calc(var(--display-surface-width) * 0.78))", maxWidth: "92vw", height: "auto" }}
-          />
+      {/* Classic Layout */}
+      <div className="classic-home logo-backed-page" style={{ minHeight: "100dvh" }}>
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
+          <div className="logo-stage">
+            <img
+              src="/logo-light-transparent.png"
+              alt="Family Ops"
+              className="logo-img logo-img-light"
+              style={{ width: "min(292px, calc(var(--display-surface-width) * 0.72))", maxWidth: "82vw", height: "auto" }}
+            />
+            <img
+              src="/logo-dark.png"
+              alt="Family Ops Dark"
+              className="logo-img logo-img-dark"
+              style={{ width: "min(392px, calc(var(--display-surface-width) * 0.78))", maxWidth: "92vw", height: "auto" }}
+            />
+          </div>
+        </div>
+        <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
+          <div style={{ marginBottom: 18, textAlign: "center" }}>
+            <p style={{ margin: 0, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--fg-muted)" }}>
+              Dashboard
+            </p>
+          </div>
+          <StandardUseCases />
+          <TileUseCases />
+          <SettingsTile />
         </div>
       </div>
 
-      <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
-        <div style={{ marginBottom: 18, textAlign: "center" }}>
-          <p style={{ margin: 0, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--fg-muted)" }}>
-            Dashboard
-          </p>
-        </div>
+      {/* Premium Layout */}
+      <PremiumHome />
 
-        <StandardUseCases />
-        <TileUseCases />
-        <SettingsTile />
-      </div>
       <BottomNav current="/" />
+      <PremiumPillNav current="/" />
     </main>
   );
 }
