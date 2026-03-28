@@ -232,6 +232,7 @@ export function Page({
   navCurrent,
   icon,
   iconAccent,
+  backHref = "/",
   children,
 }: {
   title: string;
@@ -241,13 +242,34 @@ export function Page({
   navCurrent?: string;
   icon?: string;
   iconAccent?: string;
+  backHref?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="p-page" style={noBottomNav ? styles.pageNoNav : styles.page}>
+    <div
+      className="p-page"
+      style={{ ...(noBottomNav ? styles.pageNoNav : styles.page), "--page-accent": iconAccent ?? "var(--accent)" } as React.CSSProperties}
+    >
+      {/* ── Premium full-bleed gradient hero (outside max-width container) ── */}
+      {icon && (
+        <div className="p-page-hero">
+          {/* Back navigation — identical to hub pages */}
+          <div className="p-page-hero-topbar">
+            <Link href={backHref} className="p-hub-back">‹ Home</Link>
+          </div>
+          {/* Centered icon + title + subtitle */}
+          <div className="p-page-hero-center">
+            <span className="p-page-hero-icon">{icon}</span>
+            <h1 className="p-page-hero-title">{title}</h1>
+            {subtitle && <p className="p-page-hero-subtitle">{subtitle}</p>}
+          </div>
+        </div>
+      )}
+
       <div className="p-page-container" style={styles.container}>
+        {/* ── Classic icon badge (hidden in premium) ── */}
         {icon && (
-          <div className="p-page-icon" style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
+          <div className="p-page-icon-classic" style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
             <span style={{
               width: 104, height: 104, borderRadius: 28,
               background: iconAccent ? iconAccent + "22" : "var(--bg-subtle)",
@@ -263,7 +285,8 @@ export function Page({
             <h1 className="p-page-title" style={styles.title}>{title}</h1>
             {subtitle ? <p style={styles.subtitle}>{subtitle}</p> : null}
           </div>
-          {right ? <div>{right}</div> : null}
+          {/* In premium mode this is hidden via CSS; back btn is in the hero */}
+          {right ? <div className="p-page-header-right">{right}</div> : null}
         </div>
         <div className="p-page-content">
           {children}

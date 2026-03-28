@@ -134,26 +134,26 @@ export default function ErscheinungsbildPage() {
               onClick={() => setThemeState(opt.value)}
               style={{
                 display: "flex", alignItems: "center", gap: 14,
-                border: active ? "2px solid var(--fg)" : "1px solid var(--border)",
+                border: active ? "2px solid var(--accent, var(--fg))" : "1px solid var(--border)",
                 borderRadius: "var(--radius-lg)", padding: "14px 16px",
-                background: active ? "var(--fg)" : "var(--bg)",
+                background: active ? "var(--accent, var(--fg))" : "var(--bg-card, var(--bg))",
                 cursor: "pointer", textAlign: "left", width: "100%",
-                boxShadow: active ? "none" : "var(--shadow-sm)",
+                boxShadow: active ? "var(--shadow-sm)" : "var(--shadow-sm)",
               }}
             >
               <span style={{
                 width: 44, height: 44, borderRadius: 14,
-                background: active ? "rgba(255,255,255,0.15)" : "var(--bg-subtle)",
+                background: active ? "rgba(255,255,255,0.2)" : "var(--bg-subtle)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 22, flexShrink: 0,
               }}>
                 {opt.icon}
               </span>
               <div>
-                <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "var(--bg)" : "var(--fg)" }}>
+                <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "#fff" : "var(--fg)" }}>
                   {opt.label}
                 </p>
-                <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(128,128,128,0.8)" : "var(--fg-muted)" }}>
+                <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(255,255,255,0.75)" : "var(--fg-muted)" }}>
                   {opt.sub}
                 </p>
               </div>
@@ -184,26 +184,26 @@ export default function ErscheinungsbildPage() {
                 onClick={() => setDisplayModeState(opt.value)}
                 style={{
                   display: "flex", alignItems: "center", gap: 14,
-                  border: active ? "2px solid var(--fg)" : "1px solid var(--border)",
+                  border: active ? "2px solid var(--accent, var(--fg))" : "1px solid var(--border)",
                   borderRadius: "var(--radius-lg)", padding: "14px 16px",
-                  background: active ? "var(--fg)" : "var(--bg)",
+                  background: active ? "var(--accent, var(--fg))" : "var(--bg-card, var(--bg))",
                   cursor: "pointer", textAlign: "left", width: "100%",
-                  boxShadow: active ? "none" : "var(--shadow-sm)",
+                  boxShadow: "var(--shadow-sm)",
                 }}
               >
                 <span style={{
                   width: 44, height: 44, borderRadius: 14,
-                  background: active ? "rgba(255,255,255,0.15)" : "var(--bg-subtle)",
+                  background: active ? "rgba(255,255,255,0.2)" : "var(--bg-subtle)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 22, flexShrink: 0,
                 }}>
                   {opt.icon}
                 </span>
                 <div>
-                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "var(--bg)" : "var(--fg)" }}>
+                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "#fff" : "var(--fg)" }}>
                     {opt.label}
                   </p>
-                  <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(128,128,128,0.8)" : "var(--fg-muted)" }}>
+                  <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(255,255,255,0.75)" : "var(--fg-muted)" }}>
                     {opt.sub}
                   </p>
                 </div>
@@ -261,26 +261,26 @@ export default function ErscheinungsbildPage() {
                 onClick={() => setHomeLayoutState(opt.value)}
                 style={{
                   display: "flex", alignItems: "center", gap: 14,
-                  border: active ? "2px solid var(--fg)" : "1px solid var(--border)",
+                  border: active ? "2px solid var(--accent, var(--fg))" : "1px solid var(--border)",
                   borderRadius: "var(--radius-lg)", padding: "14px 16px",
-                  background: active ? "var(--fg)" : "var(--bg)",
+                  background: active ? "var(--accent, var(--fg))" : "var(--bg-card, var(--bg))",
                   cursor: "pointer", textAlign: "left", width: "100%",
-                  boxShadow: active ? "none" : "var(--shadow-sm)",
+                  boxShadow: "var(--shadow-sm)",
                 }}
               >
                 <span style={{
                   width: 44, height: 44, borderRadius: 14,
-                  background: active ? "rgba(255,255,255,0.15)" : "var(--bg-subtle)",
+                  background: active ? "rgba(255,255,255,0.2)" : "var(--bg-subtle)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 22, flexShrink: 0,
                 }}>
                   {opt.icon}
                 </span>
                 <div>
-                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "var(--bg)" : "var(--fg)" }}>
+                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "#fff" : "var(--fg)" }}>
                     {opt.label}
                   </p>
-                  <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(128,128,128,0.8)" : "var(--fg-muted)" }}>
+                  <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(255,255,255,0.75)" : "var(--fg-muted)" }}>
                     {opt.sub}
                   </p>
                 </div>
@@ -314,10 +314,10 @@ export default function ErscheinungsbildPage() {
               >
                 <span className="premium-ux-preview-icon">{opt.icon}</span>
                 <div>
-                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "var(--bg)" : "var(--fg)" }}>
+                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "#fff" : "var(--fg)" }}>
                     {opt.label}
                   </p>
-                  <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(128,128,128,0.8)" : "var(--fg-muted)" }}>
+                  <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(255,255,255,0.75)" : "var(--fg-muted)" }}>
                     {opt.sub}
                   </p>
                 </div>

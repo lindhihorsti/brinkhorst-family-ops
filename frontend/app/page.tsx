@@ -252,14 +252,19 @@ function PremiumHome() {
         {/* Hintergrund */}
         <div className="p-home-bg" aria-hidden="true" />
 
-        {/* Header mit Greeting + Logo */}
+        {/* Header mit Greeting + Logo + Settings */}
         <header className="p-home-header">
+          <div className="p-home-header-top">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-v2-light.png" alt="Family Ops" className="p-home-logo p-home-logo-hero" />
+            <Link href="/einstellungen" className="p-home-settings-icon" aria-label="Einstellungen">
+              ⚙️
+            </Link>
+          </div>
           <div className="p-home-greeting">
             <h1 className="p-home-greeting-label">{greeting} 👋</h1>
             <p className="p-home-greeting-sub">Brinkhorst Family Ops</p>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-v2-light.png" alt="Family Ops" className="p-home-logo" />
         </header>
 
         {/* Bento Grid */}
@@ -299,17 +304,6 @@ function PremiumHome() {
           ))}
         </div>
 
-        {/* Einstellungen */}
-        <div className="p-settings-tile">
-          <Link href="/einstellungen" className="p-settings-card">
-            <span className="p-settings-icon">⚙️</span>
-            <div className="p-settings-text">
-              <p className="p-settings-title">Einstellungen</p>
-              <p className="p-settings-sub">Familie · Design · Benachrichtigungen</p>
-            </div>
-            <span className="p-settings-arrow">→</span>
-          </Link>
-        </div>
       </div>
     </div>
   );

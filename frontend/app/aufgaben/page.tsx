@@ -207,7 +207,22 @@ function AufgabenInner() {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="section-aufgaben" style={styles.page}>
+    <div
+      className="p-page section-aufgaben"
+      style={{ ...styles.page, "--page-accent": ACCENT } as React.CSSProperties}
+    >
+      {/* ── Premium full-bleed hero ── */}
+      <div className="p-page-hero">
+        <div className="p-page-hero-topbar">
+          <Link href="/" className="p-hub-back">‹ Home</Link>
+        </div>
+        <div className="p-page-hero-center">
+          <span className="p-page-hero-icon">✅</span>
+          <h1 className="p-page-hero-title">Aufgaben</h1>
+          <p className="p-page-hero-subtitle">Haushaltsaufgaben der Familie</p>
+        </div>
+      </div>
+
       <ConfirmModal
         open={confirmDeleteId !== null}
         title="Aufgabe löschen"
@@ -217,9 +232,9 @@ function AufgabenInner() {
         onConfirm={() => { if (confirmDeleteId) handleDelete(confirmDeleteId); }}
         onClose={() => setConfirmDeleteId(null)}
       />
-      <div style={styles.container}>
-        {/* Icon */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
+      <div className="p-page-container" style={styles.container}>
+        {/* ── Classic icon badge ── */}
+        <div className="p-page-icon-classic" style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
           <span style={{
             width: 104, height: 104, borderRadius: 28,
             background: "#7c3aed22",
@@ -228,12 +243,14 @@ function AufgabenInner() {
           }}>✅</span>
         </div>
         {/* Header */}
-        <div style={styles.headerRow}>
+        <div className="p-page-header" style={styles.headerRow}>
           <div>
-            <h1 style={{ ...styles.title, color: ACCENT }}>Aufgaben</h1>
+            <h1 className="p-page-title" style={{ ...styles.title, color: ACCENT }}>Aufgaben</h1>
             <p style={styles.subtitle}>Haushaltsaufgaben der Familie</p>
           </div>
-          <Link href="/" style={styles.button}>Home</Link>
+          <div className="p-page-header-right">
+            <Link href="/" style={styles.button}>Home</Link>
+          </div>
         </div>
 
         {/* Error */}
