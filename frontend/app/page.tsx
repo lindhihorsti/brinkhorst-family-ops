@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLayoutEffect } from "react";
-import { BottomNav } from "./lib/ui";
+import { BottomNav, PremiumDock } from "./lib/ui";
 
 type UseCase = {
   href: string;
@@ -213,6 +213,86 @@ function SettingsTile() {
   );
 }
 
+// ─── Premium Home ────────────────────────────────────────────────────────────
+
+function PremiumHome() {
+  return (
+    <div className="premium-home">
+      {/* Hero */}
+      <div className="premium-hero premium-animate-hero">
+        <div className="premium-hero-bg" />
+        <div className="premium-hero-fade" />
+        <div className="premium-hero-content">
+          <img
+            src="/logo-premium-light.png"
+            alt="Family Ops"
+            className="premium-logo-img"
+            style={{ display: "var(--premium-logo-light-display, block)" }}
+          />
+          <h1 className="premium-hero-title">Family Ops</h1>
+          <p className="premium-hero-sub">Euer Familien-Dashboard</p>
+        </div>
+      </div>
+
+      {/* Tiles */}
+      <div className="premium-tile-grid" style={{ marginTop: 18 }}>
+        {USE_CASES.map((uc) => (
+          <Link
+            key={uc.href}
+            href={uc.href}
+            className="premium-tile premium-animate-tile"
+            style={{
+              background: `linear-gradient(145deg, color-mix(in srgb, ${uc.accent} 14%, var(--bg)) 0%, color-mix(in srgb, ${uc.accent} 24%, var(--bg-subtle)) 100%)`,
+              border: `1px solid color-mix(in srgb, ${uc.accent} 22%, var(--border))`,
+              boxShadow: `var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.18)`,
+            }}
+          >
+            <div
+              className="premium-tile-glow"
+              style={{ background: uc.accent }}
+            />
+            <span className="premium-tile-icon">{uc.icon}</span>
+            <div>
+              <p className="premium-tile-label">{uc.title}</p>
+              <span className="premium-tile-arrow" style={{ color: uc.accent }}>↗</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Settings */}
+      <div style={{ maxWidth: "var(--page-max-width)", margin: "10px auto 0", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
+        <Link href="/einstellungen" style={{ textDecoration: "none", display: "block" }}>
+          <div className="nav-tile" style={{
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            padding: "16px 18px",
+            boxShadow: "var(--shadow-sm)",
+            background: "linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+          }}>
+            <span style={{
+              width: 50, height: 50, borderRadius: 16,
+              background: "var(--bg)", border: "1px solid var(--border)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 24, flexShrink: 0,
+            }}>⚙️</span>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>Einstellungen</p>
+              <p style={{ fontSize: 12, marginTop: 3, color: "var(--fg-muted)" }}>
+                Familie, Küche, Aktivitäten und Erscheinungsbild
+              </p>
+            </div>
+            <span style={{ fontSize: 22, color: "var(--fg-muted)" }}>→</span>
+          </div>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   useLayoutEffect(() => {
     const storageKey = "scroll:/";
@@ -265,41 +345,48 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <main className="logo-backed-page" style={{
+    <main style={{
       minHeight: "100dvh",
       color: "var(--fg)",
       fontFamily: "var(--font)",
       paddingBottom: "var(--nav-height)",
+      background: "var(--bg)",
     }}>
-      <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
-        <div className="logo-stage">
-          <img
-            src="/logo-light-transparent.png"
-            alt="Family Ops"
-            className="logo-img logo-img-light"
-            style={{ width: "min(292px, calc(var(--display-surface-width) * 0.72))", maxWidth: "82vw", height: "auto" }}
-          />
-          <img
-            src="/logo-dark.png"
-            alt="Family Ops Dark"
-            className="logo-img logo-img-dark"
-            style={{ width: "min(392px, calc(var(--display-surface-width) * 0.78))", maxWidth: "92vw", height: "auto" }}
-          />
+      {/* Classic Layout */}
+      <div className="classic-home logo-backed-page" style={{ minHeight: "100dvh" }}>
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 12, paddingBottom: 6 }}>
+          <div className="logo-stage">
+            <img
+              src="/logo-light-transparent.png"
+              alt="Family Ops"
+              className="logo-img logo-img-light"
+              style={{ width: "min(292px, calc(var(--display-surface-width) * 0.72))", maxWidth: "82vw", height: "auto" }}
+            />
+            <img
+              src="/logo-dark.png"
+              alt="Family Ops Dark"
+              className="logo-img logo-img-dark"
+              style={{ width: "min(392px, calc(var(--display-surface-width) * 0.78))", maxWidth: "92vw", height: "auto" }}
+            />
+          </div>
+        </div>
+        <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
+          <div style={{ marginBottom: 18, textAlign: "center" }}>
+            <p style={{ margin: 0, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--fg-muted)" }}>
+              Dashboard
+            </p>
+          </div>
+          <StandardUseCases />
+          <TileUseCases />
+          <SettingsTile />
         </div>
       </div>
 
-      <div style={{ maxWidth: "var(--page-max-width)", margin: "0 auto", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
-        <div style={{ marginBottom: 18, textAlign: "center" }}>
-          <p style={{ margin: 0, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.14em", color: "var(--fg-muted)" }}>
-            Dashboard
-          </p>
-        </div>
+      {/* Premium Layout */}
+      <PremiumHome />
 
-        <StandardUseCases />
-        <TileUseCases />
-        <SettingsTile />
-      </div>
       <BottomNav current="/" />
+      <PremiumDock current="/" />
     </main>
   );
 }

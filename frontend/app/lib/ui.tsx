@@ -268,6 +268,7 @@ export function Page({
         {children}
       </div>
       {navCurrent !== undefined && <BottomNav current={navCurrent} />}
+      {navCurrent !== undefined && <PremiumDock current={navCurrent} />}
     </div>
   );
 }
@@ -573,6 +574,52 @@ export function BottomNav({ current }: { current?: string }) {
           <span>{item.label}</span>
         </Link>
       ))}
+    </nav>
+  );
+}
+
+// ─── Premium Floating Dock ────────────────────────────────────────────────────
+
+export function PremiumDock({ current }: { current?: string }) {
+  const navRef = React.useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const raw = window.sessionStorage.getItem("familyops:bottom-nav-scroll-left");
+    if (!raw) return;
+    const saved = Number(raw);
+    if (Number.isFinite(saved)) nav.scrollLeft = saved;
+  }, []);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const handleScroll = () => {
+      window.sessionStorage.setItem("familyops:bottom-nav-scroll-left", String(nav.scrollLeft));
+    };
+    nav.addEventListener("scroll", handleScroll, { passive: true });
+    return () => nav.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  return (
+    <nav ref={navRef} className="premium-dock">
+      {NAV_ITEMS.map((item) => {
+        const isActive = current === item.href || (item.href !== "/" && current?.startsWith(item.href));
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            scroll={item.href === "/" ? false : undefined}
+            className={`premium-dock-item${isActive ? " active" : ""}`}
+          >
+            <span className="premium-dock-icon-wrap">
+              <span style={{ fontSize: "var(--nav-icon-size)" }}>{item.icon}</span>
+            </span>
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
     </nav>
   );
 }

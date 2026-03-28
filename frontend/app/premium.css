@@ -1,0 +1,628 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FAMILY OPS — PREMIUM UX THEME
+   Aktiviert via html[data-ux="premium"]
+   Light/Dark via data-theme + prefers-color-scheme (nutzt bestehendes System)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Google Fonts laden ────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,300;1,9..144,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,300;1,9..40,400&display=swap');
+
+/* ─── Premium Light Mode Variables ─────────────────────────────────────── */
+html[data-ux="premium"] {
+  /* Basis */
+  --bg:          #faf8f4;
+  --bg-subtle:   #f0ece4;
+  --bg-elevated: #ffffff;
+  --bg-glass:    rgba(250, 248, 244, 0.75);
+  --fg:          #1a1714;
+  --fg-muted:    #7a7068;
+  --fg-faint:    #b8b0a6;
+  --border:      rgba(26, 23, 20, 0.10);
+  --border-focus:#1a1714;
+
+  /* Elevation */
+  --shadow-sm:   0 1px 4px rgba(180, 140, 100, 0.12), 0 0 0 1px rgba(180,140,100,0.06);
+  --shadow-md:   0 4px 20px rgba(160, 120, 80, 0.14), 0 1px 4px rgba(160,120,80,0.08);
+  --shadow-lg:   0 12px 48px rgba(140, 100, 60, 0.18), 0 4px 16px rgba(140,100,60,0.10);
+  --shadow-glass:0 8px 32px rgba(180, 140, 100, 0.18);
+
+  /* Radius — weicher und großzügiger */
+  --radius-sm:   12px;
+  --radius-md:   18px;
+  --radius-lg:   24px;
+  --radius-xl:   32px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font:        'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-display:'Fraunces', Georgia, serif;
+
+  /* Akzentfarben (satter, wärmer) */
+  --kueche-accent:      #c94b18;
+  --aktivitaet-accent:  #1a5fd4;
+  --aufgaben-accent:    #6920c8;
+  --pinnwand-accent:    #c46a00;
+  --geburtstage-accent: #c01f6a;
+  --split-accent:       #047857;
+  --einkauf-accent:     #0c6258;
+  --finanzen-accent:    #0a6640;
+
+  /* Dock */
+  --dock-bg:     rgba(242, 238, 232, 0.88);
+  --dock-border: rgba(26, 23, 20, 0.12);
+  --dock-shadow: 0 -4px 24px rgba(160,120,80,0.12), 0 8px 32px rgba(160,120,80,0.10);
+  --dock-active: #1a1714;
+
+  /* Premium-spezifisch */
+  --premium-hero-bg: url('/premium-hero-light.png');
+  --premium-logo:    url('/logo-premium-light.png');
+}
+
+/* ─── Premium Dark Mode Variables ───────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) {
+    --bg:          #08080a;
+    --bg-subtle:   #111116;
+    --bg-elevated: #18181e;
+    --bg-glass:    rgba(255, 255, 255, 0.055);
+    --fg:          #f0ede8;
+    --fg-muted:    #8a8580;
+    --fg-faint:    #48453f;
+    --border:      rgba(255, 255, 255, 0.085);
+    --border-focus:#f0ede8;
+
+    --shadow-sm:   0 1px 4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
+    --shadow-md:   0 4px 20px rgba(0, 0, 0, 0.55), 0 1px 4px rgba(0,0,0,0.30);
+    --shadow-lg:   0 12px 48px rgba(0, 0, 0, 0.70), 0 4px 16px rgba(0,0,0,0.40);
+    --shadow-glass:0 8px 40px rgba(0, 0, 0, 0.60);
+
+    --kueche-accent:      #ff6b35;
+    --aktivitaet-accent:  #4a9eff;
+    --aufgaben-accent:    #a78bfa;
+    --pinnwand-accent:    #fbbf24;
+    --geburtstage-accent: #f472b6;
+    --split-accent:       #34d399;
+    --einkauf-accent:     #2dd4bf;
+    --finanzen-accent:    #22c55e;
+
+    --dock-bg:     rgba(14, 14, 18, 0.92);
+    --dock-border: rgba(255, 255, 255, 0.09);
+    --dock-shadow: 0 -4px 24px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4);
+    --dock-active: #f0ede8;
+
+    --premium-hero-bg: url('/premium-hero-dark.png');
+    --premium-logo:    url('/logo-premium-dark.png');
+
+    color-scheme: dark;
+  }
+}
+
+html[data-ux="premium"][data-theme="dark"] {
+  --bg:          #08080a;
+  --bg-subtle:   #111116;
+  --bg-elevated: #18181e;
+  --bg-glass:    rgba(255, 255, 255, 0.055);
+  --fg:          #f0ede8;
+  --fg-muted:    #8a8580;
+  --fg-faint:    #48453f;
+  --border:      rgba(255, 255, 255, 0.085);
+  --border-focus:#f0ede8;
+
+  --shadow-sm:   0 1px 4px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-md:   0 4px 20px rgba(0, 0, 0, 0.55), 0 1px 4px rgba(0,0,0,0.30);
+  --shadow-lg:   0 12px 48px rgba(0, 0, 0, 0.70), 0 4px 16px rgba(0,0,0,0.40);
+  --shadow-glass:0 8px 40px rgba(0, 0, 0, 0.60);
+
+  --kueche-accent:      #ff6b35;
+  --aktivitaet-accent:  #4a9eff;
+  --aufgaben-accent:    #a78bfa;
+  --pinnwand-accent:    #fbbf24;
+  --geburtstage-accent: #f472b6;
+  --split-accent:       #34d399;
+  --einkauf-accent:     #2dd4bf;
+  --finanzen-accent:    #22c55e;
+
+  --dock-bg:     rgba(14, 14, 18, 0.92);
+  --dock-border: rgba(255, 255, 255, 0.09);
+  --dock-shadow: 0 -4px 24px rgba(0,0,0,0.5), 0 8px 32px rgba(0,0,0,0.4);
+  --dock-active: #f0ede8;
+
+  --premium-hero-bg: url('/premium-hero-dark.png');
+  --premium-logo:    url('/logo-premium-dark.png');
+
+  color-scheme: dark;
+}
+
+html[data-ux="premium"][data-theme="light"] {
+  --bg:          #faf8f4;
+  --bg-subtle:   #f0ece4;
+  --bg-elevated: #ffffff;
+  --bg-glass:    rgba(250, 248, 244, 0.75);
+  --fg:          #1a1714;
+  --fg-muted:    #7a7068;
+  --border:      rgba(26, 23, 20, 0.10);
+
+  --kueche-accent:      #c94b18;
+  --aktivitaet-accent:  #1a5fd4;
+  --aufgaben-accent:    #6920c8;
+  --pinnwand-accent:    #c46a00;
+  --geburtstage-accent: #c01f6a;
+  --split-accent:       #047857;
+  --einkauf-accent:     #0c6258;
+  --finanzen-accent:    #0a6640;
+
+  --dock-bg:     rgba(242, 238, 232, 0.88);
+  --premium-hero-bg: url('/premium-hero-light.png');
+  --premium-logo:    url('/logo-premium-light.png');
+
+  color-scheme: light;
+}
+
+/* ─── Body Font Override ────────────────────────────────────────────────── */
+html[data-ux="premium"] body {
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Premium Typography ────────────────────────────────────────────────── */
+html[data-ux="premium"] h1,
+html[data-ux="premium"] .premium-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+html[data-ux="premium"] h2 {
+  font-family: var(--font);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ─── Classic BottomNav verstecken im Premium-Modus ────────────────────── */
+html[data-ux="premium"] .bottom-nav {
+  display: none !important;
+}
+
+/* ─── Premium Floating Dock ─────────────────────────────────────────────── */
+.premium-dock {
+  display: none; /* default: versteckt */
+}
+
+html[data-ux="premium"] .premium-dock {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100vw;
+  align-items: stretch;
+  justify-content: center;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--dock-bg);
+  border-top: 1px solid var(--dock-border);
+  box-shadow: var(--dock-shadow);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  min-height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+}
+.premium-dock::-webkit-scrollbar { display: none; }
+
+html[data-display-mode="ipad"] html[data-ux="premium"] .premium-dock,
+html[data-ux="premium"][data-display-mode="ipad"] .premium-dock,
+html[data-ux="premium"][data-display-mode="web"] .premium-dock {
+  width: calc(min(100vw, var(--display-surface-width)) - 28px);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  border: 1px solid var(--dock-border);
+  border-bottom: none;
+  border-radius: 22px 22px 0 0;
+  box-shadow: var(--shadow-md);
+}
+
+.premium-dock-item {
+  flex: none;
+  min-width: var(--nav-item-min-width);
+  min-height: var(--nav-height);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: var(--nav-label-size);
+  font-weight: 600;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: color 0.16s ease, transform 0.14s ease;
+  text-decoration: none;
+  border: none;
+  background: none;
+  font-family: var(--font);
+  letter-spacing: 0.01em;
+}
+
+.premium-dock-item:active {
+  transform: scale(0.91);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .premium-dock-item:hover {
+    color: var(--fg);
+    transform: translateY(-1px);
+  }
+}
+
+.premium-dock-item.active {
+  color: var(--dock-active);
+}
+
+.premium-dock-item.active .premium-dock-icon-wrap {
+  background: rgba(var(--dock-active-rgb, 26,23,20), 0.10);
+}
+
+.premium-dock-icon-wrap {
+  width: 36px;
+  height: 28px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.16s ease;
+  font-size: 18px;
+}
+
+.premium-dock-item.active .premium-dock-icon-wrap {
+  background: color-mix(in srgb, var(--fg) 12%, transparent);
+}
+
+/* ─── Premium Glass Card ─────────────────────────────────────────────────── */
+html[data-ux="premium"] .premium-card,
+html[data-ux="premium"] [class*="premium-card"] {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-glass);
+}
+
+/* ─── Premium Page Background ───────────────────────────────────────────── */
+html[data-ux="premium"] body {
+  background: var(--bg);
+}
+
+/* ─── Premium Home Page ──────────────────────────────────────────────────── */
+.premium-home { display: none; }
+html[data-ux="premium"] .premium-home { display: block; }
+html[data-ux="premium"] .classic-home  { display: none !important; }
+
+/* Hero Area */
+html[data-ux="premium"] .premium-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--page-x-padding) 28px;
+  text-align: center;
+}
+
+html[data-ux="premium"] .premium-hero-bg {
+  position: absolute;
+  inset: 0;
+  background-image: var(--premium-hero-bg);
+  background-size: cover;
+  background-position: center top;
+  opacity: 0.55;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) .premium-hero-bg { opacity: 0.35; }
+}
+html[data-ux="premium"][data-theme="dark"] .premium-hero-bg { opacity: 0.35; }
+
+html[data-ux="premium"] .premium-hero-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--bg) 15%, transparent) 55%,
+    var(--bg) 100%
+  );
+}
+
+html[data-ux="premium"] .premium-hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+html[data-ux="premium"] .premium-logo-img {
+  width: min(80px, 20vw);
+  height: min(80px, 20vw);
+  border-radius: 22px;
+  box-shadow: var(--shadow-lg);
+  object-fit: cover;
+}
+
+html[data-ux="premium"] .premium-hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 7vw, 42px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--fg);
+  margin: 0;
+}
+
+html[data-ux="premium"] .premium-hero-sub {
+  font-size: var(--font-size-sm);
+  color: var(--fg-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* ─── Premium Nav Tiles auf Homescreen ──────────────────────────────────── */
+html[data-ux="premium"] .premium-tile-grid {
+  display: grid;
+  gap: 10px;
+  padding: 0 var(--page-x-padding) var(--page-bottom-padding);
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+}
+
+html[data-display-mode="iphone"] html[data-ux="premium"] .premium-tile-grid,
+html[data-ux="premium"][data-display-mode="iphone"] .premium-tile-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+html[data-ux="premium"][data-display-mode="ipad"] .premium-tile-grid {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+html[data-ux="premium"][data-display-mode="web"] .premium-tile-grid {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+/* Default (iphone) */
+html[data-ux="premium"] .premium-tile-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+html[data-ux="premium"] .premium-tile {
+  position: relative;
+  overflow: hidden;
+  height: var(--home-tile-height);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-decoration: none;
+  color: var(--fg);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html[data-ux="premium"] .premium-tile:active {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-ux="premium"] .premium-tile:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg) !important;
+  }
+}
+
+html[data-ux="premium"] .premium-tile-glow {
+  position: absolute;
+  top: -30%;
+  right: -20%;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  opacity: 0.35;
+  filter: blur(28px);
+}
+
+html[data-ux="premium"] .premium-tile-icon {
+  font-size: 36px;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+
+html[data-ux="premium"] .premium-tile-label {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  position: relative;
+  z-index: 1;
+  letter-spacing: -0.01em;
+}
+
+html[data-ux="premium"] .premium-tile-arrow {
+  font-size: 14px;
+  font-weight: 800;
+  position: relative;
+  z-index: 1;
+  opacity: 0.55;
+}
+
+/* ─── Premium Settings Tile ──────────────────────────────────────────────── */
+html[data-ux="premium"] .premium-settings-tile {
+  margin: 0 var(--page-x-padding) 12px;
+  max-width: calc(var(--page-max-width) - var(--page-x-padding) * 2);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── Premium Page Wrapper ───────────────────────────────────────────────── */
+html[data-ux="premium"] .premium-page-header h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes premium-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes premium-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes premium-scale-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+html[data-ux="premium"] .premium-animate-hero {
+  animation: premium-fade-in 0.6s ease forwards;
+}
+
+html[data-ux="premium"] .premium-animate-tile {
+  animation: premium-fade-up 0.4s ease forwards;
+  opacity: 0;
+}
+
+html[data-ux="premium"] .premium-animate-tile:nth-child(1)  { animation-delay: 0.05s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(2)  { animation-delay: 0.10s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(3)  { animation-delay: 0.15s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(4)  { animation-delay: 0.20s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(5)  { animation-delay: 0.25s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(6)  { animation-delay: 0.30s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(7)  { animation-delay: 0.35s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(8)  { animation-delay: 0.40s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(9)  { animation-delay: 0.45s; }
+html[data-ux="premium"] .premium-animate-tile:nth-child(10) { animation-delay: 0.50s; }
+
+/* ─── Premium Card Overrides (für bestehende pages) ─────────────────────── */
+html[data-ux="premium"] [style*="var(--radius-lg)"],
+html[data-ux="premium"] [style*="var(--shadow-sm)"],
+html[data-ux="premium"] [style*="var(--shadow-md)"] {
+  transition: box-shadow 0.2s ease;
+}
+
+/* ─── Input / Form improvements ─────────────────────────────────────────── */
+html[data-ux="premium"] input,
+html[data-ux="premium"] textarea,
+html[data-ux="premium"] select {
+  font-family: var(--font);
+}
+
+html[data-ux="premium"] input:focus,
+html[data-ux="premium"] textarea:focus,
+html[data-ux="premium"] select:focus {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+  border-color: var(--border-focus);
+}
+
+/* ─── Premium Scrollbar ──────────────────────────────────────────────────── */
+html[data-ux="premium"] ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+html[data-ux="premium"] ::-webkit-scrollbar-track { background: transparent; }
+html[data-ux="premium"] ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+/* ─── Premium Modal ──────────────────────────────────────────────────────── */
+html[data-ux="premium"] .modal-sheet {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: 0 -4px 40px rgba(0,0,0,0.2);
+  border-top: 1px solid var(--border);
+}
+
+/* ─── Premium Badge dark mode fix ───────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) .badge-success { background: rgba(52,211,153,0.15); color: #34d399; }
+  html[data-ux="premium"]:not([data-theme="light"]) .badge-warning { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+  html[data-ux="premium"]:not([data-theme="light"]) .badge-danger  { background: rgba(248,113,113,0.15); color: #f87171; }
+  html[data-ux="premium"]:not([data-theme="light"]) .badge-info    { background: rgba(74,158,255,0.15);  color: #4a9eff; }
+}
+html[data-ux="premium"][data-theme="dark"] .badge-success { background: rgba(52,211,153,0.15); color: #34d399; }
+html[data-ux="premium"][data-theme="dark"] .badge-warning { background: rgba(251,191,36,0.15);  color: #fbbf24; }
+html[data-ux="premium"][data-theme="dark"] .badge-danger  { background: rgba(248,113,113,0.15); color: #f87171; }
+html[data-ux="premium"][data-theme="dark"] .badge-info    { background: rgba(74,158,255,0.15);  color: #4a9eff; }
+
+/* ─── Premium Skeleton ───────────────────────────────────────────────────── */
+html[data-ux="premium"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--border) 25%,
+    color-mix(in srgb, var(--border) 60%, var(--bg)) 50%,
+    var(--border) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.8s infinite linear;
+  border-radius: var(--radius-md);
+}
+
+/* ─── Premium active/hover tiles ────────────────────────────────────────── */
+html[data-ux="premium"] .nav-tile {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.15s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-ux="premium"] .nav-tile:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: var(--shadow-md) !important;
+  }
+}
+
+/* ─── Premium UX Toggle Card in Einstellungen ───────────────────────────── */
+.premium-ux-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+}
+.premium-ux-preview.active {
+  border-color: var(--fg);
+  background: var(--fg);
+  box-shadow: none;
+}
+.premium-ux-preview-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  background: var(--bg-subtle);
+}
+.premium-ux-preview.active .premium-ux-preview-icon {
+  background: rgba(255,255,255,0.15);
+}
