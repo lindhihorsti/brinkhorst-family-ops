@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLayoutEffect } from "react";
-import { BottomNav, PremiumDock } from "./lib/ui";
+import { BottomNav, PremiumPillNav } from "./lib/ui";
 
 type UseCase = {
   href: string;
@@ -213,81 +213,103 @@ function SettingsTile() {
   );
 }
 
-// ─── Premium Home ────────────────────────────────────────────────────────────
+// ─── Bento-Konfiguration ─────────────────────────────────────────────────────
+
+type BentoTile = {
+  href: string;
+  icon: string;
+  label: string;
+  sub: string;
+  from: string;
+  to: string;
+  wide?: boolean;
+};
+
+const BENTO: BentoTile[] = [
+  { href: "/kueche",      icon: "🍳", label: "Küche & Wochenplan",    sub: "Rezepte · Planung",        from: "var(--kueche-from)",      to: "var(--kueche-to)",      wide: true },
+  { href: "/einkauf",     icon: "🛒", label: "Einkaufsliste",          sub: "Listen & Snapshots",       from: "var(--einkauf-from)",     to: "var(--einkauf-to)" },
+  { href: "/finanzen",    icon: "🏦", label: "Finanzen",               sub: "Budget & Split",           from: "var(--finanzen-from)",    to: "var(--finanzen-to)" },
+  { href: "/ideen",       icon: "💡", label: "Was unternehmen wir?",   sub: "Ausflüge · Zuhause",       from: "var(--ideen-from)",       to: "var(--ideen-to)",       wide: true },
+  { href: "/aufgaben",    icon: "✅", label: "Aufgaben",               sub: "Haushalt & Punkte",        from: "var(--aufgaben-from)",    to: "var(--aufgaben-to)" },
+  { href: "/geburtstage", icon: "🎂", label: "Geburtstage",            sub: "Termine & Geschenke",      from: "var(--geburtstage-from)", to: "var(--geburtstage-to)" },
+  { href: "/pinnwand",    icon: "📌", label: "Pinnwand",               sub: "Notizen & Kategorien",     from: "var(--pinnwand-from)",    to: "var(--pinnwand-to)" },
+  { href: "/split",       icon: "💸", label: "Ausgaben & Split",       sub: "Schulden & Abrechnung",    from: "var(--split-from)",       to: "var(--split-to)" },
+];
+
+// ─── Premium Home ─────────────────────────────────────────────────────────────
 
 function PremiumHome() {
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 11) return "Guten Morgen";
+    if (h < 17) return "Guten Tag";
+    return "Guten Abend";
+  })();
+
   return (
     <div className="premium-home">
-      {/* Hero */}
-      <div className="premium-hero premium-animate-hero">
-        <div className="premium-hero-bg" />
-        <div className="premium-hero-fade" />
-        <div className="premium-hero-content">
-          <img
-            src="/logo-premium-light.png"
-            alt="Family Ops"
-            className="premium-logo-img"
-            style={{ display: "var(--premium-logo-light-display, block)" }}
-          />
-          <h1 className="premium-hero-title">Family Ops</h1>
-          <p className="premium-hero-sub">Euer Familien-Dashboard</p>
-        </div>
-      </div>
+      <div className="p-home-wrap">
+        {/* Hintergrund */}
+        <div className="p-home-bg" aria-hidden="true" />
 
-      {/* Tiles */}
-      <div className="premium-tile-grid" style={{ marginTop: 18 }}>
-        {USE_CASES.map((uc) => (
-          <Link
-            key={uc.href}
-            href={uc.href}
-            className="premium-tile premium-animate-tile"
-            style={{
-              background: `linear-gradient(145deg, color-mix(in srgb, ${uc.accent} 14%, var(--bg)) 0%, color-mix(in srgb, ${uc.accent} 24%, var(--bg-subtle)) 100%)`,
-              border: `1px solid color-mix(in srgb, ${uc.accent} 22%, var(--border))`,
-              boxShadow: `var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.18)`,
-            }}
-          >
-            <div
-              className="premium-tile-glow"
-              style={{ background: uc.accent }}
-            />
-            <span className="premium-tile-icon">{uc.icon}</span>
-            <div>
-              <p className="premium-tile-label">{uc.title}</p>
-              <span className="premium-tile-arrow" style={{ color: uc.accent }}>↗</span>
-            </div>
-          </Link>
-        ))}
-      </div>
-
-      {/* Settings */}
-      <div style={{ maxWidth: "var(--page-max-width)", margin: "10px auto 0", padding: "0 var(--page-x-padding) var(--page-bottom-padding)" }}>
-        <Link href="/einstellungen" style={{ textDecoration: "none", display: "block" }}>
-          <div className="nav-tile" style={{
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            padding: "16px 18px",
-            boxShadow: "var(--shadow-sm)",
-            background: "linear-gradient(180deg, var(--bg) 0%, var(--bg-subtle) 100%)",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-          }}>
-            <span style={{
-              width: 50, height: 50, borderRadius: 16,
-              background: "var(--bg)", border: "1px solid var(--border)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 24, flexShrink: 0,
-            }}>⚙️</span>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>Einstellungen</p>
-              <p style={{ fontSize: 12, marginTop: 3, color: "var(--fg-muted)" }}>
-                Familie, Küche, Aktivitäten und Erscheinungsbild
-              </p>
-            </div>
-            <span style={{ fontSize: 22, color: "var(--fg-muted)" }}>→</span>
+        {/* Header mit Greeting + Logo */}
+        <header className="p-home-header">
+          <div className="p-home-greeting">
+            <h1 className="p-home-greeting-label">{greeting} 👋</h1>
+            <p className="p-home-greeting-sub">Brinkhorst Family Ops</p>
           </div>
-        </Link>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-v2-light.png" alt="Family Ops" className="p-home-logo" />
+        </header>
+
+        {/* Bento Grid */}
+        <div className="p-bento">
+          {BENTO.map((tile) => (
+            <Link
+              key={tile.href}
+              href={tile.href}
+              className={`p-tile p-tile-anim${tile.wide ? " p-tile-wide" : ""}`}
+              style={{
+                background: `linear-gradient(135deg, ${tile.from} 0%, ${tile.to} 100%)`,
+                boxShadow: `0 8px 24px color-mix(in srgb, ${tile.from} 35%, transparent), 0 2px 6px rgba(0,0,0,0.12)`,
+              }}
+            >
+              <div className="p-tile-shine" />
+              {tile.wide ? (
+                <>
+                  <span className="p-tile-wide-icon">{tile.icon}</span>
+                  <div className="p-tile-wide-text">
+                    <p className="p-tile-label">{tile.label}</p>
+                    <p className="p-tile-sub">{tile.sub}</p>
+                  </div>
+                  <span className="p-tile-arrow">→</span>
+                </>
+              ) : (
+                <>
+                  <div className="p-tile-top">
+                    <span className="p-tile-icon">{tile.icon}</span>
+                  </div>
+                  <div className="p-tile-bottom">
+                    <p className="p-tile-label">{tile.label}</p>
+                    <p className="p-tile-sub">{tile.sub}</p>
+                  </div>
+                </>
+              )}
+            </Link>
+          ))}
+        </div>
+
+        {/* Einstellungen */}
+        <div className="p-settings-tile">
+          <Link href="/einstellungen" className="p-settings-card">
+            <span className="p-settings-icon">⚙️</span>
+            <div className="p-settings-text">
+              <p className="p-settings-title">Einstellungen</p>
+              <p className="p-settings-sub">Familie · Design · Benachrichtigungen</p>
+            </div>
+            <span className="p-settings-arrow">→</span>
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -386,7 +408,7 @@ export default function LandingPage() {
       <PremiumHome />
 
       <BottomNav current="/" />
-      <PremiumDock current="/" />
+      <PremiumPillNav current="/" />
     </main>
   );
 }

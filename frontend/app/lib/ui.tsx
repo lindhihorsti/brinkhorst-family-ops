@@ -268,7 +268,7 @@ export function Page({
         {children}
       </div>
       {navCurrent !== undefined && <BottomNav current={navCurrent} />}
-      {navCurrent !== undefined && <PremiumDock current={navCurrent} />}
+      {navCurrent !== undefined && <PremiumPillNav current={navCurrent} />}
     </div>
   );
 }
@@ -578,49 +578,91 @@ export function BottomNav({ current }: { current?: string }) {
   );
 }
 
-// ─── Premium Floating Dock ────────────────────────────────────────────────────
+// ─── Premium Pill Nav ─────────────────────────────────────────────────────────
 
-export function PremiumDock({ current }: { current?: string }) {
-  const navRef = React.useRef<HTMLElement | null>(null);
+const PILL_PRIMARY: NavItem[] = [
+  { href: "/", label: "Home", icon: "🏠" },
+  { href: "/kueche", label: "Küche", icon: "🍳" },
+  { href: "/einkauf", label: "Einkauf", icon: "🛒" },
+  { href: "/finanzen", label: "Finanzen", icon: "🏦" },
+];
+
+const DRAWER_ITEMS: NavItem[] = [
+  { href: "/", label: "Home", icon: "🏠" },
+  { href: "/kueche", label: "Küche", icon: "🍳" },
+  { href: "/einkauf", label: "Einkauf", icon: "🛒" },
+  { href: "/finanzen", label: "Finanzen", icon: "🏦" },
+  { href: "/ideen", label: "Ideen", icon: "💡" },
+  { href: "/aufgaben", label: "Aufgaben", icon: "✅" },
+  { href: "/geburtstage", label: "Geburtstage", icon: "🎂" },
+  { href: "/pinnwand", label: "Pinnwand", icon: "📌" },
+  { href: "/split", label: "Split", icon: "💸" },
+  { href: "/einstellungen", label: "Einstellungen", icon: "⚙️" },
+];
+
+export function PremiumPillNav({ current }: { current?: string }) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const raw = window.sessionStorage.getItem("familyops:bottom-nav-scroll-left");
-    if (!raw) return;
-    const saved = Number(raw);
-    if (Number.isFinite(saved)) nav.scrollLeft = saved;
-  }, []);
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
 
-  useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const handleScroll = () => {
-      window.sessionStorage.setItem("familyops:bottom-nav-scroll-left", String(nav.scrollLeft));
-    };
-    nav.addEventListener("scroll", handleScroll, { passive: true });
-    return () => nav.removeEventListener("scroll", handleScroll);
-  }, []);
+  const isActive = (href: string) =>
+    current === href || (href !== "/" && current?.startsWith(href));
 
   return (
-    <nav ref={navRef} className="premium-dock">
-      {NAV_ITEMS.map((item) => {
-        const isActive = current === item.href || (item.href !== "/" && current?.startsWith(item.href));
-        return (
+    <>
+      {/* Pill */}
+      <nav className="p-pill-nav">
+        {PILL_PRIMARY.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             scroll={item.href === "/" ? false : undefined}
-            className={`premium-dock-item${isActive ? " active" : ""}`}
+            className={`p-pill-item${isActive(item.href) ? " active" : ""}`}
           >
-            <span className="premium-dock-icon-wrap">
-              <span style={{ fontSize: "var(--nav-icon-size)" }}>{item.icon}</span>
-            </span>
+            <span className="p-icon">{item.icon}</span>
             <span>{item.label}</span>
           </Link>
-        );
-      })}
-    </nav>
+        ))}
+        <button
+          className="p-pill-item p-pill-mehr"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Mehr"
+        >
+          <span className="p-icon">⋯</span>
+          <span>Mehr</span>
+        </button>
+      </nav>
+
+      {/* Mehr Drawer */}
+      {drawerOpen && (
+        <div className="p-pill-drawer">
+          <div className="p-drawer-overlay" onClick={() => setDrawerOpen(false)} />
+          <div className="p-drawer-sheet">
+            <div className="p-drawer-handle" />
+            <p className="p-drawer-label">Navigation</p>
+            <div className="p-drawer-grid">
+              {DRAWER_ITEMS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  scroll={item.href === "/" ? false : undefined}
+                  className={`p-drawer-item${isActive(item.href) ? " active" : ""}`}
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  <span className="p-icon">{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Syne, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "./premium.css";
 
@@ -11,6 +11,20 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const syne = Syne({
+  variable: "--font-syne",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -45,7 +59,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Family Ops" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${syne.variable} ${jakarta.variable}`}>
         <script
           dangerouslySetInnerHTML={{
             __html: `try{var d=document.documentElement;var t=localStorage.getItem('theme');if(t==='dark'||t==='light')d.setAttribute('data-theme',t);var hl=localStorage.getItem('home_layout');d.setAttribute('data-home-layout',hl==='tiles'?'tiles':'standard');var dm=localStorage.getItem('display_mode');d.setAttribute('data-display-mode',dm==='ipad'||dm==='web'?dm:'iphone');var bg=localStorage.getItem('light_bg_color');if(/^#[0-9a-fA-F]{6}$/.test(bg||'')){d.style.setProperty('--user-light-bg',bg.toLowerCase());}var ux=localStorage.getItem('ux_version');if(ux==='premium')d.setAttribute('data-ux','premium');}catch(e){}`,
