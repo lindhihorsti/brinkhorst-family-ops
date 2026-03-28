@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BottomNav } from "../lib/ui";
+import { BottomNav, PremiumPillNav } from "../lib/ui";
 
 const options = [
   {
@@ -123,6 +123,7 @@ export default function GeburtstageHubPage() {
         </div>
       </div>
       <BottomNav current="/geburtstage" />
+      <PremiumPillNav current="/geburtstage" />
     </main>
   );
 }

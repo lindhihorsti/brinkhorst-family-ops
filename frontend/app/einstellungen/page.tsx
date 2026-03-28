@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SystemStatus } from "../lib/system-status";
-import { BottomNav } from "../lib/ui";
+import { BottomNav, PremiumPillNav } from "../lib/ui";
 
 export const metadata = { title: "Einstellungen — Family Ops" };
 
@@ -130,6 +130,7 @@ export default function EinstellungenPage() {
       </div>
 
       <BottomNav current="/einstellungen" />
+      <PremiumPillNav current="/einstellungen" />
     </main>
   );
 }

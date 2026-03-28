@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BottomNav } from "../lib/ui";
+import { BottomNav, PremiumPillNav } from "../lib/ui";
 
 const options = [
   {
@@ -123,6 +123,7 @@ export default function IdeenPage() {
         </div>
       </div>
       <BottomNav current="/ideen" />
+      <PremiumPillNav current="/ideen" />
     </main>
   );
 }

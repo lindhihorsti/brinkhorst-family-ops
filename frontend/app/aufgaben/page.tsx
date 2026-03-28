@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   Avatar,
   BottomNav,
+  PremiumPillNav,
   ConfirmModal,
   Modal,
   ProgressBar,
@@ -662,6 +663,7 @@ function AufgabenInner() {
       </Modal>
 
       <BottomNav current="/aufgaben" />
+      <PremiumPillNav current="/aufgaben" />
     </div>
   );
 }

@@ -814,3 +814,347 @@ html[data-ux="premium"] .nav-tile {
 .premium-ux-preview.active .premium-ux-preview-icon {
   background: rgba(255,255,255,0.15);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   iOS 26 LIQUID GLASS SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Glass Material Mixin ──────────────────────────────────────────────── */
+html[data-ux="premium"] .p-glass,
+html[data-ux="premium"] [class*="p-glass"] {
+  background: rgba(255, 255, 255, 0.68) !important;
+  backdrop-filter: blur(40px) saturate(2.2) brightness(1.05) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(2.2) brightness(1.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.06),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) .p-glass {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.13) !important;
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.35),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.12) !important;
+  }
+}
+html[data-ux="premium"][data-theme="dark"] .p-glass {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.13) !important;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.35),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ─── iOS 26 Pill Nav Upgrade ───────────────────────────────────────────── */
+html[data-ux="premium"] .p-pill-nav {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(44px) saturate(2.4) brightness(1.08) !important;
+  -webkit-backdrop-filter: blur(44px) saturate(2.4) brightness(1.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.10),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) .p-pill-nav {
+    background: rgba(22, 19, 16, 0.88) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;
+  }
+}
+html[data-ux="premium"][data-theme="dark"] .p-pill-nav {
+  background: rgba(22, 19, 16, 0.88) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Aktives Item im Pill — iOS 26 Kapsel */
+html[data-ux="premium"] .p-pill-item.active {
+  background: color-mix(in srgb, var(--fg) 10%, transparent) !important;
+  border-radius: 14px;
+}
+
+/* ─── iOS 26 Page Background ────────────────────────────────────────────── */
+html[data-ux="premium"] .p-page {
+  background: var(--bg) !important;
+  position: relative;
+}
+
+/* Subtiler Gradient-Halo am Seitenanfang */
+html[data-ux="premium"] .p-page::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 240px;
+  background: radial-gradient(ellipse 80% 200px at 50% -40px,
+    color-mix(in srgb, var(--accent) 10%, transparent) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── iOS 26 Page Header — Sticky Frosted Glass ─────────────────────────── */
+html[data-ux="premium"] .p-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  margin: calc(-1 * var(--page-top-padding)) calc(-1 * var(--page-x-padding)) 20px !important;
+  padding: calc(env(safe-area-inset-top, 8px) + 16px) var(--page-x-padding) 14px !important;
+  background: color-mix(in srgb, var(--bg) 82%, transparent) !important;
+  backdrop-filter: blur(30px) saturate(1.9) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.9) !important;
+  border-bottom: 1px solid var(--border) !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-bottom: 20px !important;
+}
+
+/* Sicherstellen dass Container-Inhalt über dem Before-Pseudo ist */
+html[data-ux="premium"] .p-page-container { position: relative; z-index: 1; }
+html[data-ux="premium"] .p-page-content   { position: relative; z-index: 1; }
+html[data-ux="premium"] .p-page-icon      { position: relative; z-index: 1; }
+
+/* Großer Syne-Titel im Header */
+html[data-ux="premium"] .p-page-title {
+  font-family: var(--font-display) !important;
+  font-size: clamp(22px, 5.5vw, 30px) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+  line-height: 1.05 !important;
+}
+
+/* ─── iOS 26 Cards — Liquid Glass ───────────────────────────────────────── */
+
+/* Alle Cards mit var(--border) und border-radius bekommen Glass-Treatment */
+html[data-ux="premium"] .p-page-content [style*="var(--radius-lg)"],
+html[data-ux="premium"] .p-page-content [style*="var(--radius-md)"] {
+  background: var(--bg-card) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(20px) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) .p-page-content [style*="var(--radius-lg)"],
+  html[data-ux="premium"]:not([data-theme="light"]) .p-page-content [style*="var(--radius-md)"] {
+    background: var(--bg-card) !important;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+    border: 1px solid var(--border) !important;
+  }
+}
+html[data-ux="premium"][data-theme="dark"] .p-page-content [style*="var(--radius-lg)"],
+html[data-ux="premium"][data-theme="dark"] .p-page-content [style*="var(--radius-md)"] {
+  background: var(--bg-card) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* ─── iOS 26 Mehr-Drawer Glass ──────────────────────────────────────────── */
+html[data-ux="premium"] .p-drawer-sheet {
+  background: color-mix(in srgb, var(--bg-card) 95%, transparent) !important;
+  backdrop-filter: blur(44px) saturate(2.2) !important;
+  -webkit-backdrop-filter: blur(44px) saturate(2.2) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow:
+    0 -8px 48px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) .p-drawer-sheet {
+    border-top: 1px solid rgba(255, 255, 255, 0.10) !important;
+    box-shadow: 0 -8px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+  }
+}
+html[data-ux="premium"][data-theme="dark"] .p-drawer-sheet {
+  border-top: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow: 0 -8px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+}
+
+/* ─── iOS 26 Inputs ─────────────────────────────────────────────────────── */
+html[data-ux="premium"] input[style],
+html[data-ux="premium"] textarea[style],
+html[data-ux="premium"] select[style] {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-mid) !important;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.04) !important;
+  border-radius: var(--radius-lg) !important;
+  font-family: var(--font) !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+}
+
+html[data-ux="premium"] input[style]:focus,
+html[data-ux="premium"] textarea[style]:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft), inset 0 1px 3px rgba(0,0,0,0.04) !important;
+  outline: none !important;
+}
+
+/* ─── iOS 26 Primary Button ─────────────────────────────────────────────── */
+html[data-ux="premium"] [style*="buttonPrimary"],
+html[data-ux="premium"] [style*="background: var(--fg)"][style*="color: var(--bg)"] {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  border-radius: var(--radius-lg) !important;
+  font-family: var(--font) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 16px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,0.25) !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* ─── iOS 26 Hub-Page Tiles ─────────────────────────────────────────────── */
+
+/* Kueche, Ideen, Geburtstage, Einstellungen Hub Tiles */
+html[data-ux="premium"] .p-hub-page {
+  position: relative;
+  overflow: hidden;
+}
+
+html[data-ux="premium"] .p-hub-page::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 180px;
+  background: radial-gradient(ellipse 80% 180px at 50% -30px,
+    color-mix(in srgb, var(--section-accent, var(--accent)) 14%, transparent) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Section Icon iOS 26 */
+html[data-ux="premium"] .p-section-icon {
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52px;
+  margin: 0 auto 16px;
+  background: color-mix(in srgb, var(--section-accent, var(--accent)) 15%, var(--bg-card));
+  box-shadow:
+    0 8px 32px color-mix(in srgb, var(--section-accent, var(--accent)) 25%, transparent),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(20px);
+}
+
+/* Hub Tiles (die Kacheln innerhalb von Hub-Pages) */
+html[data-ux="premium"] .p-hub-tile {
+  background: var(--bg-card) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid var(--border) !important;
+  transition: transform 0.18s var(--ease-spring), box-shadow 0.18s !important;
+}
+
+html[data-ux="premium"] .p-hub-tile:active { transform: scale(0.97) !important; }
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-ux="premium"] .p-hub-tile:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+  }
+}
+
+/* Dark mode cards */
+@media (prefers-color-scheme: dark) {
+  html[data-ux="premium"]:not([data-theme="light"]) .p-hub-tile {
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07) !important;
+  }
+}
+html[data-ux="premium"][data-theme="dark"] .p-hub-tile {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07) !important;
+}
+
+/* ─── iOS 26 Logo-backed pages (home + settings) ────────────────────────── */
+html[data-ux="premium"] .logo-backed-page {
+  background: var(--bg) !important;
+}
+
+/* ─── iOS 26 Einstellungen Hub ──────────────────────────────────────────── */
+html[data-ux="premium"] .p-settings-hub-tile {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  transition: transform 0.16s var(--ease-spring), box-shadow 0.16s !important;
+}
+
+html[data-ux="premium"] .p-settings-hub-tile:active { transform: scale(0.97) !important; }
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-ux="premium"] .p-settings-hub-tile:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+  }
+}
+
+/* ─── iOS 26 Back-Button für Deep Pages ─────────────────────────────────── */
+html[data-ux="premium"] .p-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px 6px 8px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-2);
+  text-decoration: none;
+  font-family: var(--font);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: transform 0.14s var(--ease-spring), box-shadow 0.14s;
+}
+html[data-ux="premium"] .p-back-btn:active { transform: scale(0.94); }
+
+/* ─── iOS 26 Bento Tile Upgrade ─────────────────────────────────────────── */
+html[data-ux="premium"] .p-tile {
+  box-shadow:
+    0 8px 24px color-mix(in srgb, currentColor 0%, rgba(0,0,0,0.12)),
+    0 2px 6px rgba(0,0,0,0.10),
+    inset 0 1.5px 0 rgba(255,255,255,0.30),
+    inset 0 -1px 0 rgba(0,0,0,0.08) !important;
+}
+
+/* ─── iOS 26 Bottom Padding für Pill Nav ────────────────────────────────── */
+html[data-ux="premium"] .p-page,
+html[data-ux="premium"] .p-home-wrap {
+  padding-bottom: 100px;
+}

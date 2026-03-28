@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BottomNav } from "../lib/ui";
+import { BottomNav, PremiumPillNav } from "../lib/ui";
 
 export const metadata = { title: "Küchen & Wochenplan — Family Ops" };
 
@@ -104,6 +104,7 @@ export default function KuechePage() {
       </div>
 
       <BottomNav current="/kueche" />
+      <PremiumPillNav current="/kueche" />
     </main>
   );
 }

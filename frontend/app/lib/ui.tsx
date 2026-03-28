@@ -244,10 +244,10 @@ export function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div style={noBottomNav ? styles.pageNoNav : styles.page}>
-      <div style={styles.container}>
+    <div className="p-page" style={noBottomNav ? styles.pageNoNav : styles.page}>
+      <div className="p-page-container" style={styles.container}>
         {icon && (
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
+          <div className="p-page-icon" style={{ display: "flex", justifyContent: "center", marginBottom: 20, marginTop: 4 }}>
             <span style={{
               width: 104, height: 104, borderRadius: 28,
               background: iconAccent ? iconAccent + "22" : "var(--bg-subtle)",
@@ -258,14 +258,16 @@ export function Page({
             </span>
           </div>
         )}
-        <div style={styles.headerRow}>
+        <div className="p-page-header" style={styles.headerRow}>
           <div>
-            <h1 style={styles.title}>{title}</h1>
+            <h1 className="p-page-title" style={styles.title}>{title}</h1>
             {subtitle ? <p style={styles.subtitle}>{subtitle}</p> : null}
           </div>
           {right ? <div>{right}</div> : null}
         </div>
-        {children}
+        <div className="p-page-content">
+          {children}
+        </div>
       </div>
       {navCurrent !== undefined && <BottomNav current={navCurrent} />}
       {navCurrent !== undefined && <PremiumPillNav current={navCurrent} />}
