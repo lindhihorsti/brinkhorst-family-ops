@@ -14,9 +14,14 @@ import {
   HOME_LAYOUT_TILES,
   LIGHT_BG_COLOR_KEY,
   LIGHT_BG_DEFAULT,
+  SKIN_KEY,
+  SKIN_DEFAULT,
+  SKIN_RECIPELY,
   normalizeLightBgColor,
   normalizeDisplayMode,
   normalizeHomeLayout,
+  normalizeSkin,
+  applySkin,
 } from "../../lib/appearance.mjs";
 import { BtnLink, Page, styles } from "../../lib/ui";
 
@@ -24,6 +29,7 @@ type Theme = "light" | "dark" | "system";
 type HomeLayout = "standard" | "tiles";
 type DisplayMode = "iphone" | "ipad" | "web";
 type UxVersion = "classic" | "premium";
+type Skin = "default" | "recipely";
 
 const OPTIONS: { value: Theme; label: string; sub: string; icon: string }[] = [
   { value: "light", label: "Hell",   sub: "Immer helles Design",        icon: "☀️" },
@@ -37,6 +43,7 @@ export default function ErscheinungsbildPage() {
   const [displayMode, setDisplayModeState] = useState<DisplayMode>(DISPLAY_MODE_IPHONE);
   const [lightBgColor, setLightBgColorState] = useState(LIGHT_BG_DEFAULT);
   const [uxVersion, setUxVersionState] = useState<UxVersion>("classic");
+  const [skin, setSkinState] = useState<Skin>(SKIN_DEFAULT as Skin);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -49,6 +56,7 @@ export default function ErscheinungsbildPage() {
       setLightBgColorState(normalizeLightBgColor(localStorage.getItem(LIGHT_BG_COLOR_KEY)));
       const storedUx = localStorage.getItem("ux_version");
       if (storedUx === "premium") setUxVersionState("premium");
+      setSkinState(normalizeSkin(localStorage.getItem(SKIN_KEY)) as Skin);
     } catch { /* ssr */ }
   }, []);
 
@@ -101,6 +109,17 @@ export default function ErscheinungsbildPage() {
     }
   }
 
+  function persistSkin(next: Skin) {
+    try {
+      if (next === SKIN_RECIPELY) {
+        localStorage.setItem(SKIN_KEY, SKIN_RECIPELY);
+      } else {
+        localStorage.removeItem(SKIN_KEY);
+      }
+    } catch { /* ignore */ }
+    applySkin(document.documentElement, next);
+  }
+
   function handleSave() {
     setSaving(true);
     setMsg(null);
@@ -110,6 +129,7 @@ export default function ErscheinungsbildPage() {
       persistDisplayMode(displayMode);
       persistLightBgColor(lightBgColor);
       persistUxVersion(uxVersion);
+      persistSkin(skin);
       setMsg("Gespeichert.");
     } catch {
       setMsg("Fehler");
@@ -313,6 +333,55 @@ export default function ErscheinungsbildPage() {
                 className={`premium-ux-preview${active ? " active" : ""}`}
               >
                 <span className="premium-ux-preview-icon">{opt.icon}</span>
+                <div>
+                  <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "#fff" : "var(--fg)" }}>
+                    {opt.label}
+                  </p>
+                  <p style={{ fontSize: 12, marginTop: 2, color: active ? "rgba(255,255,255,0.75)" : "var(--fg-muted)" }}>
+                    {opt.sub}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Farb-Theme (Skin) */}
+      <div style={{ ...styles.card, padding: 18, marginBottom: 22 }}>
+        <div style={{ marginBottom: 12 }}>
+          <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Farb-Theme</p>
+          <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 4 }}>
+            Wähle die Farbwelt der App. „Recipely" bringt die Teal-Koralle-Optik aus dem Food-Recipe-Designkit.
+          </p>
+        </div>
+        <div style={{ display: "grid", gap: 10 }}>
+          {([
+            { value: SKIN_DEFAULT as Skin,  label: "Standard",   sub: "Bisherige Farbwelt der App",           icon: "🎨" },
+            { value: SKIN_RECIPELY as Skin, label: "Recipely 🥗", sub: "Teal & Koralle · luftig · abgerundet", icon: "🥗" },
+          ] as { value: Skin; label: string; sub: string; icon: string }[]).map((opt) => {
+            const active = skin === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setSkinState(opt.value)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  border: active ? "2px solid var(--accent, var(--fg))" : "1px solid var(--border)",
+                  borderRadius: "var(--radius-lg)", padding: "14px 16px",
+                  background: active ? "var(--accent, var(--fg))" : "var(--bg-card, var(--bg))",
+                  cursor: "pointer", textAlign: "left", width: "100%",
+                  boxShadow: "var(--shadow-sm)",
+                }}
+              >
+                <span style={{
+                  width: 44, height: 44, borderRadius: 14,
+                  background: active ? "rgba(255,255,255,0.2)" : "var(--bg-subtle)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 22, flexShrink: 0,
+                }}>
+                  {opt.icon}
+                </span>
                 <div>
                   <p style={{ fontSize: 15, fontWeight: 700, margin: 0, color: active ? "#fff" : "var(--fg)" }}>
                     {opt.label}

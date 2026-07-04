@@ -7,6 +7,9 @@ export const DISPLAY_MODE_KEY = "display_mode";
 export const DISPLAY_MODE_IPHONE = "iphone";
 export const DISPLAY_MODE_IPAD = "ipad";
 export const DISPLAY_MODE_WEB = "web";
+export const SKIN_KEY = "skin";
+export const SKIN_DEFAULT = "default";
+export const SKIN_RECIPELY = "recipely";
 
 export function normalizeHomeLayout(value) {
   return value === HOME_LAYOUT_TILES ? HOME_LAYOUT_TILES : HOME_LAYOUT_STANDARD;
@@ -38,4 +41,17 @@ export function applyLightBgColor(root, value) {
 export function applyDisplayMode(root, value) {
   if (!root) return;
   root.setAttribute("data-display-mode", normalizeDisplayMode(value));
+}
+
+export function normalizeSkin(value) {
+  return value === SKIN_RECIPELY ? SKIN_RECIPELY : SKIN_DEFAULT;
+}
+
+export function applySkin(root, value) {
+  if (!root) return;
+  if (normalizeSkin(value) === SKIN_RECIPELY) {
+    root.setAttribute("data-skin", SKIN_RECIPELY);
+  } else {
+    root.removeAttribute("data-skin");
+  }
 }

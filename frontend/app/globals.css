@@ -519,3 +519,41 @@ html[data-display-mode="web"] .bottom-nav {
 .section-pinnwand   { --accent: var(--pinnwand-accent); }
 .section-geburtstage { --accent: var(--geburtstage-accent); }
 .section-einkauf { --accent: var(--einkauf-accent); }
+
+/* ---------------------------------------------------------------------------
+   Recipely skin — food-recipe look from the Figma UI kit (teal + coral, airy).
+   Self-contained light palette; appended last so it wins over the dark blocks
+   when both are active. Toggle via Einstellungen → Erscheinungsbild.
+--------------------------------------------------------------------------- */
+html[data-skin="recipely"] {
+  --user-light-bg: #ffffff;
+  --bg:          #ffffff;
+  --bg-subtle:   #f1f5f5;
+  --fg:          #0a2533;  /* dark teal-navy */
+  --fg-muted:    #97a2b0;
+  --border:      #e6eef0;
+  --border-focus:#0a2533;
+
+  --kueche-accent:      #70b9be;  /* Recipely teal (brand) */
+  --aktivitaet-accent:  #4a9db3;
+  --aufgaben-accent:    #0a2533;
+  --pinnwand-accent:    #ed7d5e;  /* coral */
+  --geburtstage-accent: #dc6d4e;
+  --split-accent:       #5aa899;
+  --einkauf-accent:     #0f766e;
+
+  --success: #3fae8f;
+  --info:    #70b9be;
+
+  --font: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+
+  --shadow-sm: 0 2px 8px rgba(10,37,51,0.05);
+  --shadow-md: 0 8px 20px rgba(10,37,51,0.07);
+  --shadow-lg: 0 16px 40px rgba(10,37,51,0.10);
+
+  color-scheme: light;
+}
