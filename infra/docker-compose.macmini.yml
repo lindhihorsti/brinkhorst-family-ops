@@ -1,0 +1,82 @@
+# Mac Mini "prod": alles lokal (DB inklusive), Caddy macht TLS auf 80/443.
+# Start: docker compose -f docker-compose.macmini.yml up -d --build
+services:
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DENNIS_PWHASH: ${DENNIS_PWHASH}
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+      args:
+        GIT_SHA: ${GIT_SHA:-macmini}
+        BUILD_DATE: ${BUILD_DATE:-local}
+    environment:
+      DATABASE_URL: postgresql+psycopg://familyops:familyops@db:5432/familyops
+      AUTO_MIGRATE: "0"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWLIST: ${TELEGRAM_ALLOWLIST:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_MODEL_ACTIVITIES: ${OPENAI_MODEL_ACTIVITIES:-gpt-5.2}
+      OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        GIT_SHA: ${GIT_SHA:-macmini}
+        BUILD_DATE: ${BUILD_DATE:-local}
+    networks:
+      - appnet
+    restart: unless-stopped
+
+  db:
+    # 17, damit pg_dump/restore gegen jede aktuelle Supabase-Version funktioniert
+    image: postgres:17
+    environment:
+      POSTGRES_DB: familyops
+      POSTGRES_USER: familyops
+      POSTGRES_PASSWORD: familyops
+    volumes:
+      - pgdata_macmini:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U familyops -d familyops"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - appnet
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata_macmini:
+
+networks:
+  appnet:
+    driver: bridge
+    enable_ipv6: true

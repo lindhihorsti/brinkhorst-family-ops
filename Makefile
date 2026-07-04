@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: up down logs ps build api-health api-ping psql deploy-prod rollback-prod
+.PHONY: up down logs ps build api-health api-ping psql deploy-prod rollback-prod macmini-up macmini-down macmini-logs macmini-ps migrate-supabase
 
 # DEV (local)
 up:
@@ -26,6 +26,22 @@ api-ping:
 
 psql:
 	cd infra && docker compose exec db psql -U familyops -d familyops
+
+# MAC MINI (lokaler Prod-Betrieb, siehe docs/MACMINI.md)
+macmini-up:
+	cd infra && docker compose -f docker-compose.macmini.yml up -d --build
+
+macmini-down:
+	cd infra && docker compose -f docker-compose.macmini.yml down
+
+macmini-logs:
+	cd infra && docker compose -f docker-compose.macmini.yml logs -f --tail=100
+
+macmini-ps:
+	cd infra && docker compose -f docker-compose.macmini.yml ps
+
+migrate-supabase:
+	./scripts/migrate-from-supabase.sh
 
 # PROD trigger (no SSH deploy; triggers GH workflow which updates :stable)
 deploy-prod:
