@@ -6,7 +6,7 @@ SHELL := /bin/bash
 
 # Feste Compose-Projektnamen trennen DEV und PROD auf derselben Maschine sauber:
 # eigene Container, Netze und Volumes je Projekt.
-DEV  := docker compose -p familyops-dev
+DEV  := docker compose -p familyops-dev --env-file .env.dev
 PROD := docker compose -p infra -f docker-compose.macmini.yml
 
 # =====================================================================

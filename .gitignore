@@ -4,6 +4,7 @@
 **/.env
 **/.env.*
 !infra/.env.macmini.example
+!infra/.env.dev.example
 
 *.pem
 *.key

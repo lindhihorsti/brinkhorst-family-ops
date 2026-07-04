@@ -61,6 +61,13 @@ git worktree add ~/prod/brinkhorst-family-ops main
 cp infra/.env ~/prod/brinkhorst-family-ops/infra/.env   # Secrets sind gitignored
 ```
 
+## Secrets pro Umgebung (getrennt)
+
+- **PROD** liest `infra/.env` (echte Secrets, echtes Passwort, Telegram-Token).
+- **DEV** liest `infra/.env.dev` (eigenes Dev-Passwort, Telegram bewusst leer) — die
+  DEV-Compose-Targets sind mit `--env-file .env.dev` verdrahtet. Vorlage:
+  `cp infra/.env.dev.example infra/.env.dev`. Beide Dateien sind gitignored.
+
 Danach läuft PROD aus `~/prod/brinkhorst-family-ops`. Die launchd-Jobs (DuckDNS, Backup)
 zeigen weiterhin auf die Skripte — bei Bedarf auf den PROD-Worktree-Pfad umstellen.
 
