@@ -1,22 +1,38 @@
 SHELL := /bin/bash
 
-.PHONY: up down logs ps build api-health api-ping psql deploy-prod rollback-prod macmini-up macmini-down macmini-logs macmini-ps migrate-supabase
+.PHONY: up down logs ps build api-health api-ping psql dev-seed \
+        macmini-up macmini-down macmini-logs macmini-ps migrate-supabase \
+        deploy rollback
 
-# DEV (local)
+# Feste Compose-Projektnamen trennen DEV und PROD auf derselben Maschine sauber:
+# eigene Container, Netze und Volumes je Projekt.
+DEV  := docker compose -p familyops-dev
+PROD := docker compose -p infra -f docker-compose.macmini.yml
+
+# =====================================================================
+# DEV / TEST  (lokal, http://127.0.0.1:8080, eigene DB, AUTO_MIGRATE=1)
+# =====================================================================
 up:
-	cd infra && docker compose up -d --build
+	cd infra && $(DEV) up -d --build
 
 down:
-	cd infra && docker compose down
+	cd infra && $(DEV) down
 
 logs:
-	cd infra && docker compose logs -f --tail=100
+	cd infra && $(DEV) logs -f --tail=100
 
 ps:
-	cd infra && docker compose ps
+	cd infra && $(DEV) ps
 
 build:
-	cd infra && docker compose build
+	cd infra && $(DEV) build
+
+psql:
+	cd infra && $(DEV) exec db psql -U familyops -d familyops
+
+# DEV-DB mit dem neuesten PROD-Backup befüllen (realistische Testdaten)
+dev-seed:
+	./scripts/seed-dev-from-backup.sh
 
 api-health:
 	curl -sS -u "$${BASIC_AUTH_USER:-dennis}:$${BASIC_AUTH_PASS:-dev-local-password}" http://127.0.0.1:8080/api/health ; echo
@@ -24,30 +40,34 @@ api-health:
 api-ping:
 	curl -sS -u "$${BASIC_AUTH_USER:-dennis}:$${BASIC_AUTH_PASS:-dev-local-password}" http://127.0.0.1:8080/api/db/ping ; echo
 
-psql:
-	cd infra && docker compose exec db psql -U familyops -d familyops
-
-# MAC MINI (lokaler Prod-Betrieb, siehe docs/MACMINI.md)
+# =====================================================================
+# PROD  (live, 80/443 + TLS, Domain, DB-Volume infra_pgdata_macmini)
+# Nur im PROD-Worktree (~/prod/brinkhorst-family-ops) ausführen!
+# =====================================================================
 macmini-up:
-	cd infra && docker compose -f docker-compose.macmini.yml up -d --build
+	cd infra && $(PROD) up -d --build
 
 macmini-down:
-	cd infra && docker compose -f docker-compose.macmini.yml down
+	cd infra && $(PROD) down
 
 macmini-logs:
-	cd infra && docker compose -f docker-compose.macmini.yml logs -f --tail=100
+	cd infra && $(PROD) logs -f --tail=100
 
 macmini-ps:
-	cd infra && docker compose -f docker-compose.macmini.yml ps
+	cd infra && $(PROD) ps
 
 migrate-supabase:
 	./scripts/migrate-from-supabase.sh
 
-# PROD trigger (no SSH deploy; triggers GH workflow which updates :stable)
-deploy-prod:
-	gh workflow run build.yml
+# Deploy: aktuellen Prod-Branch ziehen und Stack neu bauen (im PROD-Worktree)
+deploy:
+	git pull --ff-only
+	cd infra && $(PROD) up -d --build
+	@echo "Deploy fertig. Status: make macmini-ps"
 
-# PROD rollback (retag :stable -> sha-<SHA>)
-rollback-prod:
-	@test -n "$(SHA)" || (echo "Usage: make rollback-prod SHA=<commitsha>"; exit 1)
-	gh workflow run rollback.yml -f sha=$(SHA)
+# Rollback auf einen früheren Commit (im PROD-Worktree): make rollback SHA=<sha>
+rollback:
+	@test -n "$(SHA)" || (echo "Usage: make rollback SHA=<commitsha>"; exit 1)
+	git checkout $(SHA)
+	cd infra && $(PROD) up -d --build
+	@echo "Rollback auf $(SHA) fertig."

@@ -32,3 +32,8 @@ infra/.env
 supabase_schema.sql
 .tmp_*.sql
 *.bak
+
+# graphify: interne/maschinenlokale Artefakte (Graph-Outputs bleiben eingecheckt)
+graphify-out/cache/
+graphify-out/.graphify_*
+graphify-out/*.html
