@@ -1,8 +1,8 @@
 {
   ".claude/settings.local.json": {
-    "mtime": 1783187346.6568694,
-    "ast_hash": "579d96bb1323297f1f6b98f89e26d369",
-    "semantic_hash": "579d96bb1323297f1f6b98f89e26d369"
+    "mtime": 1783189951.8390865,
+    "ast_hash": "5ac94ac1565c7fe54adceae8f0dc8373",
+    "semantic_hash": "5ac94ac1565c7fe54adceae8f0dc8373"
   },
   "backend/app/domain_utils.py": {
     "mtime": 1783146914.7635334,
@@ -525,17 +525,17 @@
     "semantic_hash": "722845f0c278f3bb50f1804659b2454a"
   },
   "scripts/backup-db.sh": {
-    "mtime": 1783147155.1036632,
+    "mtime": 1783189267.2271116,
     "ast_hash": "faa041978c5e1d23eb193c52f32fe5d4",
     "semantic_hash": "faa041978c5e1d23eb193c52f32fe5d4"
   },
   "scripts/duckdns-update.sh": {
-    "mtime": 1783165786.3555377,
+    "mtime": 1783189267.227336,
     "ast_hash": "9e5204d61f51b6a61c524bc6da56fa50",
     "semantic_hash": "9e5204d61f51b6a61c524bc6da56fa50"
   },
   "scripts/migrate-from-supabase.sh": {
-    "mtime": 1783165174.6494741,
+    "mtime": 1783189267.227457,
     "ast_hash": "fbd0382e7900876df5d05f8e82faeacb",
     "semantic_hash": "fbd0382e7900876df5d05f8e82faeacb"
   },
@@ -560,14 +560,14 @@
     "semantic_hash": "642877b5ad8467086e678056770fae62"
   },
   "AGENTS.md": {
-    "mtime": 1783146914.7630632,
-    "ast_hash": "dcc0e244344660f6db2be1d9167ff66c",
-    "semantic_hash": "dcc0e244344660f6db2be1d9167ff66c"
+    "mtime": 1783189267.2330105,
+    "ast_hash": "009398fd1527cd8f2fc99caad0deedce",
+    "semantic_hash": "009398fd1527cd8f2fc99caad0deedce"
   },
   "CLAUDE.md": {
-    "mtime": 1783146914.7631333,
-    "ast_hash": "08be076738296d5fd8ca9e7bec770160",
-    "semantic_hash": "08be076738296d5fd8ca9e7bec770160"
+    "mtime": 1783189267.2333148,
+    "ast_hash": "f2611b57622d7554a57c65d37c2e021e",
+    "semantic_hash": "f2611b57622d7554a57c65d37c2e021e"
   },
   "backend/requirements.txt": {
     "mtime": 1783146914.7646036,
@@ -590,7 +590,7 @@
     "semantic_hash": "91b1ccf12ff90523f0a77df274fcd422"
   },
   "docs/MACMINI.md": {
-    "mtime": 1783147269.7577677,
+    "mtime": 1783189267.2263217,
     "ast_hash": "56c660396c1087a4f36a9d181b3a71e1",
     "semantic_hash": "56c660396c1087a4f36a9d181b3a71e1"
   },
@@ -730,7 +730,7 @@
     "semantic_hash": "ae449b851bd4f8b9fa8f9f081b5257d5"
   },
   "infra/docker-compose.macmini.yml": {
-    "mtime": 1783147047.230275,
+    "mtime": 1783189267.226683,
     "ast_hash": "b16acb5db89c456e6921aed05b61000b",
     "semantic_hash": "b16acb5db89c456e6921aed05b61000b"
   },
@@ -838,5 +838,15 @@
     "mtime": 1783166321.9677665,
     "ast_hash": "036c663b3c38b42f88c09c76fc5b0080",
     "semantic_hash": "036c663b3c38b42f88c09c76fc5b0080"
+  },
+  "scripts/seed-dev-from-backup.sh": {
+    "mtime": 1783189267.2437854,
+    "ast_hash": "1e0b440df01ce2f0dd6f1ec374d0e1c0",
+    "semantic_hash": "1e0b440df01ce2f0dd6f1ec374d0e1c0"
+  },
+  "docs/DEV_PROD.md": {
+    "mtime": 1783189554.7743962,
+    "ast_hash": "d79ff34b1d9b952744c4398e002109c1",
+    "semantic_hash": "d79ff34b1d9b952744c4398e002109c1"
   }
 }
