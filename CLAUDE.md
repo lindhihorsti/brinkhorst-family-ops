@@ -4,6 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Knowledge Graph (zuerst lesen, spart Tokens)
+
+Dieses Repo hat einen vorgebauten graphify-Wissensgraphen unter `graphify-out/`. **Bevor du den Code breit durchsuchst, frage den Graphen ab** — Antworten und Verbindungen (welche Route welches Modell nutzt, was welche Funktion aufruft, wie Frontend/Backend/Telegram zusammenhängen) stehen dort direkt drin und kosten einen Bruchteil der Tokens eines Datei-Scans (~9× weniger laut Benchmark).
+
+- `graphify query "<Frage>"` — Frage in natürlicher Sprache gegen den Graphen
+- `graphify path "<A>" "<B>"` — kürzester Pfad zwischen zwei Konzepten
+- `graphify explain "<Node>"` — Klartext-Erklärung eines Knotens
+- `graphify-out/GRAPH_REPORT.md` — God Nodes, Community-Struktur, überraschende Verbindungen
+
+Nach größeren Änderungen den Graphen mit `/graphify . --update` aktualisieren, damit er aktuell bleibt.
+
+---
+
 ## Architecture
 
 **Family Ops** is a household management app for weekly meal planning, shopping lists, and activity ideas.

@@ -66,6 +66,15 @@ Your job is to implement requested features safely and deliver changes that the 
 - **Local DEV:** `infra/docker-compose.yml` (Caddy on `http://127.0.0.1:8080`)
 - **PROD:** EC2 uses GHCR images (`:stable` and `:sha-<sha>`), DB is Supabase
 
+### Knowledge Graph — zuerst abfragen, spart Tokens
+Das Repo enthält einen vorgebauten graphify-Wissensgraphen unter `graphify-out/`. **Bevor du den Code breit durchsuchst, frage den Graphen ab.** Verbindungen und Antworten (welche Route welches Modell nutzt, was welche Funktion aufruft, wie Frontend/Backend/Telegram zusammenhängen) stehen dort direkt und kosten ca. 9× weniger Tokens als ein Datei-Scan.
+- `graphify query "<Frage>"` — Frage in natürlicher Sprache
+- `graphify path "<A>" "<B>"` — kürzester Pfad zwischen zwei Konzepten
+- `graphify explain "<Node>"` — Klartext-Erklärung eines Knotens
+- `graphify-out/GRAPH_REPORT.md` — God Nodes, Communities, überraschende Verbindungen
+
+Nach größeren Änderungen mit `/graphify . --update` aktualisieren.
+
 ---
 
 ## 3) Default Local Workflow (Must Use)
