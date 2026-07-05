@@ -50,7 +50,7 @@ export default function FixedCostsPage() {
   return (
     <Page title="Fixkosten" subtitle="Wiederkehrende und einmalige Kosten für euren Haushalt" icon="🧾" iconAccent={FINANCE_ACCENT} right={<BtnLink href="/finanzen">Zurück</BtnLink>} navCurrent="/finanzen">
       <div style={{ ...styles.card, marginBottom: 14, textAlign: "center" }}>
-        <Link href="/finanzen/fixkosten/new" style={{ ...styles.buttonPrimary, justifyContent: "center", minWidth: 240 }}>
+        <Link href="/finanzen/fixkosten/new" style={{ ...styles.buttonPrimary, width: "100%" }}>
           + Neue Fixkosten hinzufügen
         </Link>
       </div>
@@ -106,7 +106,7 @@ export default function FixedCostsPage() {
           <div style={{ fontSize: 36, marginBottom: 8 }}>🏦</div>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Noch keine Fixkosten erfasst</div>
           <div style={{ color: "var(--fg-muted)", marginBottom: 12 }}>Erfasse wiederkehrende Ausgaben wie Wohnen, Versicherungen oder Abos.</div>
-          <Link href="/finanzen/fixkosten/new" style={styles.buttonPrimary}>Fixkosten hinzufügen</Link>
+          <Link href="/finanzen/fixkosten/new" style={{ ...styles.buttonPrimary, width: "100%" }}>Fixkosten hinzufügen</Link>
         </div>
       ) : null}
 

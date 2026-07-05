@@ -178,6 +178,14 @@ html[data-ux="premium"] .bottom-nav {
   display: none !important;
 }
 
+/* Pill-Nav ist fixed (bottom: 20px, ~70px hoch, z-index 200). FABs, Toasts
+   und Seiten-Padding rechnen mit --nav-height — hoch genug setzen, damit
+   nichts hinter der Pill-Nav verschwindet. */
+html[data-ux="premium"],
+html[data-ux="premium"][data-skin="recipely"] {
+  --nav-height: 96px;
+}
+
 /* ─── Premium hidden by default ────────────────────────────────────────── */
 .premium-home        { display: none; }
 .p-pill-nav          { display: none; }
@@ -1094,9 +1102,11 @@ html[data-ux="premium"] .p-page-title {
 
 /* ─── iOS 26 Cards — Liquid Glass ───────────────────────────────────────── */
 
-/* Card divs with border-radius get glass treatment — buttons are excluded */
-html[data-ux="premium"] .p-page-content :not(button)[style*="var(--radius-lg)"],
-html[data-ux="premium"] .p-page-content :not(button)[style*="var(--radius-md)"] {
+/* Card divs with border-radius get glass treatment — buttons are excluded.
+   Auch Link-Buttons (fg-Hintergrund) ausschließen, sonst wird deren
+   Hintergrund bg-card und der Text (var(--bg)) unlesbar. */
+html[data-ux="premium"] .p-page-content :not(button):not([style*="background: var(--fg)"]):not([style*="background:var(--fg)"])[style*="var(--radius-lg)"],
+html[data-ux="premium"] .p-page-content :not(button):not([style*="background: var(--fg)"]):not([style*="background:var(--fg)"])[style*="var(--radius-md)"] {
   background: var(--bg-card) !important;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.06),
@@ -1107,8 +1117,8 @@ html[data-ux="premium"] .p-page-content :not(button)[style*="var(--radius-md)"] 
 }
 
 @media (prefers-color-scheme: dark) {
-  html[data-ux="premium"]:not([data-theme="light"]) .p-page-content :not(button)[style*="var(--radius-lg)"],
-  html[data-ux="premium"]:not([data-theme="light"]) .p-page-content :not(button)[style*="var(--radius-md)"] {
+  html[data-ux="premium"]:not([data-theme="light"]) .p-page-content :not(button):not([style*="background: var(--fg)"]):not([style*="background:var(--fg)"])[style*="var(--radius-lg)"],
+  html[data-ux="premium"]:not([data-theme="light"]) .p-page-content :not(button):not([style*="background: var(--fg)"]):not([style*="background:var(--fg)"])[style*="var(--radius-md)"] {
     background: var(--bg-card) !important;
     box-shadow:
       0 2px 8px rgba(0, 0, 0, 0.3),
@@ -1116,8 +1126,8 @@ html[data-ux="premium"] .p-page-content :not(button)[style*="var(--radius-md)"] 
     border: 1px solid var(--border) !important;
   }
 }
-html[data-ux="premium"][data-theme="dark"] .p-page-content :not(button)[style*="var(--radius-lg)"],
-html[data-ux="premium"][data-theme="dark"] .p-page-content :not(button)[style*="var(--radius-md)"] {
+html[data-ux="premium"][data-theme="dark"] .p-page-content :not(button):not([style*="background: var(--fg)"]):not([style*="background:var(--fg)"])[style*="var(--radius-lg)"],
+html[data-ux="premium"][data-theme="dark"] .p-page-content :not(button):not([style*="background: var(--fg)"]):not([style*="background:var(--fg)"])[style*="var(--radius-md)"] {
   background: var(--bg-card) !important;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.3),
@@ -1167,14 +1177,22 @@ html[data-ux="premium"] textarea[style]:focus {
 }
 
 /* ─── iOS 26 Primary Button ─────────────────────────────────────────────── */
-html[data-ux="premium"] [style*="buttonPrimary"],
-html[data-ux="premium"] [style*="background: var(--fg)"][style*="color: var(--bg)"] {
-  background: var(--accent) !important;
-  border-color: var(--accent) !important;
+/* Trifft alle fg/bg-invertierten Elemente (buttonPrimary, fab, chipActive) —
+   sowohl <button> als auch <Link>. SSR serialisiert Inline-Styles OHNE
+   Leerzeichen nach dem Doppelpunkt, CSSOM MIT — deshalb alle 4 Varianten. */
+html[data-ux="premium"] [style*="background: var(--fg)"][style*="color: var(--bg)"],
+html[data-ux="premium"] [style*="background:var(--fg)"][style*="color:var(--bg)"],
+html[data-ux="premium"] [style*="background: var(--fg)"][style*="color:var(--bg)"],
+html[data-ux="premium"] [style*="background:var(--fg)"][style*="color: var(--bg)"] {
+  /* Bereichsfarbe der Seite (Page setzt --page-accent aus iconAccent),
+     Fallback: globales Accent-Orange */
+  background: var(--page-accent, var(--accent)) !important;
+  color: #fff !important;
+  border-color: var(--page-accent, var(--accent)) !important;
   border-radius: var(--radius-lg) !important;
   font-family: var(--font) !important;
   font-weight: 700 !important;
-  box-shadow: 0 4px 16px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,0.25) !important;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--page-accent, var(--accent)) 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.25) !important;
   letter-spacing: -0.01em !important;
 }
 
@@ -1417,10 +1435,13 @@ html[data-ux="premium"] .p-hub-subtitle {
   max-width: 280px;
 }
 
-/* Card that overlaps the header */
+/* Card that overlaps the header — gleiche Breitenkappung wie Unterseiten
+   (styles.container nutzt --page-max-width) */
 html[data-ux="premium"] .p-hub-content {
   flex: 1;
-  margin-top: -36px;
+  margin: -36px auto 0;
+  width: 100%;
+  max-width: var(--page-max-width);
   padding: 0 12px 100px;
   position: relative;
   z-index: 3;
