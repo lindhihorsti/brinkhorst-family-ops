@@ -1,0 +1,188 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FAMILY OPS — RECIPELY SKIN
+   Aktiviert via html[data-skin="recipely"] (Einstellungen → Erscheinungsbild)
+
+   Quelle: "[FREE] Recipely — Food Recipe Mobile App UI Kit" (Figma, DhuhaCreative)
+   Screens im Kit: Login, Home, Search, Recipe Details, Account.
+   Designsprache: Teal #70b9be (Brand), Navy #0a2533 (Text/CTA), Koralle #ed7d5e,
+   Plus Jakarta Sans, weiße Karten ohne harte Borders, weiche Navy-Schatten,
+   Pill-Tabs (aktiv = Teal gefüllt), Segmented Control (aktiv = Navy),
+   Sheet mit Drag-Handle, Buttons 54px hoch mit Radius 16.
+
+   Wie premium.css: Overrides brauchen !important, weil die Komponenten
+   Inline-Styles aus lib/ui.tsx tragen; Tokens wirken ohne !important.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Design Tokens (1:1 aus dem Figma-Kit gezogen) ─────────────────────── */
+html[data-skin="recipely"] {
+  --user-light-bg: #ffffff;
+  --bg:          #ffffff;
+  --bg-subtle:   #f1f5f5;  /* Input-/Icon-Flächen im Kit */
+  --bg-card:     #ffffff;
+  --fg:          #0a2533;  /* dunkles Teal-Navy */
+  --fg-muted:    #97a2b0;
+  --border:      #e6eef0;
+  --border-focus:#70b9be;
+
+  --recipely-teal:   #70b9be;
+  --recipely-navy:   #0a2533;
+  --recipely-coral:  #ed7d5e;
+
+  --accent: var(--recipely-teal);
+
+  --kueche-accent:      #70b9be;  /* Recipely Teal (Brand) */
+  --aktivitaet-accent:  #4a9db3;
+  --aufgaben-accent:    #0a2533;
+  --pinnwand-accent:    #ed7d5e;  /* Koralle */
+  --geburtstage-accent: #dc6d4e;
+  --split-accent:       #5aa899;
+  --einkauf-accent:     #0f766e;
+
+  --success: #3fae8f;
+  --info:    #70b9be;
+
+  --radius-sm: 12px;
+  --radius-md: 16px;   /* Buttons/Inputs im Kit: 16 */
+  --radius-lg: 24px;   /* Karten/Sheets im Kit: 24 */
+
+  --shadow-sm: 0 2px 8px rgba(10,37,51,0.05);
+  --shadow-md: 0 8px 20px rgba(10,37,51,0.07);
+  --shadow-lg: 0 16px 40px rgba(10,37,51,0.10);
+
+  --nav-height: 72px;
+
+  color-scheme: light;
+}
+
+/* ─── Typografie ─────────────────────────────────────────────────────────── */
+/* --font-jakarta wird von next/font auf <body> definiert und ist auf <html>
+   nicht auflösbar — deshalb muss der --font-Override auf <body> liegen. */
+html[data-skin="recipely"] body {
+  --font: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+}
+
+html[data-skin="recipely"] h1,
+html[data-skin="recipely"] h2,
+html[data-skin="recipely"] h3 {
+  letter-spacing: -0.01em;
+}
+
+html[data-skin="recipely"] ::selection {
+  background: rgba(112, 185, 190, 0.35);
+}
+
+/* ─── Bottom Nav — weiße schwebende Bar wie die Kit-"Bottom Bar" ─────────── */
+html[data-skin="recipely"] .bottom-nav {
+  background: #ffffff;
+  border-top: none;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -6px 24px rgba(10, 37, 51, 0.08);
+}
+html[data-skin="recipely"] .bottom-nav-item {
+  color: #97a2b0;
+}
+html[data-skin="recipely"] .bottom-nav-item.active {
+  color: var(--recipely-teal);
+  font-weight: 700;
+}
+
+/* ─── Chips → Recipely Bubble-Tabs (Home/Search: Breakfast·Lunch·Dinner) ─── */
+html[data-skin="recipely"] .chip {
+  background: #ffffff !important;
+  border: 1px solid #e6eef0 !important;
+  color: #0a2533 !important;
+  padding: 8px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+html[data-skin="recipely"] .chip-active {
+  background: var(--recipely-teal) !important;
+  border: 1px solid var(--recipely-teal) !important;
+  color: #ffffff !important;
+  padding: 8px 18px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 12px rgba(112, 185, 190, 0.4);
+}
+
+/* ─── Formular-Fokus (Kit: Teal-Umrandung statt Navy) ────────────────────── */
+html[data-skin="recipely"] input:focus,
+html[data-skin="recipely"] select:focus,
+html[data-skin="recipely"] textarea:focus {
+  border-color: var(--recipely-teal) !important;
+  box-shadow: 0 0 0 3px rgba(112, 185, 190, 0.18);
+}
+html[data-skin="recipely"] input[type="checkbox"],
+html[data-skin="recipely"] input[type="radio"] {
+  accent-color: var(--recipely-teal);
+}
+
+/* ─── Modal → Detail-Sheet mit Drag-Handle (Kit: 50×5, zentriert) ────────── */
+html[data-skin="recipely"] .modal-sheet {
+  position: relative;
+  border-radius: 24px 24px 0 0 !important;
+  padding-top: 34px !important;
+}
+html[data-skin="recipely"] .modal-sheet::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 5px;
+  border-radius: 999px;
+  background: #e6eef0;
+}
+
+/* ─── Badges — weiche Teal/Koralle-Tints statt Tailwind-Farben ───────────── */
+html[data-skin="recipely"] .badge-success { background: #e2f2ee; color: #2c8a72; }
+html[data-skin="recipely"] .badge-warning { background: #fdeee9; color: #d05a3a; }
+html[data-skin="recipely"] .badge-danger  { background: #fdeee9; color: #c2412a; }
+html[data-skin="recipely"] .badge-info    { background: #e9f4f5; color: #3d8b90; }
+
+/* ─── Progress / Checklist / Skeleton ────────────────────────────────────── */
+html[data-skin="recipely"] .progress-fill {
+  background: linear-gradient(90deg, #70b9be, #5aa899);
+}
+html[data-skin="recipely"] .checklist-item.checked { opacity: 0.4; }
+html[data-skin="recipely"] .skeleton {
+  background: linear-gradient(90deg, #f1f5f5 25%, #e6eef0 50%, #f1f5f5 75%);
+  background-size: 800px 100%;
+}
+
+/* ─── Karten & Tiles — weiß, randlos-weich, Hover-Lift wie Kit-Cards ─────── */
+html[data-skin="recipely"] .nav-tile {
+  border-color: transparent !important;
+  box-shadow: 0 4px 16px rgba(10, 37, 51, 0.06) !important;
+}
+@media (hover: hover) {
+  html[data-skin="recipely"] .nav-tile:hover {
+    background-color: #ffffff !important;
+    box-shadow: 0 10px 28px rgba(10, 37, 51, 0.10) !important;
+    transform: translateY(-2px);
+  }
+}
+html[data-skin="recipely"] .recipe-photo,
+html[data-skin="recipely"] .recipe-photo-placeholder {
+  border-radius: 16px;
+}
+
+/* ─── Startseite / Logo-Bühne — Skin ist immer hell, auch bei System-Dark ── */
+html[data-skin="recipely"] {
+  --logo-page-bg: #ffffff;
+  --logo-page-halo: rgba(112, 185, 190, 0.16);
+  --logo-stage-bg: transparent;
+  --logo-stage-border: transparent;
+}
+html[data-skin="recipely"] .logo-stage {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+html[data-skin="recipely"] .logo-img-light { display: block; }
+html[data-skin="recipely"] .logo-img-dark  { display: none; }
+html[data-skin="recipely"] .logo-img { filter: drop-shadow(0 8px 16px rgba(10, 37, 51, 0.08)); }
+html[data-skin="recipely"] .logo-backed-page {
+  background: radial-gradient(circle at top, rgba(112, 185, 190, 0.14) 0%, #ffffff 60%) !important;
+}

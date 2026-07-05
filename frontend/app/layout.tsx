@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Syne, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "./premium.css";
+import "./recipely.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

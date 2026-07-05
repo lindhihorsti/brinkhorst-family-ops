@@ -310,7 +310,7 @@ export function BtnLink({ href, children }: { href: string; children: React.Reac
 
 export function Chip({ text, active, onClick }: { text: string; active?: boolean; onClick?: () => void }) {
   return (
-    <span style={active ? styles.chipActive : styles.chip} onClick={onClick} role={onClick ? "button" : undefined}>
+    <span className={active ? "chip-active" : "chip"} style={active ? styles.chipActive : styles.chip} onClick={onClick} role={onClick ? "button" : undefined}>
       {text}
     </span>
   );

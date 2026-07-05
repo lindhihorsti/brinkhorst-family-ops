@@ -352,7 +352,7 @@ export default function ErscheinungsbildPage() {
         <div style={{ marginBottom: 12 }}>
           <p style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Farb-Theme</p>
           <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 4 }}>
-            Wähle die Farbwelt der App. „Recipely" bringt die Teal-Koralle-Optik aus dem Food-Recipe-Designkit.
+            Wähle die Farbwelt der App. „Recipely“ bringt das komplette Food-App-Design aus dem Figma-Kit: Teal & Koralle, Jakarta-Schrift, Bubble-Tabs, schwebende Navigation und Sheet-Dialoge.
           </p>
         </div>
         <div style={{ display: "grid", gap: 10 }}>
