@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 import json
 import os
 import re
@@ -43,6 +43,7 @@ from app.finance_utils import (
 )
 from app.models import (
     Recipe,
+    RecipePhoto,
     AppState,
     FamilyMember,
     ChoreTask,
@@ -652,7 +653,7 @@ def _fetch_html_with_redirects(url: str) -> Tuple[str, str]:
         raise ValueError("Zu viele Weiterleitungen.")
 
 
-def _extract_recipe_inputs(html: str) -> Tuple[Dict[str, Any], List[str]]:
+def _extract_recipe_inputs(html: str, base_url: str = "") -> Tuple[Dict[str, Any], List[str]]:
     from bs4 import BeautifulSoup
     from readability import Document
 
@@ -714,6 +715,7 @@ def _extract_recipe_inputs(html: str) -> Tuple[Dict[str, Any], List[str]]:
         "ingredients": ingredients,
         "time_minutes": time_minutes,
         "text": text,
+        "photo_url": _extract_recipe_image(recipe, soup, base_url) or "",
     }
     if not extracted["text"] and not extracted["ingredients"]:
         raise ValueError("Seite konnte nicht gelesen werden.")
@@ -751,6 +753,97 @@ def _type_is_recipe(value: Any) -> bool:
     if isinstance(value, str):
         return "recipe" in value.lower()
     return False
+
+
+def _jsonld_image_url(value: Any) -> Optional[str]:
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, dict):
+        return _jsonld_image_url(value.get("url") or value.get("contentUrl"))
+    if isinstance(value, list):
+        for item in value:
+            found = _jsonld_image_url(item)
+            if found:
+                return found
+    return None
+
+
+def _extract_recipe_image(recipe: Optional[Dict[str, Any]], soup, base_url: str) -> Optional[str]:
+    candidate = _jsonld_image_url(recipe.get("image")) if recipe else None
+    if not candidate:
+        for selector in ('meta[property="og:image"]', 'meta[name="twitter:image"]'):
+            tag = soup.select_one(selector)
+            if tag and tag.get("content"):
+                candidate = str(tag.get("content")).strip()
+                break
+    if not candidate:
+        return None
+    absolute = urljoin(base_url, candidate) if base_url else candidate
+    if not absolute.startswith(("http://", "https://")):
+        return None
+    return absolute
+
+
+RECIPE_PHOTO_MAX_BYTES = 15 * 1024 * 1024
+RECIPE_PHOTO_MAX_DIM = 800
+
+
+def _download_recipe_photo_bytes(url: str) -> Optional[Tuple[bytes, str]]:
+    from io import BytesIO
+    from PIL import Image as PILImage
+
+    try:
+        current = _validate_import_url(url)
+    except ValueError:
+        return None
+    timeout = httpx.Timeout(IMPORT_FETCH_TIMEOUT_SECONDS)
+    headers = {"User-Agent": "FamilyOpsRecipeImporter/1.0"}
+    data: Optional[bytearray] = None
+    try:
+        with httpx.Client(timeout=timeout, headers=headers, follow_redirects=False) as client:
+            for _ in range(IMPORT_FETCH_MAX_REDIRECTS + 1):
+                with client.stream("GET", current) as resp:
+                    if resp.status_code in (301, 302, 303, 307, 308) and resp.headers.get("location"):
+                        current = _validate_import_url(urljoin(current, resp.headers["location"]))
+                        continue
+                    if resp.status_code != 200:
+                        return None
+                    buf = bytearray()
+                    for chunk in resp.iter_bytes():
+                        buf.extend(chunk)
+                        if len(buf) > RECIPE_PHOTO_MAX_BYTES:
+                            return None
+                    data = buf
+                    break
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not data:
+        return None
+    try:
+        img = PILImage.open(BytesIO(bytes(data)))
+        img = img.convert("RGB")
+        img.thumbnail((RECIPE_PHOTO_MAX_DIM, RECIPE_PHOTO_MAX_DIM))
+        out = BytesIO()
+        img.save(out, format="JPEG", quality=82)
+        return out.getvalue(), "image/jpeg"
+    except Exception:
+        return None
+
+
+def _store_recipe_photo(session: Session, recipe_id: UUID, photo_url: str) -> bool:
+    downloaded = _download_recipe_photo_bytes(photo_url)
+    if not downloaded:
+        return False
+    payload, mime = downloaded
+    existing = session.get(RecipePhoto, recipe_id)
+    if existing:
+        existing.data = payload
+        existing.mime = mime
+        session.add(existing)
+    else:
+        session.add(RecipePhoto(recipe_id=recipe_id, data=payload, mime=mime))
+    session.commit()
+    return True
 
 
 def _parse_duration_to_minutes(value: Any) -> Optional[int]:
@@ -2373,7 +2466,7 @@ def api_recipe_import_preview(payload: RecipeImportPreviewRequest):
         return {"ok": True, "draft": cached["draft"], "warnings": cached.get("warnings", [])}
 
     try:
-        extracted, warnings = _extract_recipe_inputs(html)
+        extracted, warnings = _extract_recipe_inputs(html, canonical_url)
     except Exception as e:
         return {"ok": False, "error": str(e), "existing_recipe_id": None}
 
@@ -2390,6 +2483,7 @@ def api_recipe_import_preview(payload: RecipeImportPreviewRequest):
     draft["source_url"] = canonical_url
     draft["created_by"] = "dennis"
     draft["is_active"] = True
+    draft["photo_url"] = extracted.get("photo_url") or None
 
     cleaned_tags, tag_warning = _limit_tags(draft.get("tags") or [])
     if tag_warning:
@@ -2635,6 +2729,11 @@ def api_create_recipe(payload: RecipeCreate):
         session.add(r)
         session.commit()
         session.refresh(r)
+        if r.photo_url:
+            try:
+                _store_recipe_photo(session, r.id, r.photo_url)
+            except Exception:
+                pass
         _maybe_send_telegram_event(
             "notify_new_recipe",
             telegram_recipe_created_text(r.title, r.time_minutes, r.collection_name),
@@ -2658,7 +2757,69 @@ def api_update_recipe(recipe_id: UUID, payload: RecipeUpdate):
         session.add(r)
         session.commit()
         session.refresh(r)
+        if "photo_url" in data:
+            try:
+                if r.photo_url:
+                    _store_recipe_photo(session, r.id, r.photo_url)
+                else:
+                    stored = session.get(RecipePhoto, r.id)
+                    if stored:
+                        session.delete(stored)
+                        session.commit()
+            except Exception:
+                pass
         return r
+
+
+@app.get("/api/recipes/{recipe_id}/photo")
+def api_recipe_photo(recipe_id: UUID):
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    with Session(engine) as session:
+        photo = session.get(RecipePhoto, recipe_id)
+        if photo:
+            return Response(
+                content=photo.data,
+                media_type=photo.mime,
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+        r = session.get(Recipe, recipe_id)
+        if r and r.photo_url:
+            return RedirectResponse(r.photo_url, status_code=302)
+    raise HTTPException(404, "Kein Bild vorhanden")
+
+
+@app.post("/api/recipes/photos/backfill")
+def api_recipe_photos_backfill():
+    if engine is None:
+        raise HTTPException(500, "DATABASE_URL missing")
+    stored = skipped = failed = 0
+    with Session(engine) as session:
+        recipes = session.exec(select(Recipe).where(Recipe.is_active == True)).all()  # noqa: E712
+        for r in recipes:
+            if session.get(RecipePhoto, r.id):
+                skipped += 1
+                continue
+            url = r.photo_url
+            if not url and r.source_url:
+                try:
+                    canonical, html = _fetch_html_with_redirects(_validate_import_url(r.source_url))
+                    extracted, _ = _extract_recipe_inputs(html, canonical)
+                    url = extracted.get("photo_url") or None
+                except Exception:
+                    url = None
+                if url:
+                    r.photo_url = url
+                    session.add(r)
+                    session.commit()
+            if not url:
+                skipped += 1
+                continue
+            if _store_recipe_photo(session, r.id, url):
+                stored += 1
+            else:
+                failed += 1
+    return {"stored": stored, "skipped": skipped, "failed": failed}
 
 
 @app.delete("/api/recipes/{recipe_id}")

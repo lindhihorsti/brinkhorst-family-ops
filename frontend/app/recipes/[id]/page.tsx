@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, type Recipe } from "../../lib/api";
@@ -114,6 +115,11 @@ export default function RecipeDetailPage() {
             <div style={{ ...styles.card, borderColor: "#fecaca", background: "#fff" }}>
               <div style={{ fontWeight: 800, marginBottom: 6 }}>Archivieren fehlgeschlagen</div>
               <div style={{ fontSize: 13 }}>{archiveError}</div>
+            </div>
+          ) : null}
+          {item.photo_url ? (
+            <div style={{ position: "relative", width: "100%", height: 240, borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "var(--shadow-sm)" }}>
+              <Image src={`/api/recipes/${item.id}/photo`} alt={item.title} fill style={{ objectFit: "cover" }} unoptimized />
             </div>
           ) : null}
           <div style={styles.card}>

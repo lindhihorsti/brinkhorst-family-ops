@@ -27,6 +27,7 @@ export default function EditRecipePage() {
 
   const [title, setTitle] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState("");
   const [timeMinutes, setTimeMinutes] = useState("");
@@ -48,6 +49,7 @@ export default function EditRecipePage() {
 
         setTitle(r.title ?? "");
         setSourceUrl((r.source_url ?? "") as string);
+        setPhotoUrl((r.photo_url ?? "") as string);
         setNotes((r.notes ?? "") as string);
         setTags((r.tags ?? []).join(", "));
         setTimeMinutes(r.time_minutes != null ? String(r.time_minutes) : "");
@@ -89,6 +91,7 @@ export default function EditRecipePage() {
       await api.updateRecipe(id, {
         title: title.trim(),
         source_url: sourceUrl.trim() || null,
+        photo_url: photoUrl.trim() || null,
         notes: notes.trim() || null,
         tags: splitCsv(tags),
         ingredients,
@@ -140,6 +143,7 @@ export default function EditRecipePage() {
 
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Titel" style={styles.input} />
           <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="Link (optional)" style={styles.input} />
+          <input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="Bild-URL (optional, wird beim Speichern geladen)" style={styles.input} />
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notizen (optional)" rows={3} style={styles.textarea} />
           <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags (comma-separated)" style={styles.input} />
 

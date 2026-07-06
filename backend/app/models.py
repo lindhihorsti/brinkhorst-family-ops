@@ -2,7 +2,7 @@ from typing import Optional, List, Any, Dict
 from uuid import UUID
 from sqlmodel import SQLModel, Field
 from datetime import datetime, date
-from sqlalchemy import Column, text, DateTime, func, Text, Integer, Numeric, Boolean, Date
+from sqlalchemy import Column, text, DateTime, func, Text, Integer, Numeric, Boolean, Date, ForeignKey, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY, JSONB
 from sqlalchemy import String
 
@@ -39,6 +39,17 @@ class Recipe(SQLModel, table=True):
         default=None, sa_column=Column(JSONB, nullable=True)
     )
     collection_name: Optional[str] = None
+
+
+class RecipePhoto(SQLModel, table=True):
+    __tablename__ = "recipe_photos"
+
+    recipe_id: UUID = Field(
+        sa_column=Column(PG_UUID(as_uuid=True), ForeignKey("recipes.id", ondelete="CASCADE"), primary_key=True),
+    )
+    data: bytes = Field(sa_column=Column(LargeBinary, nullable=False))
+    mime: str = Field(default="image/jpeg", sa_column=Column(Text, nullable=False, server_default="image/jpeg"))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class AppState(SQLModel, table=True):

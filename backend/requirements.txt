@@ -9,3 +9,4 @@ beautifulsoup4==4.12.3
 readability-lxml==0.8.1
 lxml==5.2.2
 lxml_html_clean==0.4.1
+pillow==11.3.0

@@ -147,6 +147,7 @@ export default function RecipesPage() {
       ingredients: importDraft.ingredients ?? [],
       time_minutes: importDraft.time_minutes ?? null,
       difficulty: importDraft.difficulty ?? null,
+      photo_url: importDraft.photo_url ?? null,
     };
     try {
       const res = await fetch("/api/recipes", {
@@ -240,7 +241,7 @@ export default function RecipesPage() {
                 <div style={styles.rowBetween}>
                   {r.photo_url ? (
                     <div style={{ position: "relative", width: 60, height: 60, borderRadius: "var(--radius-md)", overflow: "hidden", flexShrink: 0 }}>
-                      <Image src={r.photo_url} alt={r.title} fill style={{ objectFit: "cover" }} unoptimized />
+                      <Image src={`/api/recipes/${r.id}/photo`} alt={r.title} fill style={{ objectFit: "cover" }} unoptimized />
                     </div>
                   ) : null}
                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -376,6 +377,12 @@ export default function RecipesPage() {
                         </Link>
                       </div>
                     ) : null}
+                  </div>
+                ) : null}
+
+                {importDraft.photo_url ? (
+                  <div style={{ position: "relative", width: "100%", height: 160, borderRadius: "var(--radius-md)", overflow: "hidden" }}>
+                    <Image src={importDraft.photo_url} alt="Rezeptbild von der Quellseite" fill style={{ objectFit: "cover" }} unoptimized />
                   </div>
                 ) : null}
 
