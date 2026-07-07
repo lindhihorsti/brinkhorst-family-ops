@@ -9,6 +9,11 @@ SHELL := /bin/bash
 DEV  := docker compose -p familyops-dev --env-file .env.dev
 PROD := docker compose -p infra -f docker-compose.macmini.yml
 
+# Reale Build-Metadaten (Commit + UTC-Zeit) an die Prod-Images durchreichen,
+# statt der Defaults macmini/local. Command-Substitution läuft zur Laufzeit
+# im Recipe-Shell — bewusst leerzeichenfreies Zeitformat (inline env-Var).
+PROD_BUILD := GIT_SHA=$$(git rev-parse --short HEAD) BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%MZ)
+
 # =====================================================================
 # DEV / TEST  (lokal, http://127.0.0.1:8080, eigene DB, AUTO_MIGRATE=1)
 # =====================================================================
@@ -45,7 +50,7 @@ api-ping:
 # Nur im PROD-Worktree (~/prod/brinkhorst-family-ops) ausführen!
 # =====================================================================
 macmini-up:
-	cd infra && $(PROD) up -d --build
+	cd infra && $(PROD_BUILD) $(PROD) up -d --build
 
 macmini-down:
 	cd infra && $(PROD) down
@@ -62,12 +67,12 @@ migrate-supabase:
 # Deploy: aktuellen Prod-Branch ziehen und Stack neu bauen (im PROD-Worktree)
 deploy:
 	git pull --ff-only
-	cd infra && $(PROD) up -d --build
+	cd infra && $(PROD_BUILD) $(PROD) up -d --build
 	@echo "Deploy fertig. Status: make macmini-ps"
 
 # Rollback auf einen früheren Commit (im PROD-Worktree): make rollback SHA=<sha>
 rollback:
 	@test -n "$(SHA)" || (echo "Usage: make rollback SHA=<commitsha>"; exit 1)
 	git checkout $(SHA)
-	cd infra && $(PROD) up -d --build
+	cd infra && $(PROD_BUILD) $(PROD) up -d --build
 	@echo "Rollback auf $(SHA) fertig."
