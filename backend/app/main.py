@@ -3618,12 +3618,19 @@ def api_weekly_history_detail(week_start: str):
     return {"ok": True, "item": _serialize_weekly_history_entry(week_start_date, base["days"] or {})}
 
 
+class WeeklyPlanCreateRequest(BaseModel):
+    days_count: Optional[int] = None
+    start_day: Optional[int] = None
+
+
 @app.post("/api/weekly/plan")
-def api_weekly_plan(notify: int = 0):
+def api_weekly_plan(notify: int = 0, payload: Optional[WeeklyPlanCreateRequest] = None):
     if engine is None:
         raise HTTPException(500, "DATABASE_URL missing")
     week_start = _current_week_start()
-    days = _build_new_week_plan()
+    start_day = payload.start_day if payload and payload.start_day else 1
+    days_count = payload.days_count if payload and payload.days_count else 8 - min(max(start_day, 1), 7)
+    days = _build_new_week_plan(days_count, start_day)
     _db_upsert_weekly_plan(week_start, days)
 
     base = _db_get_weekly_plan(week_start)
@@ -4756,10 +4763,12 @@ def _format_plan(days: Dict[str, str]) -> str:
     return "\n".join(lines)
 
 
-def _build_new_week_plan() -> Dict[str, str]:
+def _build_new_week_plan(days_count: int = 7, start_day: int = 1) -> Dict[str, str]:
+    start_day = min(max(start_day, 1), 7)
+    days_count = min(max(days_count, 1), 8 - start_day)
     preferences = _get_settings_preferences()
     tags = preferences.get("tags") or []
-    prefer_max = int(7 * 0.5) if tags else 0
+    prefer_max = int(days_count * 0.5) if tags else 0
 
     # Get last 2 weeks of meal history to avoid recent repeats
     recent_ids: List[str] = []
@@ -4781,14 +4790,14 @@ def _build_new_week_plan() -> Dict[str, str]:
     picked_ids, dummy_titles = swap_service.pick_recipes_for_days(
         engine,
         existing_ids=recent_ids,
-        count=7,
+        count=days_count,
         prefer_tags=tags,
         prefer_max=prefer_max,
     )
     days: Dict[str, str] = {}
     di = 0
     pi = 0
-    for d in range(1, 8):
+    for d in range(start_day, start_day + days_count):
         if pi < len(picked_ids):
             days[str(d)] = picked_ids[pi]
             pi += 1

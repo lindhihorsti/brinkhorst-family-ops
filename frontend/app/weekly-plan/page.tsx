@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getErrorMessage } from "../lib/errors";
 import { getWeeklyPlanHref } from "../lib/weekly-plan-links.mjs";
-import { BtnLink, ConfirmModal, Page, StarRating, styles } from "../lib/ui";
+import { BtnLink, Modal, Page, StarRating, styles } from "../lib/ui";
 
 type DayEntry = {
   day: number;
@@ -104,9 +104,11 @@ function isoWeekNumber(isoDate: string): number | null {
 }
 
 function DayGrid({ days }: { days: DayEntry[] }) {
+  const filled = days.filter((d) => d.kind !== "empty");
+  const visible = filled.length > 0 ? filled : days;
   return (
     <div style={cardStyles.grid}>
-      {days.map((d) => {
+      {visible.map((d) => {
         const href = getWeeklyPlanHref(d);
         const content = (
           <>
@@ -160,7 +162,9 @@ export default function WeeklyPlanPage() {
   const [swapDraft, setSwapDraft] = useState<DraftPayload | null>(null);
 
   const [planWarning, setPlanWarning] = useState<string | null>(null);
-  const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [startDay, setStartDay] = useState(1);
+  const [daysCount, setDaysCount] = useState(7);
 
   const weekStart = current?.week_start ?? "—";
   const weekEnd = current?.week_start ? addDays(current.week_start, 6) : null;
@@ -191,25 +195,6 @@ export default function WeeklyPlanPage() {
   }, []);
 
   useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-    const prevHtmlOverscroll = html.style.overscrollBehaviorY;
-    const prevBodyOverscroll = body.style.overscrollBehaviorY;
-
-    html.classList.add("weekly-plan-root");
-    body.classList.add("weekly-plan-root");
-    html.style.overscrollBehaviorY = "none";
-    body.style.overscrollBehaviorY = "none";
-
-    return () => {
-      html.classList.remove("weekly-plan-root");
-      body.classList.remove("weekly-plan-root");
-      html.style.overscrollBehaviorY = prevHtmlOverscroll;
-      body.style.overscrollBehaviorY = prevBodyOverscroll;
-    };
-  }, []);
-
-  useEffect(() => {
     if (current?.has_draft && current.draft) {
       setSwapDraft(current.draft);
       setSwapStep("preview");
@@ -226,7 +211,11 @@ export default function WeeklyPlanPage() {
     setCurrentError(null);
     setPlanWarning(null);
     try {
-      const res = await fetch("/api/weekly/plan?notify=1", { method: "POST" });
+      const res = await fetch("/api/weekly/plan?notify=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days_count: daysCount, start_day: startDay }),
+      });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as WeeklyCurrent;
       setCurrent(data);
@@ -240,12 +229,10 @@ export default function WeeklyPlanPage() {
     }
   };
 
-  const handlePlan = async () => {
-    if (current?.has_plan) {
-      setConfirmReplaceOpen(true);
-      return;
-    }
-    await createPlan();
+  const handlePlan = () => {
+    setStartDay(1);
+    setDaysCount(7);
+    setCreateOpen(true);
   };
 
   const handleSwapPreview = async () => {
@@ -484,17 +471,68 @@ export default function WeeklyPlanPage() {
         {!canSwap ? <div style={{ ...cardStyles.muted, marginTop: 8 }}>Sobald ein Plan existiert, kannst du einzelne Tage tauschen.</div> : null}
       </div>
 
-      <ConfirmModal
-        open={confirmReplaceOpen}
-        title="Vorhandenen Plan ersetzen?"
-        message="Für diese Woche existiert bereits ein Plan. Willst du ihn wirklich neu erstellen und damit überschreiben?"
-        confirmLabel={planLoading ? "Plane…" : "Ja, ersetzen"}
-        onConfirm={async () => {
-          setConfirmReplaceOpen(false);
-          await createPlan();
-        }}
-        onClose={() => setConfirmReplaceOpen(false)}
-      />
+      <Modal
+        open={createOpen}
+        title={current?.has_plan ? "Plan neu erstellen" : "Plan erstellen"}
+        onClose={() => setCreateOpen(false)}
+        footer={
+          <div style={{ display: "flex", gap: 10 }}>
+            <button style={{ ...styles.button, flex: 1 }} onClick={() => setCreateOpen(false)}>
+              Abbrechen
+            </button>
+            <button
+              style={{ ...styles.buttonPrimary, flex: 1 }}
+              disabled={planLoading}
+              onClick={async () => {
+                setCreateOpen(false);
+                await createPlan();
+              }}
+            >
+              {planLoading ? "Plane…" : "Erstellen"}
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: "grid", gap: 12 }}>
+          {current?.has_plan ? (
+            <div style={{ fontSize: 13, color: "var(--danger)" }}>
+              Für diese Woche existiert bereits ein Plan — er wird beim Erstellen überschrieben.
+            </div>
+          ) : null}
+          <div>
+            <label style={styles.label}>Starttag</label>
+            <select
+              value={startDay}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setStartDay(next);
+                setDaysCount((prev) => Math.min(prev, 8 - next));
+              }}
+              style={styles.select}
+            >
+              {daysList.map((d) => (
+                <option key={d.day} value={d.day}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={styles.label}>Anzahl Tage</label>
+            <select value={daysCount} onChange={(e) => setDaysCount(Number(e.target.value))} style={styles.select}>
+              {Array.from({ length: 8 - startDay }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n} {n === 1 ? "Tag" : "Tage"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={cardStyles.muted}>
+            Plan läuft von {daysList.find((d) => d.day === startDay)?.label} bis{" "}
+            {daysList.find((d) => d.day === Math.min(startDay + daysCount - 1, 7))?.label}.
+          </div>
+        </div>
+      </Modal>
     </Page>
   );
 }

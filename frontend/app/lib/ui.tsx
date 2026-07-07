@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 
 // ─── Style helpers (CSS-var based) ──────────────────────────────────────────
@@ -396,11 +397,11 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 200,
+        position: "fixed", inset: 0, zIndex: 250,
         background: "rgba(0,0,0,0.5)",
         display: "flex", alignItems: "flex-end", justifyContent: "center",
       }}
@@ -426,7 +427,8 @@ export function Modal({
         {children}
         {footer && <div style={{ marginTop: 18 }}>{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
