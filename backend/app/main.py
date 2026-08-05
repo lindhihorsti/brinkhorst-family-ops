@@ -2501,6 +2501,7 @@ def api_recipe_import_preview(payload: RecipeImportPreviewRequest):
 
 class WeeklySwapRequest(BaseModel):
     days: List[int]
+    manual_recipes: Optional[Dict[str, str]] = None  # day-str -> recipe_id chosen by user
 
 
 class PantryItemPayload(BaseModel):
@@ -3621,6 +3622,7 @@ def api_weekly_history_detail(week_start: str):
 class WeeklyPlanCreateRequest(BaseModel):
     days_count: Optional[int] = None
     start_day: Optional[int] = None
+    manual_recipes: Optional[Dict[str, str]] = None  # day-str -> recipe_id chosen by user
 
 
 @app.post("/api/weekly/plan")
@@ -3630,7 +3632,8 @@ def api_weekly_plan(notify: int = 0, payload: Optional[WeeklyPlanCreateRequest] 
     week_start = _current_week_start()
     start_day = payload.start_day if payload and payload.start_day else 1
     days_count = payload.days_count if payload and payload.days_count else 8 - min(max(start_day, 1), 7)
-    days = _build_new_week_plan(days_count, start_day)
+    manual_recipes = payload.manual_recipes if payload else None
+    days = _build_new_week_plan(days_count, start_day, manual_recipes)
     _db_upsert_weekly_plan(week_start, days)
 
     base = _db_get_weekly_plan(week_start)
@@ -3672,7 +3675,26 @@ def api_weekly_plan(notify: int = 0, payload: Optional[WeeklyPlanCreateRequest] 
     return response
 
 
-def _run_swap_preview(week_start: date, swap_days: List[int]) -> Dict[str, Any]:
+def _valid_manual_recipes(manual_recipes: Optional[Dict[str, str]]) -> Dict[str, str]:
+    """day-str -> recipe_id, keeping only non-empty ids that exist as active recipes."""
+    if not manual_recipes or engine is None:
+        return {}
+    valid: Dict[str, str] = {}
+    with Session(engine) as session:
+        for day, rid in manual_recipes.items():
+            if not rid or not isinstance(rid, str):
+                continue
+            r = session.get(Recipe, rid)
+            if r and r.is_active:
+                valid[str(day)] = rid
+    return valid
+
+
+def _run_swap_preview(
+    week_start: date,
+    swap_days: List[int],
+    manual_recipes: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     base = _db_get_weekly_plan(week_start)
     if not base:
         return {
@@ -3694,7 +3716,18 @@ def _run_swap_preview(week_start: date, swap_days: List[int]) -> Dict[str, Any]:
         avoid_ids = set()
         base_days = base["days"]
 
-    proposed = swap_service.apply_swaps(engine, base_days, swap_days, avoid_ids)
+    manual, random_day_keys = swap_service.split_manual_days(
+        [str(d) for d in swap_days],
+        _valid_manual_recipes(manual_recipes),
+    )
+    # Manual picks first; apply_swaps then bans everything already in `proposed`
+    # (incl. manual picks) so randoms never duplicate them.
+    proposed = dict(base_days)
+    for d, rid in manual.items():
+        proposed[d] = rid
+    random_days = [int(d) for d in random_day_keys]
+    if random_days:
+        proposed = swap_service.apply_swaps(engine, proposed, random_days, avoid_ids)
     _db_create_draft(week_start, str(base_plan_id), proposed, swap_days)
 
     return {
@@ -3718,7 +3751,7 @@ def api_weekly_swap(payload: WeeklySwapRequest):
         raise HTTPException(400, "days must be unique")
 
     swap_days = sorted(days)
-    return _run_swap_preview(week_start, swap_days)
+    return _run_swap_preview(week_start, swap_days, payload.manual_recipes)
 
 
 @app.post("/api/weekly/confirm")
@@ -4763,12 +4796,22 @@ def _format_plan(days: Dict[str, str]) -> str:
     return "\n".join(lines)
 
 
-def _build_new_week_plan(days_count: int = 7, start_day: int = 1) -> Dict[str, str]:
+def _build_new_week_plan(
+    days_count: int = 7,
+    start_day: int = 1,
+    manual_recipes: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
     start_day = min(max(start_day, 1), 7)
     days_count = min(max(days_count, 1), 8 - start_day)
     preferences = _get_settings_preferences()
     tags = preferences.get("tags") or []
-    prefer_max = int(days_count * 0.5) if tags else 0
+
+    plan_keys = [str(d) for d in range(start_day, start_day + days_count)]
+    manual, random_keys = swap_service.split_manual_days(
+        plan_keys,
+        _valid_manual_recipes(manual_recipes),
+    )
+    prefer_max = int(len(random_keys) * 0.5) if tags else 0
 
     # Get last 2 weeks of meal history to avoid recent repeats
     recent_ids: List[str] = []
@@ -4789,20 +4832,20 @@ def _build_new_week_plan(days_count: int = 7, start_day: int = 1) -> Dict[str, s
 
     picked_ids, dummy_titles = swap_service.pick_recipes_for_days(
         engine,
-        existing_ids=recent_ids,
-        count=days_count,
+        existing_ids=recent_ids + list(manual.values()),  # never duplicate a manual pick
+        count=len(random_keys),
         prefer_tags=tags,
         prefer_max=prefer_max,
     )
-    days: Dict[str, str] = {}
+    days: Dict[str, str] = dict(manual)
     di = 0
     pi = 0
-    for d in range(start_day, start_day + days_count):
+    for d in random_keys:
         if pi < len(picked_ids):
-            days[str(d)] = picked_ids[pi]
+            days[d] = picked_ids[pi]
             pi += 1
         else:
-            days[str(d)] = dummy_titles[di]
+            days[d] = dummy_titles[di]
             di += 1
     return days
 

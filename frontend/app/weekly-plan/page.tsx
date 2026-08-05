@@ -46,6 +46,8 @@ type WeeklySwapResponse = {
   message?: string;
 };
 
+type RecipeLite = { id: string; title: string };
+
 const daysList = [
   { day: 1, label: "Mo" },
   { day: 2, label: "Di" },
@@ -146,6 +148,27 @@ function DayGrid({ days }: { days: DayEntry[] }) {
   );
 }
 
+function RecipeSelect({
+  recipes,
+  value,
+  onChange,
+}: {
+  recipes: RecipeLite[];
+  value: string;
+  onChange: (recipeId: string) => void;
+}) {
+  return (
+    <select style={styles.select} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">🎲 Zufällig</option>
+      {recipes.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.title}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export default function WeeklyPlanPage() {
   const [current, setCurrent] = useState<WeeklyCurrent | null>(null);
   const [loadingCurrent, setLoadingCurrent] = useState(false);
@@ -165,6 +188,25 @@ export default function WeeklyPlanPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [startDay, setStartDay] = useState(1);
   const [daysCount, setDaysCount] = useState(7);
+
+  const [recipes, setRecipes] = useState<RecipeLite[]>([]);
+  const [manualPlan, setManualPlan] = useState<Record<string, string>>({});
+  const [manualSwap, setManualSwap] = useState<Record<string, string>>({});
+
+  const ensureRecipes = async () => {
+    if (recipes.length > 0) return;
+    try {
+      const res = await fetch("/api/recipes?limit=500", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as RecipeLite[];
+      setRecipes(data);
+    } catch {
+      // ponytail: picker just stays empty on failure, random still works
+    }
+  };
+
+  const lastActiveDay = Math.min(startDay + daysCount - 1, 7);
+  const activeDays = daysList.filter((d) => d.day >= startDay && d.day <= lastActiveDay);
 
   const weekStart = current?.week_start ?? "—";
   const weekEnd = current?.week_start ? addDays(current.week_start, 6) : null;
@@ -206,15 +248,31 @@ export default function WeeklyPlanPage() {
     }
   }, [current]);
 
+  useEffect(() => {
+    setManualPlan((prev) => {
+      const next: Record<string, string> = {};
+      for (const d of activeDays) {
+        if (prev[String(d.day)]) next[String(d.day)] = prev[String(d.day)];
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDay, daysCount]);
+
   const createPlan = async () => {
     setPlanLoading(true);
     setCurrentError(null);
     setPlanWarning(null);
     try {
+      const manual_recipes: Record<string, string> = {};
+      for (const d of activeDays) {
+        const rid = manualPlan[String(d.day)];
+        if (rid) manual_recipes[String(d.day)] = rid;
+      }
       const res = await fetch("/api/weekly/plan?notify=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days_count: daysCount, start_day: startDay }),
+        body: JSON.stringify({ days_count: daysCount, start_day: startDay, manual_recipes }),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as WeeklyCurrent;
@@ -232,6 +290,8 @@ export default function WeeklyPlanPage() {
   const handlePlan = () => {
     setStartDay(1);
     setDaysCount(7);
+    setManualPlan({});
+    ensureRecipes();
     setCreateOpen(true);
   };
 
@@ -239,10 +299,15 @@ export default function WeeklyPlanPage() {
     setSwapLoading(true);
     setSwapError(null);
     try {
+      const manual_recipes: Record<string, string> = {};
+      for (const d of selectedDays) {
+        const rid = manualSwap[String(d)];
+        if (rid) manual_recipes[String(d)] = rid;
+      }
       const res = await fetch("/api/weekly/swap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days: selectedDays }),
+        body: JSON.stringify({ days: selectedDays, manual_recipes }),
       });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as WeeklySwapResponse;
@@ -276,6 +341,7 @@ export default function WeeklyPlanPage() {
       setCurrent(data);
       setSwapStep("closed");
       setSelectedDays([]);
+      setManualSwap({});
       setSwapDraft(null);
     } catch (e) {
       setSwapError(getErrorMessage(e, "Fehler beim Bestätigen"));
@@ -293,6 +359,7 @@ export default function WeeklyPlanPage() {
       await res.json();
       setSwapStep("closed");
       setSelectedDays([]);
+      setManualSwap({});
       setSwapDraft(null);
       await loadCurrent();
     } catch (e) {
@@ -356,22 +423,40 @@ export default function WeeklyPlanPage() {
               Tage auswählen ({swapDayLabel})
             </div>
             {planDays.map((d) => (
-              <label key={d.day} style={cardStyles.checkboxRow}>
-                <input
-                  type="checkbox"
-                  checked={selectedDays.includes(d.day)}
-                  onChange={(e) => {
-                    setSelectedDays((prev) =>
-                      e.target.checked
-                        ? Array.from(new Set([...prev, d.day]))
-                        : prev.filter((x) => x !== d.day)
-                    );
-                  }}
-                />
-                <span>
-                  <strong>{d.label}</strong> · {d.title}
-                </span>
-              </label>
+              <div key={d.day} style={{ marginBottom: 8 }}>
+                <label style={cardStyles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={selectedDays.includes(d.day)}
+                    onChange={(e) => {
+                      setSelectedDays((prev) =>
+                        e.target.checked
+                          ? Array.from(new Set([...prev, d.day]))
+                          : prev.filter((x) => x !== d.day)
+                      );
+                      if (!e.target.checked) {
+                        setManualSwap((prev) => {
+                          const next = { ...prev };
+                          delete next[String(d.day)];
+                          return next;
+                        });
+                      }
+                    }}
+                  />
+                  <span>
+                    <strong>{d.label}</strong> · {d.title}
+                  </span>
+                </label>
+                {selectedDays.includes(d.day) ? (
+                  <RecipeSelect
+                    recipes={recipes}
+                    value={manualSwap[String(d.day)] ?? ""}
+                    onChange={(rid) =>
+                      setManualSwap((prev) => ({ ...prev, [String(d.day)]: rid }))
+                    }
+                  />
+                ) : null}
+              </div>
             ))}
             <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
               <button
@@ -386,6 +471,7 @@ export default function WeeklyPlanPage() {
                 onClick={() => {
                   setSwapStep("closed");
                   setSelectedDays([]);
+                  setManualSwap({});
                 }}
               >
                 Schließen
@@ -439,7 +525,7 @@ export default function WeeklyPlanPage() {
             <div style={{ fontSize: 13, marginBottom: 10 }}>
               Tausche einzelne Tage gegen neue Vorschläge.
             </div>
-            <button style={styles.button} onClick={() => setSwapStep("select")}>
+            <button style={styles.button} onClick={() => { ensureRecipes(); setSwapStep("select"); }}>
               Tausch starten
             </button>
           </div>
@@ -461,6 +547,7 @@ export default function WeeklyPlanPage() {
             style={styles.button}
             onClick={() => {
               setSwapError(null);
+              ensureRecipes();
               setSwapStep((s) => (s === "closed" ? "select" : s));
             }}
             disabled={!canSwap}
@@ -530,6 +617,21 @@ export default function WeeklyPlanPage() {
           <div style={cardStyles.muted}>
             Plan läuft von {daysList.find((d) => d.day === startDay)?.label} bis{" "}
             {daysList.find((d) => d.day === Math.min(startDay + daysCount - 1, 7))?.label}.
+          </div>
+          <div>
+            <label style={styles.label}>Rezepte je Tag (optional)</label>
+            <div style={{ display: "grid", gap: 8 }}>
+              {activeDays.map((d) => (
+                <div key={d.day} style={{ display: "grid", gridTemplateColumns: "36px 1fr", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{d.label}</div>
+                  <RecipeSelect
+                    recipes={recipes}
+                    value={manualPlan[String(d.day)] ?? ""}
+                    onChange={(rid) => setManualPlan((prev) => ({ ...prev, [String(d.day)]: rid }))}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </Modal>

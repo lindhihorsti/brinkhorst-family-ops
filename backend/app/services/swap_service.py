@@ -61,6 +61,19 @@ def pick_recipes_for_days(
     return picked, dummy
 
 
+def split_manual_days(
+    day_keys: List[str],
+    manual_valid: Dict[str, str],
+) -> Tuple[Dict[str, str], List[str]]:
+    """Split day_keys into (manual_map, random_keys).
+    manual_valid: day-str -> recipe_id, already validated as existing/active.
+    Only keys present in day_keys are considered.
+    """
+    manual = {d: manual_valid[d] for d in day_keys if d in manual_valid}
+    random_keys = [d for d in day_keys if d not in manual]
+    return manual, random_keys
+
+
 def update_avoid_list_for_reroll(
     current_days: Dict[str, str],
     swap_days: List[int],
