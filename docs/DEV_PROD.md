@@ -17,8 +17,13 @@ aus **einem** Repository getrennt.
 | Migrationen | `AUTO_MIGRATE=1` (automatisch) | `AUTO_MIGRATE=0` (kontrolliert) |
 | Quelle des Builds | Arbeits-Working-Tree | fester Checkout auf `main` |
 
-Docker isoliert alles anhand des Projektnamens. Kollisionen gibt es nur bei Host-Ports —
-und DEV (8080) und PROD (80/443) überschneiden sich nicht.
+Docker isoliert alles anhand des Projektnamens (DEV = `familyops-dev`, PROD = `infra`),
+und die Host-Ports überschneiden sich nicht (DEV 8080, PROD 80/443).
+
+> ⚠️ **Nur über die Makefile-Targets arbeiten.** `cd infra && docker compose …` **direkt**
+> nutzt den Default-Projektnamen `infra` — identisch zum PROD-Stack. Ein verirrtes
+> `docker compose -p infra up/down` baut damit den **PROD-Stack** neu bzw. reißt ihn ab.
+> DEV immer via `make up`/`make down` (Projekt `familyops-dev`).
 
 ## Täglicher Workflow
 

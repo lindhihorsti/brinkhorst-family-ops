@@ -55,7 +55,7 @@ Your job is to implement requested features safely and deliver changes that the 
 - **Backend:** FastAPI (containerized)
 - **DB:** PostgreSQL
   - DEV: local Docker Postgres
-  - PROD: Supabase Postgres
+  - PROD: local Docker Postgres on the Mac Mini (volume `infra_pgdata_macmini`)
 
 ### Reverse proxy
 - **Caddy** routes:
@@ -63,8 +63,8 @@ Your job is to implement requested features safely and deliver changes that the 
   - `/api/*` → backend
 
 ### Environments
-- **Local DEV:** `infra/docker-compose.yml` (Caddy on `http://127.0.0.1:8080`)
-- **PROD:** EC2 uses GHCR images (`:stable` and `:sha-<sha>`), DB is Supabase
+- **Local DEV:** `infra/docker-compose.yml`, Compose project `familyops-dev` (Caddy on `http://127.0.0.1:8080`)
+- **PROD:** runs locally on the Mac Mini via `infra/docker-compose.macmini.yml`, Compose project `infra`, Caddy on 80/443 (`https://brinkhorst-family-ops.duckdns.org`). Deploy with `make deploy` in the `~/prod/brinkhorst-family-ops` worktree. No EC2, no GHCR auto-pull.
 
 ### Knowledge Graph — zuerst abfragen, spart Tokens
 Das Repo enthält einen vorgebauten graphify-Wissensgraphen unter `graphify-out/`. **Bevor du den Code breit durchsuchst, frage den Graphen ab.** Verbindungen und Antworten (welche Route welches Modell nutzt, was welche Funktion aufruft, wie Frontend/Backend/Telegram zusammenhängen) stehen dort direkt und kosten ca. 9× weniger Tokens als ein Datei-Scan.
@@ -185,7 +185,7 @@ Do not introduce Kubernetes or any orchestrator beyond Docker Compose.
 
 Do not add a local Supabase stack.
 
-Do not change EC2/systemd deployment unless the task is explicitly about deployment.
+Do not change the Mac-Mini prod deployment (Docker Compose / launchd / Caddy) unless the task is explicitly about deployment.
 
 Do not add heavy new dependencies without justification.
 

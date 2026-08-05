@@ -99,11 +99,12 @@ Migration naming: `db/migrations/YYYY-MM-DD_NNN_short_desc.sql`
 - **Never commit directly to `main`**. Use `feat/<name>` or `fix/<name>` branches.
 - Do not push or open PRs — the user does that manually.
 - Commit message prefixes: `feat:`, `fix:`, `db:`, `chore:`
-- Merging to `main` triggers GitHub Actions → builds GHCR images → EC2 auto-pulls `:stable` tag within ~2 min.
+- Prod runs **locally on the Mac Mini** (no EC2, no GHCR auto-pull). Deploy manually: in the PROD worktree `~/prod/brinkhorst-family-ops` (branch `main`) run `make deploy` (= `git pull --ff-only` + rebuild the `infra` macmini stack on 80/443). The GitHub Action "Build Images (GHCR)" still runs on push to `main`, but nothing consumes those images anymore.
+- **Never run `cd infra && docker compose …` directly.** That uses the default Compose project name `infra` — identical to the PROD stack — so a stray `up`/`down` can recreate or tear down prod. Always use the Makefile targets (DEV = project `familyops-dev`).
 
 ### Prod rollback
 ```bash
-make rollback-prod SHA=<commitsha>
+cd ~/prod/brinkhorst-family-ops && make rollback SHA=<commitsha>
 ```
 
 ---
@@ -120,7 +121,7 @@ For every task, create/update a doc in `docs/agent-tasks/` with:
 
 - Do not introduce Kubernetes or anything beyond Docker Compose.
 - Do not add a local Supabase stack.
-- Do not modify EC2/systemd deployment unless the task is explicitly about deployment.
+- Do not modify the Mac-Mini prod deployment (Docker Compose / launchd / Caddy) unless the task is explicitly about deployment.
 - API changes must be additive (backward compatible) unless explicitly permitted otherwise.
 - `AUTO_MIGRATE=1` is for local dev only — never enable on prod.
 
